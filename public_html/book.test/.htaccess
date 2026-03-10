@@ -1,0 +1,5 @@
+
+AuthUserFile "/home/fitsc/fit-sc.jp/htpasswd/book.test/.htpasswd"
+AuthName "Member Site"
+AuthType BASIC
+require valid-user

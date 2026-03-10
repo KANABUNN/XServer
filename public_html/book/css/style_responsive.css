@@ -1,0 +1,290 @@
+/* =========================================================
+   style_responsive.css
+   既存 style.css の後に読み込む「狭域上書き専用」
+   対象: スマホ/タブレット
+   ========================================================= */
+
+/* iOSのノッチ/ホームバー領域も考慮 */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+/* 画面が狭いときは「中央固定」より「上から自然にスクロール」優先 */
+@media (max-width: 1024px) {
+  body {
+    /* 100vhはモバイルのURLバーで崩れやすいので、可能ならdvhを優先 */
+    min-height: 100dvh;
+    padding: calc(16px + var(--safe-top)) calc(16px + var(--safe-right))
+             calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left));
+    align-items: flex-start; /* 上寄せ */
+  }
+
+  .container {
+    width: 100%;
+    max-width: 760px; /* タブレット横でも読みやすい上限 */
+    padding: 32px;
+    border-radius: 14px;
+  }
+
+  h1 {
+    font-size: 28px;
+  }
+
+  .message {
+    font-size: 15px;
+  }
+
+  /* ダイアログ類は横幅を画面に追従 */
+  #fileDialog,
+  .terms-dialog,
+  .calendar-dialog {
+    width: min(96vw, 920px);
+  }
+}
+
+/* タブレット縦～小さめ端末 */
+@media (max-width: 768px) {
+  .container {
+    padding: 24px 20px;
+    border-radius: 14px;
+  }
+
+  h1 {
+    font-size: 24px;
+    margin-bottom: 8px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+
+  .form-group {
+    margin-bottom: 18px;
+  }
+
+  .form-group label {
+    font-size: 13px;
+  }
+
+  .form-group input,
+  .form-group select {
+    padding: 12px 12px;
+    font-size: 16px; /* iOSの自動ズーム回避（目安16px以上） */
+    border-radius: 10px;
+  }
+
+  /* selectの矢印位置を少し内側へ */
+  .form-group select {
+    padding-right: 44px;
+    background-position:
+      calc(100% - 18px) calc(50% - 2px),
+      calc(100% - 12px) calc(50% - 2px);
+  }
+
+  .submit-btn {
+    padding: 14px;
+    font-size: 16px;
+    border-radius: 12px;
+  }
+
+  /* テンプレDLボタンは狭い画面で“横に伸ばす”と押しやすい */
+  .template-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  /* 2つ以上並ぶボタン群は折り返し */
+  .button-group {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .button-group .link {
+    width: 100%;
+    text-align: center;
+    padding: 10px 14px;
+    border-radius: 12px;
+  }
+
+  /* 利用規約チェックは縦詰めしすぎない */
+  .checkbox-line {
+    align-items: flex-start;
+  }
+  .checkbox-line input[type="checkbox"] {
+    margin-top: 2px;
+  }
+
+  /* 規約ダイアログ：ヘッダーを詰めて本文領域を確保 */
+  .terms-dialog {
+    width: min(96vw, 860px);
+    max-height: calc(92dvh - var(--safe-top) - var(--safe-bottom));
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .terms-header h2 {
+    font-size: 18px;
+  }
+
+  .terms-close {
+    width: 40px;
+    height: 40px;
+    font-size: 22px;
+  }
+
+  /* iframe高さ：安全領域を引いた上で、端末でも見切れにくく */
+  .terms-frame {
+    height: calc(92dvh - 14px - 14px - 42px - 12px - var(--safe-top) - var(--safe-bottom));
+    border-radius: 14px;
+  }
+
+  /* カレンダーダイアログ：スマホで“ほぼ全画面” */
+  .calendar-dialog {
+    width: 96vw;
+    max-height: calc(92dvh - var(--safe-top) - var(--safe-bottom));
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .calendar-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  #calendarTitle {
+    font-size: 22px;
+  }
+
+  .calendar-toolbar {
+    gap: 10px;
+  }
+
+  .calendar-nav-btn {
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .calendar-legend {
+    font-size: 12px;
+    gap: 10px;
+  }
+}
+
+/* スマホ標準（縦持ち） */
+@media (max-width: 600px) {
+  body {
+    padding: calc(12px + var(--safe-top)) calc(12px + var(--safe-right))
+             calc(12px + var(--safe-bottom)) calc(12px + var(--safe-left));
+  }
+
+  .container {
+    padding: 20px 16px;
+    border-radius: 14px;
+  }
+
+  .icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+  }
+
+  .message {
+    font-size: 15px;
+    margin: 14px 0;
+  }
+
+  /* ファイル選択ダイアログも“全幅寄り”に */
+  #fileDialog {
+    width: min(94vw, 520px);
+    border-radius: 14px;
+    padding: 14px 14px;
+  }
+
+  #fileDialog .link {
+    border-radius: 14px;
+    padding: 10px 14px;
+  }
+
+  /* カレンダー：セルの高さを詰め、情報はチップで最低限 */
+  .calendar-grid {
+    gap: 6px;
+  }
+
+  .calendar-weekday {
+    font-size: 12px;
+    padding: 6px 0;
+  }
+
+  .calendar-day {
+    min-height: 78px;
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .calendar-day-number {
+    font-size: 14px;
+  }
+
+  .room-chip {
+    font-size: 10px;
+    padding: 4px 6px;
+    border-radius: 8px;
+  }
+
+  .calendar-detail-card {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .calendar-detail-card h3 {
+    font-size: 16px;
+  }
+
+  /* 右下FABはホームバーと干渉しないように */
+  .calendar-fab {
+    right: calc(14px + var(--safe-right));
+    bottom: calc(14px + var(--safe-bottom));
+    min-width: 108px;
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+}
+
+/* かなり小さい端末（SE等） */
+@media (max-width: 420px) {
+  h1 {
+    font-size: 22px;
+  }
+
+  .subtitle {
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+
+  .calendar-nav-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .calendar-toolbar-left {
+    width: 100%;
+  }
+
+  .calendar-toolbar-left > * {
+    flex: 1 1 auto;
+  }
+}
+
+/* 動きが苦手な人向け（OS設定に追従） */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

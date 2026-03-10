@@ -1,0 +1,747 @@
+:root {
+  color-scheme: light;
+  --bg: #f0f4f9;
+  --card: #ffffff;
+  --line: #d8e0ea;
+  --line-strong: #c2cedc;
+  --text: #1b2430;
+  --muted: #5e6b7a;
+  --accent: #1f6feb;
+  --accent-soft: #e8f0fe;
+  --danger: #c62828;
+  --danger-soft: #fdecec;
+  --shadow: 0 10px 30px rgba(20, 30, 50, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.wrap {
+  width: min(100%, 1880px);
+  max-width: none;
+  margin: 0 auto;
+  padding: 24px 28px;
+}
+
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 30px;
+}
+
+.lead {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-wide {
+  grid-column: span 2;
+}
+
+.field span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+input[type="search"],
+input[type="date"],
+select {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #64748b;
+}
+
+button.danger {
+  background: var(--danger);
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.toolbar,
+.meta-row,
+.pagination,
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.toolbar {
+  margin: 16px 0 10px;
+}
+
+.meta-row {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.meta,
+.status,
+#pageInfo,
+.dialog-sub,
+.detail-empty {
+  color: var(--muted);
+}
+
+.status {
+  min-height: 1.5em;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  min-height: 30px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+table {
+  width: max(100%, 1500px);
+  min-width: 1500px;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f0f4f9;
+}
+
+td code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.actions button {
+  min-width: 84px;
+}
+
+.empty {
+  padding: 26px;
+  text-align: center;
+}
+
+.pagination {
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.detail-dialog {
+  width: min(920px, calc(100vw - 24px));
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  padding: 0;
+  box-shadow: 0 20px 60px rgba(10, 20, 40, 0.22);
+}
+
+.detail-dialog::backdrop {
+  background: rgba(10, 20, 30, 0.45);
+}
+
+.dialog-shell {
+  padding: 18px;
+}
+
+.dialog-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+.dialog-head h2 {
+  margin: 0;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.detail-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px;
+}
+
+.detail-card.full {
+  grid-column: 1 / -1;
+}
+
+.detail-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.detail-value {
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.detail-value code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.status-error {
+  color: var(--danger);
+}
+
+.status-ok {
+  color: #2e7d32;
+}
+
+.file-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.file-badge.ok {
+  background: #e9f7ee;
+  color: #2e7d32;
+}
+
+.file-badge.missing {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+@media (max-width: 980px) {
+  .filters-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .field-wide {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 720px) {
+  .wrap {
+    padding: 16px;
+  }
+
+  .page-head,
+  .meta-row,
+  .dialog-head,
+  .dialog-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters-grid,
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .field-wide,
+  .detail-card.full {
+    grid-column: auto;
+  }
+
+  .pagination {
+    justify-content: space-between;
+  }
+}
+
+
+/* =========================
+   確定予約（カレンダー登録）ダイアログ
+   ========================= */
+.calendar-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.calendar-form-grid .field-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .calendar-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ================================
+   Sidebar & View Switch (added)
+   ================================ */
+
+.admin-shell {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.sidebar {
+  background: linear-gradient(180deg, #1f2a44 0%, #182033 100%);
+  color: #fff;
+  padding: 24px 18px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.sidebar-brand h1 {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+}
+
+.sidebar-brand p {
+  margin: 0 0 18px;
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.sidebar-nav {
+  display: grid;
+  gap: 10px;
+}
+
+.sidebar-link {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  padding: 14px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sidebar-link.is-active {
+  background: #ffffff;
+  color: #1f2a44;
+  border-color: #ffffff;
+  font-weight: 700;
+}
+
+.content-shell {
+  min-width: 0;
+}
+
+.content-view {
+  display: none;
+  min-width: 0;
+}
+
+.content-view.is-active {
+  display: block;
+}
+
+/* 右側コンテンツは wrap をそのまま使うが、横幅が広い場合は少し詰める */
+@media (min-width: 1400px) {
+  .content-view .wrap {
+    max-width: none;
+  }
+}
+
+/* ================================
+   Calendar View (added)
+   ================================ */
+
+.calendar-legend {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  margin: 14px 0 18px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #d1d5db;
+  display: inline-block;
+}
+
+.legend-dot.is-room {
+  background: var(--accent);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.calendar-weekday,
+.calendar-day {
+  background: var(--card);
+  border-radius: 14px;
+  border: 1px solid var(--line);
+}
+
+.calendar-weekday {
+  padding: 12px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.calendar-day {
+  min-height: 132px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.calendar-day.is-muted {
+  opacity: 0.38;
+}
+
+.calendar-day.is-today {
+  border: 2px solid var(--accent);
+}
+
+.calendar-day-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.calendar-day-number {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.calendar-day-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.calendar-entry {
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+  padding: 6px 8px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.calendar-entry-room {
+  display: block;
+  font-weight: 700;
+}
+
+.calendar-empty {
+  color: #9ca3af;
+  font-size: 0.86rem;
+}
+
+.calendar-list-wrap {
+  margin-top: 20px;
+}
+
+/* ================================
+   Responsive (added)
+   ================================ */
+@media (max-width: 1080px) {
+  .admin-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+    padding: 16px;
+  }
+
+  .sidebar-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .sidebar-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-weekday {
+    display: none;
+  }
+
+  .calendar-day {
+    min-height: auto;
+  }
+}
+
+
+/* ===== Calendar individual management ===== */
+.calendar-day[data-date] {
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.calendar-day[data-date]:hover {
+  border-color: var(--accent);
+  box-shadow: 0 8px 18px rgba(31, 111, 235, 0.12);
+  transform: translateY(-1px);
+}
+
+.calendar-day-tools {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.calendar-day-manage {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.calendar-entry-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.calendar-entry-id {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.calendar-list-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.calendar-manage-shell {
+  max-width: 860px;
+}
+
+.calendar-manage-section + .calendar-manage-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.calendar-manage-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.calendar-manage-list {
+  display: grid;
+  gap: 10px;
+}
+
+.calendar-manage-item {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  background: #fff;
+}
+
+.calendar-manage-item-main {
+  min-width: 0;
+}
+
+.calendar-manage-item-title {
+  font-weight: 700;
+}
+
+.calendar-manage-item-meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.calendar-manage-item-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 760px) {
+  .calendar-manage-header,
+  .calendar-manage-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .calendar-day-tools {
+    justify-content: flex-start;
+  }
+}
+
+
+/* ================================
+   Wide layout overrides (added)
+   ================================ */
+
+/* 右側コンテンツを可能な限り横に広げる */
+.content-view .wrap {
+  max-width: none;
+}
+
+/* 表を横に広げ、折り返しを極力なくす（横スクロールで対応） */
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: max-content;
+  min-width: 1500px;
+}
+
+th,
+td {
+  white-space: nowrap;
+}
+
+td code {
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.actions {
+  flex-wrap: nowrap;
+}

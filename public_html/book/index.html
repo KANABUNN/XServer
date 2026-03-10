@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>貸し部屋予約</title>
+  <link rel="icon" href="icon.png">
+  <link rel="stylesheet" href="css/style.css?v=20260306">
+  <link rel="stylesheet" href="css/style_responsive.css?v=20260306">
+</head>
+<body>
+  <div class="container">
+    <h1>貸し部屋予約申請</h1>
+    <p class="subtitle">
+      指定のdocxファイルをアップロードしてください<br>
+      <button type="button" id="openfile" class="template-btn">テンプレートのダウンロード</button>
+    </p>
+
+    <form action="submit.php" method="post" class="form" enctype="multipart/form-data">
+      <div class="form-group">
+        <label for="email">メールアドレス <span class="required">*</span></label>
+        <input type="email" name="email" id="email"
+          placeholder="s(学籍番号)@bene.fit.ac.jp または (団体名)@bene.fit.ac.jp"
+          pattern="^[^@]+@bene\.fit\.ac\.jp$"
+          title="@bene.fit.ac.jpのメールアドレスのみ使用できます"
+          required>
+      </div>
+
+      <div class="form-group">
+        <label for="select">予約する部屋を選択してください <span class="required">*</span></label>
+        <select name="select" id="select" required>
+          <option value="">部屋を選択してください</option>
+          <option value="tamoku">多目的室</option>
+          <option value="orange">オレンジの部屋</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="file">docxファイルを添付 <span class="required">*</span></label>
+        <input type="file" name="file" id="file" accept=".docx" required>
+      </div>
+
+      <div class="form-group">
+        <label for="text">備考</label>
+        <input type="text" name="text" id="text" placeholder="再提出の理由などを詳細に記入してください">
+      </div>
+
+      <!-- 利用規約 同意 -->
+      <div class="form-group terms-consent">
+        <label class="checkbox-line">
+        <input type="checkbox" id="agreeTerms" name="agree_terms" required>
+          利用規約に同意します <span class="required">*</span>
+        </label>
+
+        <button type="button" id="openTerms" class="terms-link-btn">
+          利用規約を表示
+        </button>
+      </div>
+
+      <button type="submit" class="submit-btn">予約申請</button>
+    </form>
+    <p class="copyright">
+      &copy; 2026 総合管理事務局. All rights reserved.
+    </p>
+  </div>
+
+  <button type="button" id="openCalendar" class="calendar-fab" aria-label="予約状況を表示">
+    予約状況
+  </button>
+
+  <dialog id="fileDialog">
+    <a href="template_file/template.docx" class="link" target="_blank" rel="noopener">多目的室借用申請書をダウンロード</a>
+    <a href="template_file/template_orange.docx" class="link" target="_blank" rel="noopener">オレンジの部屋借用申請書をダウンロード</a>
+  </dialog>
+
+  <dialog id="calendarDialog" class="calendar-dialog">
+    <div class="calendar-header">
+      <div>
+        <p class="calendar-caption">貸し部屋予約状況</p>
+        <h2 id="calendarTitle">読み込み中...</h2>
+      </div>
+      <button type="button" id="closeCalendar" class="calendar-close" aria-label="閉じる">×</button>
+    </div>
+
+    <div class="calendar-toolbar">
+      <div class="calendar-toolbar-left">
+        <button type="button" id="prevMonth" class="calendar-nav-btn">‹ 前月</button>
+        <button type="button" id="goToday" class="calendar-nav-btn calendar-today-btn">今日</button>
+        <button type="button" id="nextMonth" class="calendar-nav-btn">翌月 ›</button>
+      </div>
+
+      <div class="calendar-legend">
+        <span><i class="legend-box available"></i>空き</span>
+        <span><i class="legend-box full"></i>使用中</span>
+      </div>
+    </div>
+
+    <div class="calendar-grid" id="calendarGrid"></div>
+
+    <div class="calendar-detail" id="calendarDetail">
+      <p class="calendar-detail-placeholder">日付を選択すると部屋ごとの状況が表示されます。</p>
+    </div>
+  </dialog>
+
+  <dialog id="termsDialog" class="terms-dialog" aria-labelledby="termsTitle">
+    <div class="terms-header">
+      <h2 id="termsTitle">利用規約</h2>
+      <button type="button" id="closeTerms" class="terms-close" aria-label="閉じる">×</button>
+    </div>
+
+    <iframe
+      id="termsFrame"
+      class="terms-frame"
+      src="terms.html"
+      title="利用規約"
+    ></iframe>
+  </dialog>
+
+  <script src="js/dialog.js" defer></script>
+  <script src="js/calendar.js" defer></script>
+</body>
+</html>
