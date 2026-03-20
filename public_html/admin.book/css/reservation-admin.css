@@ -59,14 +59,14 @@ h1 {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 18px;
-  padding: 18px;
+  padding: 18px 18px 16px;
   box-shadow: var(--shadow);
 }
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .field {
@@ -108,14 +108,14 @@ button.secondary {
   background: #64748b;
 }
 
-button.danger {
-  background: var(--danger);
-}
-
 button.ghost {
   background: transparent;
-  color: var(--text);
   border: 1px solid var(--line);
+  color: var(--text);
+}
+
+button.danger {
+  background: var(--danger);
 }
 
 button:disabled {
@@ -158,70 +158,79 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 12px;
-  min-height: 30px;
+  margin-bottom: 10px;
 }
 
 .chip {
   display: inline-flex;
+  gap: 6px;
   align-items: center;
   padding: 6px 10px;
   border-radius: 999px;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: #124191;
   font-size: 13px;
 }
 
+.chip button {
+  border-radius: 999px;
+  padding: 0 6px;
+  background: transparent;
+  color: #124191;
+}
+
 .table-wrap {
-  overflow-x: auto;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 16px;
+  overflow: hidden;
   background: #fff;
 }
 
 table {
-  width: max(100%, 1500px);
-  min-width: 1500px;
+  width: 100%;
   border-collapse: collapse;
+  font-size: 14px;
+}
+
+thead {
+  background: #f4f7fb;
 }
 
 th,
 td {
-  padding: 12px;
+  padding: 12px 12px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
-  font-size: 14px;
-  white-space: nowrap;
 }
 
 th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: #f0f4f9;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #49596a;
+}
+
+td.empty {
+  text-align: center;
+  padding: 18px;
+  color: var(--muted);
 }
 
 td code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
-  white-space: nowrap;
-  word-break: normal;
 }
 
 .actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .actions button {
-  min-width: 84px;
-}
-
-.empty {
-  padding: 26px;
-  text-align: center;
+  padding: 8px 10px;
+  font-size: 12px;
 }
 
 .pagination {
@@ -319,122 +328,53 @@ td code {
   color: var(--danger);
 }
 
-@media (max-width: 980px) {
-  .filters-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .field-wide {
-    grid-column: span 2;
-  }
-}
-
-@media (max-width: 720px) {
-  .wrap {
-    padding: 16px;
-  }
-
-  .page-head,
-  .meta-row,
-  .dialog-head,
-  .dialog-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .filters-grid,
-  .detail-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .field-wide,
-  .detail-card.full {
-    grid-column: auto;
-  }
-
-  .pagination {
-    justify-content: space-between;
-  }
-}
-
-
-/* =========================
-   確定予約（カレンダー登録）ダイアログ
-   ========================= */
-.calendar-form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 8px;
-}
-
-.calendar-form-grid .field-wide {
-  grid-column: 1 / -1;
-}
-
-@media (max-width: 720px) {
-  .calendar-form-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ================================
-   Sidebar & View Switch (added)
-   ================================ */
-
+/* ===== Sidebar layout (admin) ===== */
 .admin-shell {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
   min-height: 100vh;
-  background: var(--bg);
 }
 
 .sidebar {
-  background: linear-gradient(180deg, #1f2a44 0%, #182033 100%);
-  color: #fff;
-  padding: 24px 18px;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 18px;
   position: sticky;
   top: 0;
   height: 100vh;
 }
 
 .sidebar-brand h1 {
-  margin: 0 0 8px;
-  font-size: 1.25rem;
+  font-size: 18px;
+  margin: 0;
+  color: #fff;
 }
 
 .sidebar-brand p {
-  margin: 0 0 18px;
-  font-size: 0.92rem;
-  color: rgba(255, 255, 255, 0.78);
+  margin: 6px 0 0;
+  font-size: 12px;
+  opacity: 0.8;
 }
 
 .sidebar-nav {
   display: grid;
   gap: 10px;
+  margin-top: 18px;
 }
 
 .sidebar-link {
-  width: 100%;
-  text-align: left;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
-  padding: 14px 16px;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+  padding: 10px 12px;
   border-radius: 12px;
+  text-align: left;
   cursor: pointer;
-  transition: 0.2s ease;
-}
-
-.sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.12);
 }
 
 .sidebar-link.is-active {
-  background: #ffffff;
-  color: #1f2a44;
-  border-color: #ffffff;
-  font-weight: 700;
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
 .content-shell {
@@ -443,87 +383,45 @@ td code {
 
 .content-view {
   display: none;
-  min-width: 0;
 }
 
 .content-view.is-active {
   display: block;
 }
 
-/* 右側コンテンツは wrap をそのまま使うが、横幅が広い場合は少し詰める */
-@media (min-width: 1400px) {
-  .content-view .wrap {
-    max-width: none;
-  }
-}
-
-/* ================================
-   Calendar View (added)
-   ================================ */
-
-.calendar-legend {
-  display: flex;
-  gap: 18px;
-  align-items: center;
-  margin: 14px 0 18px;
-  flex-wrap: wrap;
-}
-
-.legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 0.94rem;
-}
-
-.legend-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #d1d5db;
-  display: inline-block;
-}
-
-.legend-dot.is-room {
-  background: var(--accent);
-}
-
+/* ===== Calendar view ===== */
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 10px;
-}
-
-.calendar-weekday,
-.calendar-day {
-  background: var(--card);
-  border-radius: 14px;
-  border: 1px solid var(--line);
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .calendar-weekday {
-  padding: 12px;
+  font-size: 12px;
   text-align: center;
-  font-weight: 700;
-  color: var(--text);
+  color: var(--muted);
+  padding: 6px;
 }
 
 .calendar-day {
-  min-height: 132px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
   padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  min-height: 150px;
 }
 
 .calendar-day.is-muted {
-  opacity: 0.38;
+  opacity: 0.4;
+  background: #f6f8fb;
 }
 
 .calendar-day.is-today {
-  border: 2px solid var(--accent);
+  border-color: rgba(31, 111, 235, 0.55);
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
 }
 
 .calendar-day-head {
@@ -534,43 +432,84 @@ td code {
 
 .calendar-day-number {
   font-weight: 700;
-  color: var(--text);
 }
 
 .calendar-day-body {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 6px;
+  margin-top: 8px;
 }
 
 .calendar-entry {
-  background: var(--accent-soft);
-  border-left: 4px solid var(--accent);
-  border-radius: 10px;
-  padding: 6px 8px;
-  font-size: 0.86rem;
-  line-height: 1.45;
-  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+.calendar-entry small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
 }
 
 .calendar-entry-room {
-  display: block;
   font-weight: 700;
 }
 
 .calendar-empty {
-  color: #9ca3af;
-  font-size: 0.86rem;
+  padding: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.calendar-legend {
+  margin-top: 10px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.legend-item {
+  font-size: 13px;
+  color: var(--muted);
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--line);
+  display: inline-block;
+}
+
+.legend-dot.is-room {
+  background: rgba(31, 111, 235, 0.8);
 }
 
 .calendar-list-wrap {
-  margin-top: 20px;
+  margin-top: 18px;
 }
 
-/* ================================
-   Responsive (added)
-   ================================ */
-@media (max-width: 1080px) {
+.calendar-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+
+@media (max-width: 860px) {
+  .filters-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .field-wide {
+    grid-column: 1 / -1;
+  }
+
   .admin-shell {
     grid-template-columns: 1fr;
   }
@@ -578,32 +517,16 @@ td code {
   .sidebar {
     position: static;
     height: auto;
-    padding: 16px;
-  }
-
-  .sidebar-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 760px) {
-  .sidebar-nav {
-    grid-template-columns: 1fr;
   }
 
   .calendar-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .calendar-weekday {
-    display: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .calendar-day {
     min-height: auto;
   }
 }
-
 
 /* ===== Calendar individual management ===== */
 .calendar-day[data-date] {
@@ -712,7 +635,6 @@ td code {
   }
 }
 
-
 /* ================================
    Wide layout overrides (added)
    ================================ */
@@ -746,24 +668,71 @@ td code {
   flex-wrap: nowrap;
 }
 
-/* =========================================
-   Calendar dialogs: 利用時間(開始〜終了)の並び崩れ修正
-   - selectの width:100% と toolbar の wrap が原因で縦積みになるのを防ぐ
-   ========================================= */
+/* ================================
+   Dialog width & alignment fixes (added)
+   - Close button / action buttons / right-side text should follow widened dialog
+   ================================ */
+
+/* On wider screens, allow dialogs to use more horizontal space */
+@media (min-width: 980px) {
+  .detail-dialog {
+    width: min(1280px, calc(100vw - 24px));
+  }
+}
+
+/* Ensure dialog inner containers can expand fully */
+#detailDialog .dialog-shell,
+#calendarAddDialog .dialog-shell,
+#calendarManageDialog .dialog-shell {
+  width: 100%;
+  max-width: none;
+}
+
+/* Remove the calendar manage dialog inner max-width cap */
+#calendarManageDialog .calendar-manage-shell {
+  max-width: none;
+  width: 100%;
+}
+
+/* Header/footer rows should use full width and align to the right edge */
+#detailDialog .dialog-head,
+#calendarAddDialog .dialog-head,
+#calendarManageDialog .dialog-head {
+  width: 100%;
+  align-items: center; /* better vertical alignment for close button */
+}
+
+#detailDialog .dialog-head button,
+#calendarAddDialog .dialog-head button,
+#calendarManageDialog .dialog-head button {
+  flex-shrink: 0;
+}
+
+#detailDialog .dialog-actions,
+#calendarAddDialog .dialog-actions,
+#calendarManageDialog .dialog-actions {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+/* ================================
+   Usage time (start/end) select layout fix (added)
+   - Prevent select width:100% + toolbar wrap from breaking layout
+   ================================ */
 
 #calendarAddDialog .calendar-form-grid .toolbar,
 #calendarManageDialog .calendar-form-grid .toolbar {
-  margin: 0;                 /* 既存 .toolbar の余白を無効化 */
-  flex-wrap: nowrap;         /* 折り返し禁止（横並び固定） */
+  margin: 0;
+  flex-wrap: nowrap;
   align-items: center;
   width: 100%;
 }
 
 #calendarAddDialog .calendar-form-grid .toolbar select,
 #calendarManageDialog .calendar-form-grid .toolbar select {
-  width: auto;               /* 既存 select { width:100% } を上書き */
-  flex: 1 1 0;               /* 開始/終了を均等に伸縮 */
-  min-width: 0;              /* はみ出し防止（重要） */
+  width: auto;   /* override select { width:100% } */
+  flex: 1 1 0;   /* make start/end share the row */
+  min-width: 0;  /* prevent overflow */
 }
 
 #calendarAddDialog .calendar-form-grid .toolbar span,
@@ -774,7 +743,7 @@ td code {
   padding: 0 4px;
 }
 
-/* 画面が狭い時は縦積みに戻す（スマホ対応） */
+/* When the screen is narrow, stacking is easier to use */
 @media (max-width: 560px) {
   #calendarAddDialog .calendar-form-grid .toolbar,
   #calendarManageDialog .calendar-form-grid .toolbar {
