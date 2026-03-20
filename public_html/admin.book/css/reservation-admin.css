@@ -745,3 +745,52 @@ td code {
 .actions {
   flex-wrap: nowrap;
 }
+
+/* =========================================
+   Calendar dialogs: 利用時間(開始〜終了)の並び崩れ修正
+   - selectの width:100% と toolbar の wrap が原因で縦積みになるのを防ぐ
+   ========================================= */
+
+#calendarAddDialog .calendar-form-grid .toolbar,
+#calendarManageDialog .calendar-form-grid .toolbar {
+  margin: 0;                 /* 既存 .toolbar の余白を無効化 */
+  flex-wrap: nowrap;         /* 折り返し禁止（横並び固定） */
+  align-items: center;
+  width: 100%;
+}
+
+#calendarAddDialog .calendar-form-grid .toolbar select,
+#calendarManageDialog .calendar-form-grid .toolbar select {
+  width: auto;               /* 既存 select { width:100% } を上書き */
+  flex: 1 1 0;               /* 開始/終了を均等に伸縮 */
+  min-width: 0;              /* はみ出し防止（重要） */
+}
+
+#calendarAddDialog .calendar-form-grid .toolbar span,
+#calendarManageDialog .calendar-form-grid .toolbar span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--muted);
+  padding: 0 4px;
+}
+
+/* 画面が狭い時は縦積みに戻す（スマホ対応） */
+@media (max-width: 560px) {
+  #calendarAddDialog .calendar-form-grid .toolbar,
+  #calendarManageDialog .calendar-form-grid .toolbar {
+    flex-wrap: wrap;
+  }
+
+  #calendarAddDialog .calendar-form-grid .toolbar select,
+  #calendarManageDialog .calendar-form-grid .toolbar select {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  #calendarAddDialog .calendar-form-grid .toolbar span,
+  #calendarManageDialog .calendar-form-grid .toolbar span {
+    width: 100%;
+    text-align: center;
+    padding: 4px 0;
+  }
+}
