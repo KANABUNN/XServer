@@ -22,6 +22,71 @@
     return e.slice(0, at);
   }
 
+  // 利用時間（開始/終了）プルダウン生成（0〜23時・15分刻み）
+  function buildTimeValues() {
+    const values = [];
+    for (let h = 0; h <= 23; h += 1) {
+      for (let m = 0; m <= 45; m += 15) {
+        const hh = String(h).padStart(2, '0');
+        const mm = String(m).padStart(2, '0');
+        values.push(`${hh}:${mm}`);
+      }
+    }
+    return values;
+  }
+
+  function populateTimeSelect(selectEl, placeholder) {
+    if (!selectEl) return;
+    const current = String(selectEl.value || '').trim();
+    const options = [`<option value="">${u.escapeHtml(placeholder || '選択')}</option>`];
+    buildTimeValues().forEach((t) => {
+      options.push(`<option value="${u.escapeHtml(t)}">${u.escapeHtml(t)}</option>`);
+    });
+    selectEl.innerHTML = options.join('');
+    if (current) selectEl.value = current;
+  }
+
+  function timeValueToMinutes(timeValue) {
+    const v = String(timeValue || '').trim();
+    if (!/^[0-2]\d:[0-5]\d$/.test(v)) return null;
+    const [hh, mm] = v.split(':').map(Number);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+    if (hh < 0 || hh > 23) return null;
+    if (![0, 15, 30, 45].includes(mm)) return null;
+    return hh * 60 + mm;
+  }
+
+  // 両方未選択なら ''、片方のみはエラー、終了<=開始もエラー
+  function buildUsageTimeString(startValue, endValue) {
+    const start = String(startValue || '').trim();
+    const end = String(endValue || '').trim();
+
+    if (!start && !end) return '';
+
+    if (!start || !end) {
+      throw new Error('利用時間は開始と終了を両方選択してください。');
+    }
+
+    const startMin = timeValueToMinutes(start);
+    const endMin = timeValueToMinutes(end);
+    if (startMin === null || endMin === null) {
+      throw new Error('利用時間の形式が不正です。');
+    }
+    if (endMin <= startMin) {
+      throw new Error('利用終了時刻は利用開始時刻より後を選択してください。');
+    }
+
+    return `${start}~${end}`;
+  }
+
+  function initTimeSelects() {
+    const el = Admin.el;
+    populateTimeSelect(el.calendarUsageStart, '開始');
+    populateTimeSelect(el.calendarUsageEnd, '終了');
+    populateTimeSelect(el.calendarManageUsageStart, '開始');
+    populateTimeSelect(el.calendarManageUsageEnd, '終了');
+  }
+
   function ensureLoaded() {
     const el = Admin.el;
     const cs = Admin.calendar.state;
@@ -314,7 +379,8 @@
     if (!el.calendarOrgName.value && guessedOrg) el.calendarOrgName.value = guessedOrg;
 
     if (el.calendarPeopleCount) el.calendarPeopleCount.value = '';
-    if (el.calendarUsageTime) el.calendarUsageTime.value = '';
+    if (el.calendarUsageStart) el.calendarUsageStart.value = '';
+    if (el.calendarUsageEnd) el.calendarUsageEnd.value = '';
 
     if (!el.calendarAddDialog.open) el.calendarAddDialog.showModal();
   }
@@ -328,7 +394,14 @@
     const useDate = (el.calendarUseDate?.value || '').trim();
     const roomCode = (el.calendarRoomCode?.value || '').trim();
     const orgName = (el.calendarOrgName?.value || '').trim();
-    const usageTime = (el.calendarUsageTime?.value || '').trim();
+
+    let usageTime = '';
+    try {
+      usageTime = buildUsageTimeString(el.calendarUsageStart?.value, el.calendarUsageEnd?.value);
+    } catch (err) {
+      u.setElementStatus(el.calendarAddStatus, err.message || '利用時間が不正です。', 'error');
+      return;
+    }
 
     let peopleCount = null;
     try {
@@ -401,7 +474,8 @@
 
     el.calendarManageOrgName.value = '';
     if (el.calendarManagePeopleCount) el.calendarManagePeopleCount.value = '';
-    if (el.calendarManageUsageTime) el.calendarManageUsageTime.value = '';
+    if (el.calendarManageUsageStart) el.calendarManageUsageStart.value = '';
+    if (el.calendarManageUsageEnd) el.calendarManageUsageEnd.value = '';
 
     u.setElementStatus(el.calendarManageStatus, '');
     renderManageList();
@@ -453,7 +527,14 @@
     const useDate = (el.calendarManageUseDate?.value || '').trim();
     const roomCode = (el.calendarManageRoomCode?.value || '').trim();
     const orgName = (el.calendarManageOrgName?.value || '').trim();
-    const usageTime = (el.calendarManageUsageTime?.value || '').trim();
+
+    let usageTime = '';
+    try {
+      usageTime = buildUsageTimeString(el.calendarManageUsageStart?.value, el.calendarManageUsageEnd?.value);
+    } catch (err) {
+      u.setElementStatus(el.calendarManageStatus, err.message || '利用時間が不正です。', 'error');
+      return;
+    }
 
     let peopleCount = null;
     try {
@@ -490,7 +571,8 @@
       u.setElementStatus(el.calendarManageStatus, data.message || '追加しました。', 'ok');
       el.calendarManageOrgName.value = '';
       if (el.calendarManagePeopleCount) el.calendarManagePeopleCount.value = '';
-      if (el.calendarManageUsageTime) el.calendarManageUsageTime.value = '';
+      if (el.calendarManageUsageStart) el.calendarManageUsageStart.value = '';
+      if (el.calendarManageUsageEnd) el.calendarManageUsageEnd.value = '';
 
       await loadReservations();
       openManage(useDate, roomCode);
@@ -535,6 +617,9 @@
 
   function bindAddDialog() {
     const el = Admin.el;
+
+    // 申請一覧から「確定」ダイアログを開くケースがあるため、初期化はここで行う
+    initTimeSelects();
 
     el.calendarFillTodayBtn?.addEventListener('click', () => {
       if (el.calendarUseDate) el.calendarUseDate.value = u.formatDateValue(new Date());

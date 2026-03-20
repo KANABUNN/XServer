@@ -266,7 +266,15 @@
 
         <label class="field field-wide">
           <span>利用時間</span>
-          <input type="text" id="calendarUsageTime" maxlength="100" placeholder="例：13:00〜15:00">
+          <div class="toolbar" style="justify-content:flex-start; gap:8px; margin:0;">
+            <select id="calendarUsageStart">
+              <option value="">開始</option>
+            </select>
+            <span>〜</span>
+            <select id="calendarUsageEnd">
+              <option value="">終了</option>
+            </select>
+          </div>
         </label>
       </div>
 
@@ -332,7 +340,15 @@
 
           <label class="field field-wide">
             <span>利用時間</span>
-            <input type="text" id="calendarManageUsageTime" maxlength="100" placeholder="例：13:00〜15:00">
+            <div class="toolbar" style="justify-content:flex-start; gap:8px; margin:0;">
+              <select id="calendarManageUsageStart">
+                <option value="">開始</option>
+              </select>
+              <span>〜</span>
+              <select id="calendarManageUsageEnd">
+                <option value="">終了</option>
+              </select>
+            </div>
           </label>
         </div>
 
