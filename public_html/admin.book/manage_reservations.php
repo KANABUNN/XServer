@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 try {
     $cfg = load_config();
+    load_google_calendar_sync_helpers();
     $pdo = db_connect($cfg);
 
     $action = (string)($_REQUEST['action'] ?? 'list');
@@ -40,14 +41,14 @@ try {
             if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
                 json_response(['ok' => false, 'message' => '登録は POST で呼び出してください。'], 405);
             }
-            handle_calendar_add($pdo);
+            handle_calendar_add($pdo, $cfg);
             break;
 
         case 'calendar_delete':
             if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
                 json_response(['ok' => false, 'message' => '削除は POST で呼び出してください。'], 405);
             }
-            handle_calendar_delete($pdo);
+            handle_calendar_delete($pdo, $cfg);
             break;
 
         default:
@@ -63,6 +64,31 @@ try {
             'message' => '管理処理でエラーが発生しました。ログを確認してください。',
         ], 500);
     }
+}
+
+
+function load_google_calendar_sync_helpers(): void
+{
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+
+    $candidates = [
+        __DIR__ . '/../../apps/google_calendar_sync.php',
+        __DIR__ . '/../apps/google_calendar_sync.php',
+        __DIR__ . '/apps/google_calendar_sync.php',
+    ];
+
+    foreach ($candidates as $path) {
+        if (is_file($path)) {
+            require_once $path;
+            $loaded = true;
+            return;
+        }
+    }
+
+    throw new RuntimeException('google_calendar_sync.php が見つかりません。apps 配下へ配置してください。');
 }
 
 function load_config(): array
@@ -384,7 +410,8 @@ function handle_calendar_list(PDO $pdo): void
     ]);
 }
 
-function handle_calendar_add(PDO $pdo): void
+
+function handle_calendar_add(PDO $pdo, array $cfg): void
 {
     $input = get_request_payload();
 
@@ -436,7 +463,12 @@ function handle_calendar_add(PDO $pdo): void
         $placeholders[] = ':usage_time';
     }
 
+    $googleSyncEnabled = function_exists('google_calendar_sync_enabled') && google_calendar_sync_enabled($cfg);
+    $googleResult = null;
+
     try {
+        $pdo->beginTransaction();
+
         $sql = sprintf(
             'INSERT INTO %s (%s) VALUES (%s)',
             $table,
@@ -467,11 +499,44 @@ function handle_calendar_add(PDO $pdo): void
 
         $stmt->execute();
 
+        $insertedId = $map['id_column'] !== null ? (int)$pdo->lastInsertId() : null;
+
+        if ($googleSyncEnabled) {
+            $calendarId = google_calendar_require_room_calendar_id($cfg, $roomCode);
+            $googleResult = google_calendar_create_via_gas($cfg, [
+                'reservation_id' => $insertedId,
+                'use_date' => $useDate,
+                'usage_time' => $usageTime,
+                'room_code' => $roomCode,
+                'room_label' => room_code_to_label($roomCode),
+                'organization_name' => $orgName,
+                'calendar_id' => $calendarId,
+            ]);
+
+            update_calendar_google_sync_state($pdo, $table, $map, $insertedId, $useDate, $roomCode, $orgName, [
+                'google_event_id' => $googleResult['event_id'] ?? null,
+                'google_calendar_id' => $googleResult['calendar_id'] ?? $calendarId,
+                'google_sync_status' => 'synced',
+                'google_sync_error' => null,
+            ]);
+        }
+
+        $pdo->commit();
+
+        $message = $googleSyncEnabled
+            ? '確定予約を登録し、Googleカレンダーにも反映しました。'
+            : '確定予約として登録しました。';
+
         json_response([
             'ok' => true,
-            'message' => '確定予約として登録しました。',
+            'message' => $message,
+            'google_synced' => $googleSyncEnabled,
+            'google_event_id' => $googleResult['event_id'] ?? null,
         ]);
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         if ($e->getCode() === '23000') {
             json_response([
                 'ok' => false,
@@ -479,10 +544,15 @@ function handle_calendar_add(PDO $pdo): void
             ], 409);
         }
         throw $e;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
     }
 }
 
-function handle_calendar_delete(PDO $pdo): void
+function handle_calendar_delete(PDO $pdo, array $cfg): void
 {
     $input = get_request_payload();
     $table = get_calendar_table_name($pdo);
@@ -494,22 +564,112 @@ function handle_calendar_delete(PDO $pdo): void
     $roomCode = trim((string)($input['room_code'] ?? ''));
     $orgName = trim((string)($input['organization_name'] ?? ''));
 
-    if ($id > 0 && $map['id_column'] !== null) {
-        $stmt = $pdo->prepare(sprintf('DELETE FROM %s WHERE %s = :id', $table, $map['id_column']));
-        $stmt->execute([':id' => $id]);
-        if ($stmt->rowCount() < 1) {
+    $googleSyncEnabled = function_exists('google_calendar_sync_enabled') && google_calendar_sync_enabled($cfg);
+
+    $pdo->beginTransaction();
+    try {
+        $row = find_calendar_reservation_for_update($pdo, $table, $map, $id, $useDate, $roomCode, $orgName);
+        if ($row === null) {
+            $pdo->rollBack();
             json_response(['ok' => false, 'message' => '削除対象が見つかりませんでした。'], 404);
         }
-        json_response(['ok' => true, 'message' => '確定予約を削除しました。']);
+
+        $storedRoomCode = trim((string)($row['room_code'] ?? ''));
+        $storedUseDate = trim((string)($row['use_date'] ?? ''));
+        $storedOrgName = trim((string)($row['organization_name'] ?? ''));
+        $storedUsageTime = trim((string)($row['usage_time'] ?? ''));
+        $storedGoogleEventId = trim((string)($row['google_event_id'] ?? ''));
+        $storedGoogleCalendarId = trim((string)($row['google_calendar_id'] ?? ''));
+
+        $googleDeleted = false;
+        if ($googleSyncEnabled) {
+            $calendarId = $storedGoogleCalendarId !== ''
+                ? $storedGoogleCalendarId
+                : google_calendar_require_room_calendar_id($cfg, $storedRoomCode);
+
+            $deleteResult = google_calendar_delete_via_gas($cfg, [
+                'reservation_id' => $row['id'] ?? null,
+                'use_date' => $storedUseDate,
+                'usage_time' => $storedUsageTime,
+                'room_code' => $storedRoomCode,
+                'room_label' => room_code_to_label($storedRoomCode),
+                'organization_name' => $storedOrgName,
+                'calendar_id' => $calendarId,
+                'event_id' => $storedGoogleEventId,
+            ]);
+            $googleDeleted = (bool)($deleteResult['deleted'] ?? false);
+        }
+
+        if ($id > 0 && $map['id_column'] !== null) {
+            $stmt = $pdo->prepare(sprintf('DELETE FROM %s WHERE %s = :id', $table, $map['id_column']));
+            $stmt->execute([':id' => $id]);
+        } else {
+            $sql = sprintf(
+                'DELETE FROM %s WHERE %s = :use_date AND %s = :room_code AND %s = :organization_name LIMIT 1',
+                $table,
+                $map['date_column'],
+                $map['room_column'],
+                $map['org_column']
+            );
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                ':use_date' => $storedUseDate,
+                ':room_code' => $storedRoomCode,
+                ':organization_name' => $storedOrgName,
+            ]);
+        }
+
+        if ($stmt->rowCount() < 1) {
+            throw new RuntimeException('削除対象が見つかりませんでした。');
+        }
+
+        $pdo->commit();
+
+        $message = ($googleSyncEnabled && $googleDeleted)
+            ? '確定予約を削除し、Googleカレンダーからも削除しました。'
+            : '確定予約を削除しました。';
+
+        json_response([
+            'ok' => true,
+            'message' => $message,
+            'google_deleted' => $googleDeleted,
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function find_calendar_reservation_for_update(PDO $pdo, string $table, array $map, int $id, string $useDate, string $roomCode, string $orgName): ?array
+{
+    $select = sprintf(
+        'SELECT %s AS id, %s AS use_date, %s AS room_code, %s AS organization_name, %s AS people_count, %s AS usage_time, %s AS google_event_id, %s AS google_calendar_id FROM %s',
+        $map['id_select'],
+        $map['date_column'],
+        $map['room_column'],
+        $map['org_column'],
+        $map['people_count_select'],
+        $map['usage_time_select'],
+        $map['google_event_id_select'],
+        $map['google_calendar_id_select'],
+        $table
+    );
+
+    if ($id > 0 && $map['id_column'] !== null) {
+        $stmt = $pdo->prepare($select . sprintf(' WHERE %s = :id FOR UPDATE', $map['id_column']));
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+        return $row !== false ? $row : null;
     }
 
     if ($useDate === '' || $roomCode === '' || $orgName === '') {
-        json_response(['ok' => false, 'message' => '削除対象の識別情報が不足しています。'], 400);
+        return null;
     }
 
-    $sql = sprintf(
-        'DELETE FROM %s WHERE %s = :use_date AND %s = :room_code AND %s = :organization_name LIMIT 1',
-        $table,
+    $sql = $select . sprintf(
+        ' WHERE %s = :use_date AND %s = :room_code AND %s = :organization_name LIMIT 1 FOR UPDATE',
         $map['date_column'],
         $map['room_column'],
         $map['org_column']
@@ -520,12 +680,78 @@ function handle_calendar_delete(PDO $pdo): void
         ':room_code' => $roomCode,
         ':organization_name' => $orgName,
     ]);
+    $row = $stmt->fetch();
 
-    if ($stmt->rowCount() < 1) {
-        json_response(['ok' => false, 'message' => '削除対象が見つかりませんでした。'], 404);
+    return $row !== false ? $row : null;
+}
+
+function update_calendar_google_sync_state(PDO $pdo, string $table, array $map, ?int $id, string $useDate, string $roomCode, string $orgName, array $state): void
+{
+    $sets = [];
+    $params = [];
+
+    if ($map['google_event_id_column'] !== null) {
+        $sets[] = $map['google_event_id_column'] . ' = :google_event_id';
+        $params[':google_event_id'] = $state['google_event_id'] ?? null;
     }
 
-    json_response(['ok' => true, 'message' => '確定予約を削除しました。']);
+    if ($map['google_calendar_id_column'] !== null) {
+        $sets[] = $map['google_calendar_id_column'] . ' = :google_calendar_id';
+        $params[':google_calendar_id'] = $state['google_calendar_id'] ?? null;
+    }
+
+    if ($map['google_sync_status_column'] !== null) {
+        $sets[] = $map['google_sync_status_column'] . ' = :google_sync_status';
+        $params[':google_sync_status'] = $state['google_sync_status'] ?? null;
+    }
+
+    if ($map['google_sync_error_column'] !== null) {
+        $sets[] = $map['google_sync_error_column'] . ' = :google_sync_error';
+        $params[':google_sync_error'] = $state['google_sync_error'] ?? null;
+    }
+
+    if ($map['google_synced_at_column'] !== null) {
+        $sets[] = $map['google_synced_at_column'] . ' = NOW()';
+    }
+
+    if (!$sets) {
+        return;
+    }
+
+    if ($id !== null && $id > 0 && $map['id_column'] !== null) {
+        $whereSql = $map['id_column'] . ' = :target_id';
+        $params[':target_id'] = $id;
+    } else {
+        $whereSql = sprintf(
+            '%s = :use_date AND %s = :room_code AND %s = :organization_name',
+            $map['date_column'],
+            $map['room_column'],
+            $map['org_column']
+        );
+        $params[':use_date'] = $useDate;
+        $params[':room_code'] = $roomCode;
+        $params[':organization_name'] = $orgName;
+    }
+
+    $sql = sprintf('UPDATE %s SET %s WHERE %s', $table, implode(', ', $sets), $whereSql);
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $key => $value) {
+        if ($value === null) {
+            $stmt->bindValue($key, null, PDO::PARAM_NULL);
+        } else {
+            $stmt->bindValue($key, $value);
+        }
+    }
+    $stmt->execute();
+}
+
+function room_code_to_label(string $roomCode): string
+{
+    return match ($roomCode) {
+        'tamoku' => '多目的室',
+        'orange' => 'オレンジの部屋',
+        default => $roomCode,
+    };
 }
 
 function build_where_sql(string $q, string $room, string $dateFrom, string $dateTo, ?array &$params): string
@@ -675,6 +901,7 @@ function get_table_columns(PDO $pdo, string $table): array
     return $columns;
 }
 
+
 function resolve_calendar_column_map(array $columns): array
 {
     $idColumn = first_existing_column($columns, ['id']);
@@ -683,6 +910,11 @@ function resolve_calendar_column_map(array $columns): array
     $orgColumn = first_existing_column($columns, ['organization_name', 'org_name', 'organization']);
     $peopleCountColumn = first_existing_column($columns, ['people_count']);
     $usageTimeColumn = first_existing_column($columns, ['usage_time']);
+    $googleEventIdColumn = first_existing_column($columns, ['google_event_id']);
+    $googleCalendarIdColumn = first_existing_column($columns, ['google_calendar_id']);
+    $googleSyncStatusColumn = first_existing_column($columns, ['google_sync_status']);
+    $googleSyncedAtColumn = first_existing_column($columns, ['google_synced_at']);
+    $googleSyncErrorColumn = first_existing_column($columns, ['google_sync_error']);
 
     if ($dateColumn === null || $roomColumn === null || $orgColumn === null) {
         throw new RuntimeException('カレンダー予約テーブルの列構成を特定できませんでした。');
@@ -698,8 +930,16 @@ function resolve_calendar_column_map(array $columns): array
         'people_count_select' => $peopleCountColumn !== null ? $peopleCountColumn : 'NULL',
         'usage_time_column' => $usageTimeColumn,
         'usage_time_select' => $usageTimeColumn !== null ? $usageTimeColumn : 'NULL',
+        'google_event_id_column' => $googleEventIdColumn,
+        'google_event_id_select' => $googleEventIdColumn !== null ? $googleEventIdColumn : 'NULL',
+        'google_calendar_id_column' => $googleCalendarIdColumn,
+        'google_calendar_id_select' => $googleCalendarIdColumn !== null ? $googleCalendarIdColumn : 'NULL',
+        'google_sync_status_column' => $googleSyncStatusColumn,
+        'google_synced_at_column' => $googleSyncedAtColumn,
+        'google_sync_error_column' => $googleSyncErrorColumn,
     ];
 }
+
 
 function normalize_optional_people_count(mixed $value): ?int
 {

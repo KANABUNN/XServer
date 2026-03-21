@@ -21,5 +21,17 @@ return [
     'reservation_dir' => dirname(__DIR__) . '/storage/reservations',
     'reservation_path_prefix' => 'storage/reservations',
   ],
-
+  
+  'google_calendar' => [
+    'enabled' => true,
+    'gas_url' => 'https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/exec',
+    'shared_secret' => 'CHANGE_ME_TO_LONG_RANDOM_SECRET',
+    'timezone' => 'Asia/Tokyo',
+    'connect_timeout' => 5,
+    'timeout' => 15,
+    'room_calendar_map' => [
+        'tamoku' => 'tamoku_calendar_id@group.calendar.google.com',
+        'orange' => 'orange_calendar_id@group.calendar.google.com',
+    ],
+  ],
 ];
