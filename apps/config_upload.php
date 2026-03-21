@@ -34,4 +34,22 @@ return [
         'orange' => 'orange_calendar_id@group.calendar.google.com',
     ],
   ],
+
+  'switchbot' => [
+    'token' => '',
+    'secret' => '',
+    'api_base' => 'https://api.switch-bot.com/v1.1',
+    'timeout' => 15,
+    'timezone' => 'Asia/Tokyo',
+    'keypads' => [
+      'tamoku' => [
+        'device_id' => '',
+        'device_name' => '多目的室',
+      ],
+      'orange' => [
+        'device_id' => '',
+        'device_name' => 'オレンジの部屋',
+      ],
+    ],
+  ],
 ];
