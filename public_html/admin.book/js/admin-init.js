@@ -27,6 +27,10 @@
       Admin.calendar.bindAddDialog();
     }
 
+    if (Admin.switchbot && typeof Admin.switchbot.bindEvents === 'function') {
+      Admin.switchbot.bindEvents();
+    }
+
     initDialogsBackdrop();
 
     // 初回ロード（申請一覧）

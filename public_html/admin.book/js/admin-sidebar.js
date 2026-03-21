@@ -26,6 +26,14 @@
         setStatus && setStatus('カレンダー機能が初期化されていません。', true);
       }
     }
+
+    if (viewId === 'switchbotView') {
+      if (Admin.switchbot && typeof Admin.switchbot.ensureLoaded === 'function') {
+        Admin.switchbot.ensureLoaded();
+      } else {
+        setStatus && setStatus('借用部屋管理機能が初期化されていません。', true);
+      }
+    }
   }
 
   function init() {

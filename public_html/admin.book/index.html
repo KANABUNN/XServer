@@ -17,6 +17,7 @@
       <nav class="sidebar-nav">
         <button type="button" class="sidebar-link is-active" data-view-target="applicationView">予約申請状況</button>
         <button type="button" class="sidebar-link" data-view-target="calendarView">予約状況管理</button>
+        <button type="button" class="sidebar-link" data-view-target="switchbotView">借用部屋管理</button>
       </nav>
     </aside>
 
@@ -202,6 +203,43 @@
   </div>
 </section>
 
+      <section id="switchbotView" class="content-view">
+  <div class="wrap">
+    <header class="page-head">
+      <div>
+        <h1>借用部屋管理</h1>
+        <p class="lead">SwitchBot API を使って、多目的室・オレンジの部屋のキーパッドへ「期間内に有効」のパスワードを追加します。</p>
+      </div>
+      <div class="head-actions">
+        <button id="switchbotReloadBtn" type="button" class="secondary">再読込</button>
+      </div>
+    </header>
+
+    <section class="panel">
+      <div class="meta-row">
+        <div class="meta" id="switchbotMetaText">SwitchBot 設定を確認します。</div>
+        <div class="status" id="switchbotStatusText" aria-live="polite"></div>
+      </div>
+
+      <div class="switchbot-note">
+        <strong>注意</strong>
+        <p>SwitchBot の Keypad / Keypad Touch 系のパスワード作成は非同期処理です。画面上では API への受付結果（commandId）までを表示します。</p>
+      </div>
+
+      <div id="switchbotRoomGrid" class="switchbot-room-grid">
+        <article class="switchbot-room-card">
+          <div class="switchbot-room-header">
+            <div>
+              <h2>多目的室</h2>
+              <p class="dialog-sub">読込中です…</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+  </div>
+</section>
+
     </main>
   </div>
 
@@ -368,6 +406,7 @@
   <script src="./js/admin-sidebar.js" defer></script>
   <script src="./js/admin-application.js" defer></script>
   <script src="./js/admin-calendar.js" defer></script>
+  <script src="./js/admin-room-access.js" defer></script>
   <script src="./js/admin-init.js" defer></script>
 </body>
 </html>

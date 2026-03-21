@@ -77,5 +77,11 @@
     calendarManageStatus: document.getElementById('calendarManageStatus'),
     calendarManageAddBtn: document.getElementById('calendarManageAddBtn'),
     calendarManageCloseBtn: document.getElementById('calendarManageCloseBtn'),
+
+    // SwitchBot room access view
+    switchbotReloadBtn: document.getElementById('switchbotReloadBtn'),
+    switchbotMetaText: document.getElementById('switchbotMetaText'),
+    switchbotStatusText: document.getElementById('switchbotStatusText'),
+    switchbotRoomGrid: document.getElementById('switchbotRoomGrid'),
   };
 })();

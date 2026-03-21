@@ -29,6 +29,13 @@
 
   Admin.calendar.targetReservationId = null;
 
+  // 借用部屋管理（SwitchBot）側の状態
+  Admin.switchbot = Admin.switchbot || {};
+  Admin.switchbot.state = {
+    loaded: false,
+    status: null,
+  };
+
   // 表示用定数
   Admin.constants = {
     roomLabelMap: {
