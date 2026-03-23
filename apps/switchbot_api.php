@@ -1044,6 +1044,23 @@ function switchbot_append_webhook_event(array $cfg, array $entry): void
     }
 }
 
+function switchbot_is_passcode_history_record(array $record): bool
+{
+    if (trim((string)($record['room_code'] ?? '')) !== '') {
+        return true;
+    }
+    if (trim((string)($record['room_label'] ?? '')) !== '') {
+        return true;
+    }
+    if (trim((string)($record['passcode_name'] ?? '')) !== '') {
+        return true;
+    }
+    if (trim((string)($record['start_at'] ?? '')) !== '' || trim((string)($record['end_at'] ?? '')) !== '') {
+        return true;
+    }
+    return trim((string)($record['event_name'] ?? '')) === 'createKey';
+}
+
 function switchbot_apply_webhook_event_to_store(array $cfg, array $event): ?array
 {
     $context = $event['context'] ?? [];
@@ -1071,6 +1088,10 @@ function switchbot_apply_webhook_event_to_store(array $cfg, array $event): ?arra
 
     if ($targetIndex === null && $eventName === 'createKey') {
         $targetIndex = switchbot_guess_record_index_for_create_key_event($records);
+    }
+
+    if ($targetIndex === null && $eventName !== 'createKey') {
+        return null;
     }
 
     if ($targetIndex !== null) {
@@ -1112,7 +1133,8 @@ function switchbot_apply_webhook_event_to_store(array $cfg, array $event): ?arra
         array_unshift($records, $updatedRecord);
     }
 
-    $records = array_slice(array_values($records), 0, 300);
+    $records = array_values(array_filter($records, 'switchbot_is_passcode_history_record'));
+    $records = array_slice($records, 0, 300);
     switchbot_write_command_records($cfg, $records);
     $updatedRecord = switchbot_db_upsert_request($cfg, $updatedRecord);
     $detail = [
@@ -1130,7 +1152,7 @@ function switchbot_apply_webhook_event_to_store(array $cfg, array $event): ?arra
 
 function switchbot_list_recent_commands(array $cfg, int $limit = 20): array
 {
-    $records = switchbot_read_command_records($cfg);
+    $records = array_values(array_filter(switchbot_read_command_records($cfg), 'switchbot_is_passcode_history_record'));
     usort($records, static function (array $a, array $b): int {
         return strcmp((string)($b['updated_at'] ?? ''), (string)($a['updated_at'] ?? ''));
     });

@@ -226,6 +226,30 @@
         <p>SwitchBot の Keypad / Keypad Touch 系のパスワード作成は非同期処理です。下の Webhook 設定を有効にすると、createKey の成功 / 失敗をこの画面で追跡できます。</p>
       </div>
 
+      <div id="switchbotRoomGrid" class="switchbot-room-grid">
+        <article class="switchbot-room-card">
+          <div class="switchbot-room-header">
+            <div>
+              <h2>多目的室</h2>
+              <p class="dialog-sub">読込中です…</p>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <section class="switchbot-command-panel">
+        <div class="switchbot-room-header">
+          <div>
+            <h2>直近のパスワード発行履歴</h2>
+            <p class="dialog-sub">createKey 要求と webhook の戻りをまとめて表示します。</p>
+          </div>
+        </div>
+
+        <div id="switchbotCommandList" class="switchbot-command-list">
+          <div class="empty">まだ履歴がありません。</div>
+        </div>
+      </section>
+
       <section class="switchbot-webhook-panel">
         <div class="switchbot-room-header">
           <div>
@@ -254,30 +278,6 @@
           <div class="empty">読み込み前です。</div>
         </div>
       </section>
-
-      <section class="switchbot-command-panel">
-        <div class="switchbot-room-header">
-          <div>
-            <h2>直近のパスワード発行履歴</h2>
-            <p class="dialog-sub">createKey 要求と webhook の戻りをまとめて表示します。</p>
-          </div>
-        </div>
-
-        <div id="switchbotCommandList" class="switchbot-command-list">
-          <div class="empty">まだ履歴がありません。</div>
-        </div>
-      </section>
-
-      <div id="switchbotRoomGrid" class="switchbot-room-grid">
-        <article class="switchbot-room-card">
-          <div class="switchbot-room-header">
-            <div>
-              <h2>多目的室</h2>
-              <p class="dialog-sub">読込中です…</p>
-            </div>
-          </div>
-        </article>
-      </div>
     </section>
   </div>
 </section>
