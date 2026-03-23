@@ -41,6 +41,12 @@ return [
     'api_base' => 'https://api.switch-bot.com/v1.1',
     'timeout' => 15,
     'timezone' => 'Asia/Tokyo',
+    'storage_dir' => dirname(__DIR__) . '/storage/switchbot',
+    'detail_dir' => dirname(__DIR__) . '/storage/switchbot/requests',
+    'request_table' => 'switchbot_passcode_requests',
+    'webhook_secret' => 'CHANGE_ME_TO_LONG_RANDOM_TOKEN',
+    'webhook_url' => '',
+    'webhook_path' => '/switchbot_webhook.php',
     'keypads' => [
       'tamoku' => [
         'device_id' => '',
