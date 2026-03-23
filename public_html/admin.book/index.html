@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>予約データ管理</title>
+  <link rel="icon" type="image/png" href="icon.png">
   <link rel="stylesheet" href="./css/reservation-admin.css">
 </head>
 <body>
@@ -208,7 +209,7 @@
     <header class="page-head">
       <div>
         <h1>借用部屋管理</h1>
-        <p class="lead">SwitchBot API を使って、多目的室・オレンジの部屋のキーパッドへ「期間内に有効」のパスワードを追加します。</p>
+        <p class="lead">SwitchBot API を使って、多目的室・オレンジの部屋のキーパッドへ「期間内に有効」のパスワードを追加し、Webhook で最終結果を追跡します。</p>
       </div>
       <div class="head-actions">
         <button id="switchbotReloadBtn" type="button" class="secondary">再読込</button>
@@ -223,8 +224,50 @@
 
       <div class="switchbot-note">
         <strong>注意</strong>
-        <p>SwitchBot の Keypad / Keypad Touch 系のパスワード作成は非同期処理です。画面上では API への受付結果（commandId）までを表示します。</p>
+        <p>SwitchBot の Keypad / Keypad Touch 系のパスワード作成は非同期処理です。下の Webhook 設定を有効にすると、createKey の成功 / 失敗をこの画面で追跡できます。</p>
       </div>
+
+      <section class="switchbot-webhook-panel">
+        <div class="switchbot-room-header">
+          <div>
+            <h2>Webhook 設定</h2>
+            <p class="dialog-sub" id="switchbotWebhookSummary">現在の登録状態を確認します。</p>
+          </div>
+          <div class="switchbot-webhook-actions">
+            <button id="switchbotWebhookSyncBtn" type="button">このURLで登録/更新</button>
+            <button id="switchbotWebhookToggleBtn" type="button" class="secondary">有効化</button>
+          </div>
+        </div>
+
+        <div class="switchbot-webhook-urlbox">
+          <div>
+            <div class="switchbot-urlbox-label">提案 URL</div>
+            <code id="switchbotSuggestedUrl">読込中…</code>
+          </div>
+          <p class="switchbot-room-note">config.php の <code>switchbot.webhook_secret</code> を設定すると、URL にトークンを付与して簡易的な検証を行います。</p>
+        </div>
+
+        <div class="meta-row switchbot-meta-row-tight">
+          <div class="meta" id="switchbotWebhookStatusText">SwitchBot Cloud 上の webhook 設定を確認します。</div>
+        </div>
+
+        <div id="switchbotWebhookList" class="switchbot-webhook-list">
+          <div class="empty">読み込み前です。</div>
+        </div>
+      </section>
+
+      <section class="switchbot-command-panel">
+        <div class="switchbot-room-header">
+          <div>
+            <h2>直近のパスワード発行履歴</h2>
+            <p class="dialog-sub">createKey 要求と webhook の戻りをまとめて表示します。</p>
+          </div>
+        </div>
+
+        <div id="switchbotCommandList" class="switchbot-command-list">
+          <div class="empty">まだ履歴がありません。</div>
+        </div>
+      </section>
 
       <div id="switchbotRoomGrid" class="switchbot-room-grid">
         <article class="switchbot-room-card">

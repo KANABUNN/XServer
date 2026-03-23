@@ -878,3 +878,110 @@ td code {
     grid-template-columns: 1fr;
   }
 }
+
+
+.switchbot-webhook-panel,
+.switchbot-command-panel {
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  padding: 16px;
+}
+
+.switchbot-webhook-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.switchbot-webhook-urlbox {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fbfdff;
+  padding: 12px 14px;
+}
+
+.switchbot-webhook-urlbox code,
+.switchbot-command-side code,
+.switchbot-webhook-item code {
+  display: inline-block;
+  margin-top: 6px;
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.switchbot-urlbox-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.switchbot-meta-row-tight {
+  margin-top: 12px;
+}
+
+.switchbot-webhook-list,
+.switchbot-command-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.switchbot-webhook-item,
+.switchbot-command-item {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fbfdff;
+  padding: 12px 14px;
+}
+
+.switchbot-webhook-item.is-current {
+  border-color: rgba(31, 111, 235, 0.35);
+  box-shadow: 0 0 0 1px rgba(31, 111, 235, 0.08) inset;
+}
+
+.switchbot-webhook-meta,
+.switchbot-command-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.switchbot-command-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.switchbot-command-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.switchbot-command-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.switchbot-command-side {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+@media (max-width: 1100px) {
+  .switchbot-command-item {
+    flex-direction: column;
+  }
+
+  .switchbot-command-side {
+    text-align: left;
+  }
+}

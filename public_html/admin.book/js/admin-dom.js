@@ -83,5 +83,12 @@
     switchbotMetaText: document.getElementById('switchbotMetaText'),
     switchbotStatusText: document.getElementById('switchbotStatusText'),
     switchbotRoomGrid: document.getElementById('switchbotRoomGrid'),
+    switchbotWebhookSummary: document.getElementById('switchbotWebhookSummary'),
+    switchbotSuggestedUrl: document.getElementById('switchbotSuggestedUrl'),
+    switchbotWebhookList: document.getElementById('switchbotWebhookList'),
+    switchbotWebhookStatusText: document.getElementById('switchbotWebhookStatusText'),
+    switchbotWebhookSyncBtn: document.getElementById('switchbotWebhookSyncBtn'),
+    switchbotWebhookToggleBtn: document.getElementById('switchbotWebhookToggleBtn'),
+    switchbotCommandList: document.getElementById('switchbotCommandList'),
   };
 })();

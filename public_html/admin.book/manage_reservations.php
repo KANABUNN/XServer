@@ -75,6 +75,20 @@ try {
             handle_switchbot_create_key($cfg);
             break;
 
+        case 'switchbot_webhook_sync':
+            if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+                json_response(['ok' => false, 'message' => 'Webhook 設定は POST で呼び出してください。'], 405);
+            }
+            handle_switchbot_webhook_sync($cfg);
+            break;
+
+        case 'switchbot_webhook_toggle':
+            if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+                json_response(['ok' => false, 'message' => 'Webhook 設定は POST で呼び出してください。'], 405);
+            }
+            handle_switchbot_webhook_toggle($cfg);
+            break;
+
         default:
             json_response(['ok' => false, 'message' => '不正な action です。'], 400);
     }
@@ -82,17 +96,34 @@ try {
     error_log('[manage_reservations] ' . $e->getMessage());
     error_log('[manage_reservations] ' . $e->getFile() . ':' . $e->getLine());
 
+    $actionForError = (string)($_REQUEST['action'] ?? '');
+    $isSwitchBotAction = str_starts_with($actionForError, 'switchbot_');
+
     if (!headers_sent()) {
         json_response([
             'ok' => false,
-            'message' => '管理処理でエラーが発生しました。ログを確認してください。',
+            'message' => $isSwitchBotAction
+                ? $e->getMessage()
+                : '管理処理でエラーが発生しました。ログを確認してください。',
         ], 500);
     }
 }
 
 
+
 function handle_switchbot_status(array $cfg): void
 {
+    $webhook = switchbot_basic_webhook_overview($cfg, $_SERVER);
+    $recentCommands = switchbot_list_recent_commands($cfg, 20);
+
+    if (switchbot_is_configured($cfg)) {
+        try {
+            $webhook = switchbot_get_webhook_overview($cfg, $_SERVER);
+        } catch (Throwable $e) {
+            $webhook['query_error'] = $e->getMessage();
+        }
+    }
+
     if (!switchbot_is_configured($cfg)) {
         json_response([
             'ok' => true,
@@ -102,6 +133,8 @@ function handle_switchbot_status(array $cfg): void
                 'tamoku' => switchbot_build_room_status($cfg, 'tamoku', []),
                 'orange' => switchbot_build_room_status($cfg, 'orange', []),
             ],
+            'webhook' => $webhook,
+            'recent_commands' => $recentCommands,
             'message' => 'SwitchBot の token / secret が未設定です。config.php を確認してください。',
         ]);
     }
@@ -116,6 +149,8 @@ function handle_switchbot_status(array $cfg): void
             'tamoku' => switchbot_build_room_status($cfg, 'tamoku', $keypads),
             'orange' => switchbot_build_room_status($cfg, 'orange', $keypads),
         ],
+        'webhook' => $webhook,
+        'recent_commands' => $recentCommands,
         'message' => 'SwitchBot 状態を更新しました。',
     ]);
 }
@@ -154,22 +189,137 @@ function handle_switchbot_create_key(array $cfg): void
         throw new RuntimeException('SwitchBot deviceId を取得できませんでした。');
     }
 
-    $result = switchbot_create_time_limited_key($cfg, $deviceId, $name, $password, $startAt, $endAt);
-    $statusCode = (int)($result['statusCode'] ?? 0);
-    if ($statusCode !== 100) {
-        $message = (string)($result['message'] ?? 'SwitchBot API error');
-        json_response(['ok' => false, 'message' => 'SwitchBot API でエラーが返されました: ' . $message], 502);
-    }
-
-    $commandId = (string)($result['body']['commandId'] ?? '');
-    json_response([
-        'ok' => true,
+    $localRequestId = switchbot_generate_local_request_id();
+    $baseRecord = [
+        'local_request_id' => $localRequestId,
+        'command_id' => '',
         'room_code' => $roomCode,
         'room_label' => switchbot_room_label($roomCode),
         'device_id' => $deviceId,
         'device_name' => (string)($device['deviceName'] ?? ''),
-        'command_id' => $commandId,
-        'message' => 'SwitchBot へパスワード追加要求を送信しました。Keypad 系は非同期反映のため、これは受付完了の応答です。',
+        'passcode_name' => $name,
+        'passcode' => $password,
+        'start_at' => $startAt,
+        'end_at' => $endAt,
+        'status' => 'queued',
+    ];
+
+    $baseDetail = [
+        'phase' => 'before_api_request',
+        'room_code' => $roomCode,
+        'room_label' => switchbot_room_label($roomCode),
+        'device' => [
+            'device_id' => $deviceId,
+            'device_name' => (string)($device['deviceName'] ?? ''),
+            'device_type' => (string)($device['deviceType'] ?? ''),
+        ],
+        'request' => [
+            'name' => $name,
+            'password_masked' => str_repeat('*', max(6, min(12, strlen($password)))),
+            'start_at' => $startAt,
+            'end_at' => $endAt,
+        ],
+    ];
+
+    $storedRecord = switchbot_upsert_request_record($cfg, $baseRecord, $baseDetail);
+
+    try {
+        $result = switchbot_create_time_limited_key($cfg, $deviceId, $name, $password, $startAt, $endAt);
+        $statusCode = (int)($result['statusCode'] ?? 0);
+        if ($statusCode !== 100) {
+            $message = (string)($result['message'] ?? 'SwitchBot API error');
+            $failureRecord = $storedRecord;
+            $failureRecord['status'] = 'api_error';
+            $failureRecord['result'] = $message;
+            $failureRecord['updated_at'] = switchbot_now_string($cfg);
+            switchbot_upsert_request_record($cfg, $failureRecord, [
+                'phase' => 'api_error',
+                'api_response' => $result,
+                'request' => $baseDetail['request'],
+                'device' => $baseDetail['device'],
+            ]);
+            json_response(['ok' => false, 'message' => 'SwitchBot API でエラーが返されました: ' . $message], 502);
+        }
+
+        $commandId = (string)($result['body']['commandId'] ?? '');
+        $storedRecord['command_id'] = $commandId;
+        $storedRecord['status'] = 'accepted';
+        $storedRecord['updated_at'] = switchbot_now_string($cfg);
+        $storedRecord['result'] = trim((string)($result['message'] ?? 'success'));
+        $storedRecord = switchbot_upsert_request_record($cfg, $storedRecord, [
+            'phase' => 'accepted',
+            'request' => $baseDetail['request'],
+            'device' => $baseDetail['device'],
+            'api_response' => $result,
+        ]);
+
+        $message = $commandId !== ''
+            ? 'SwitchBot へパスワード追加要求を送信しました。Webhook で最終結果を追跡します。'
+            : 'SwitchBot へパスワード追加要求を送信しました。commandId は未返却だったため、local_request_id を基準に管理します。';
+
+        json_response([
+            'ok' => true,
+            'room_code' => $roomCode,
+            'room_label' => switchbot_room_label($roomCode),
+            'device_id' => $deviceId,
+            'device_name' => (string)($device['deviceName'] ?? ''),
+            'local_request_id' => $localRequestId,
+            'command_id' => $commandId,
+            'db_id' => (int)($storedRecord['id'] ?? 0),
+            'message' => $message,
+        ]);
+    } catch (Throwable $e) {
+        $failureRecord = $storedRecord;
+        $failureRecord['status'] = 'api_error';
+        $failureRecord['result'] = $e->getMessage();
+        $failureRecord['updated_at'] = switchbot_now_string($cfg);
+        switchbot_upsert_request_record($cfg, $failureRecord, [
+            'phase' => 'exception',
+            'request' => $baseDetail['request'],
+            'device' => $baseDetail['device'],
+            'exception' => [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ],
+        ]);
+        throw $e;
+    }
+}
+
+
+
+function handle_switchbot_webhook_sync(array $cfg): void
+{
+    if (!switchbot_is_configured($cfg)) {
+        json_response(['ok' => false, 'message' => 'SwitchBot の token / secret が未設定です。'], 400);
+    }
+
+    $overview = switchbot_sync_webhook_to_current_url($cfg, $_SERVER);
+    json_response([
+        'ok' => true,
+        'webhook' => $overview,
+        'message' => '現在の URL で SwitchBot webhook を登録または更新しました。',
+    ]);
+}
+
+function handle_switchbot_webhook_toggle(array $cfg): void
+{
+    if (!switchbot_is_configured($cfg)) {
+        json_response(['ok' => false, 'message' => 'SwitchBot の token / secret が未設定です。'], 400);
+    }
+
+    $input = get_request_payload();
+    $enable = filter_var($input['enable'] ?? null, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+    if ($enable === null) {
+        json_response(['ok' => false, 'message' => 'enable に true / false を指定してください。'], 400);
+    }
+
+    $overview = switchbot_set_webhook_enabled_for_current_url($cfg, $_SERVER, $enable);
+    json_response([
+        'ok' => true,
+        'webhook' => $overview,
+        'message' => $enable ? 'Webhook を有効化しました。' : 'Webhook を無効化しました。',
     ]);
 }
 

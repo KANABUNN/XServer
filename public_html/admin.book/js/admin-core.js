@@ -8,7 +8,7 @@
   const Admin = (window.Admin = window.Admin || {});
 
   // API（js/ は index.html の1つ下なので ../ で同階層へ）
-  Admin.apiPath = "../manage_reservations.php";
+  Admin.apiPath = "manage_reservations.php";
 
   // 一覧（申請）側の状態
   Admin.state = {
@@ -34,6 +34,7 @@
   Admin.switchbot.state = {
     loaded: false,
     status: null,
+    busy: false,
   };
 
   // 表示用定数
