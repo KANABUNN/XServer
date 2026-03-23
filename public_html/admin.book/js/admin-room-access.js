@@ -21,10 +21,19 @@
     el.switchbotReloadBtn?.addEventListener('click', () => loadStatus());
     el.switchbotWebhookSyncBtn?.addEventListener('click', () => submitWebhookSync());
     el.switchbotWebhookToggleBtn?.addEventListener('click', () => submitWebhookToggle());
+    el.switchbotCommandCloseBtn?.addEventListener('click', () => el.switchbotCommandDialog?.close());
     el.switchbotRoomGrid?.addEventListener('click', (event) => {
       const button = event.target.closest('button[data-action="switchbot-create"]');
       if (!button) return;
       submitCreateKey(button.dataset.roomCode || '');
+    });
+    el.switchbotCommandList?.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-action="switchbot-detail"]');
+      if (!button) return;
+      openCommandDetail({
+        localRequestId: button.dataset.localRequestId || '',
+        dbId: Number(button.dataset.dbId || 0),
+      });
     });
   }
 
@@ -163,8 +172,10 @@
     const badge = commandBadge(status, item.result || '');
     const period = item.start_at && item.end_at ? `${u.escapeHtml(item.start_at)} 〜 ${u.escapeHtml(item.end_at)}` : '—';
     const commandId = item.command_id ? `<code>${u.escapeHtml(item.command_id)}</code>` : '未取得';
-    const localRequestId = item.local_request_id ? `<code>${u.escapeHtml(item.local_request_id)}</code>` : '未採番';
-    const dbId = Number(item.id || 0) > 0 ? String(item.id) : '—';
+    const localRequestIdText = item.local_request_id ? `<code>${u.escapeHtml(item.local_request_id)}</code>` : '未採番';
+    const localRequestIdAttr = u.escapeHtml(String(item.local_request_id || ''));
+    const dbIdNum = Number(item.id || 0);
+    const dbId = dbIdNum > 0 ? String(dbIdNum) : '—';
     const webhookText = item.webhook_received_at ? `${u.escapeHtml(item.webhook_received_at)} / ${u.escapeHtml(item.result || '') || '受信'}` : '未受信';
 
     return `
@@ -176,7 +187,7 @@
           </div>
           <div class="switchbot-command-meta">
             <span>DB ID: ${u.escapeHtml(dbId)}</span>
-            <span>local_request_id: ${localRequestId}</span>
+            <span>local_request_id: ${localRequestIdText}</span>
             <span>パスワード名: ${u.escapeHtml(item.passcode_name || '—')}</span>
             <span>要求時刻: ${u.escapeHtml(item.requested_at || '—')}</span>
             <span>有効期間: ${period}</span>
@@ -184,10 +195,119 @@
             <span>event: ${u.escapeHtml(item.event_name || '—')}</span>
           </div>
         </div>
-        <div class="switchbot-command-side">
-          ${commandId}
+        <div class="switchbot-command-side switchbot-command-actions">
+          <button type="button" class="secondary" data-action="switchbot-detail" data-local-request-id="${localRequestIdAttr}" data-db-id="${u.escapeHtml(String(dbIdNum || 0))}">照会</button>
+          <div class="switchbot-command-code">
+            <span class="switchbot-urlbox-label">commandId</span>
+            ${commandId}
+          </div>
         </div>
       </article>
+    `;
+  }
+
+  async function openCommandDetail({ localRequestId = '', dbId = 0 } = {}) {
+    const el = Admin.el;
+    if (!el.switchbotCommandDialog) return;
+
+    if (el.switchbotCommandSubText) {
+      el.switchbotCommandSubText.textContent = localRequestId ? `local_request_id ${localRequestId}` : `DB ID ${dbId || '—'}`;
+    }
+    if (el.switchbotCommandDetailGrid) {
+      el.switchbotCommandDetailGrid.innerHTML = '<div class="detail-empty">詳細を読み込んでいます…</div>';
+    }
+    if (el.switchbotCommandDetailJson) {
+      el.switchbotCommandDetailJson.textContent = '読み込み中です…';
+    }
+    u.setElementStatus(el.switchbotCommandDetailStatus, '保存済みの詳細情報を読み込んでいます…');
+
+    if (!el.switchbotCommandDialog.open) {
+      el.switchbotCommandDialog.showModal();
+    }
+
+    try {
+      const url = new URL(Admin.apiPath, window.location.href);
+      url.searchParams.set('action', 'switchbot_command_detail');
+      if (localRequestId) {
+        url.searchParams.set('local_request_id', localRequestId);
+      } else if (dbId > 0) {
+        url.searchParams.set('id', String(dbId));
+      } else {
+        throw new Error('照会対象の local_request_id / id を取得できませんでした。');
+      }
+
+      const res = await fetch(url, { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || '発行済みパスワード詳細の取得に失敗しました。');
+      }
+
+      renderCommandDetail(data);
+      u.setElementStatus(el.switchbotCommandDetailStatus, data.message || '詳細を取得しました。', 'ok');
+    } catch (err) {
+      if (el.switchbotCommandDetailGrid) {
+        el.switchbotCommandDetailGrid.innerHTML = `<div class="detail-empty">${u.escapeHtml(err.message || '詳細取得エラー')}</div>`;
+      }
+      if (el.switchbotCommandDetailJson) {
+        el.switchbotCommandDetailJson.textContent = '詳細JSONを取得できませんでした。';
+      }
+      u.setElementStatus(el.switchbotCommandDetailStatus, err.message || '詳細取得に失敗しました。', 'error');
+    }
+  }
+
+  function renderCommandDetail(data) {
+    const el = Admin.el;
+    const record = data.record || {};
+    const localRequestId = String(record.local_request_id || '');
+    const dbId = Number(record.id || 0);
+    const roomLabel = record.room_label || u.roomLabel(record.room_code || '') || '未特定';
+    const status = String(record.status || 'accepted');
+    const badge = commandBadge(status, record.result || '');
+    const passwordValue = String(record.passcode || '').trim();
+    const detailJson = data.detail_json && typeof data.detail_json === 'object'
+      ? JSON.stringify(data.detail_json, null, 2)
+      : String(data.detail_json || '保存された詳細 JSON はありません。');
+
+    if (el.switchbotCommandSubText) {
+      const parts = [];
+      if (localRequestId) parts.push(`local_request_id ${localRequestId}`);
+      if (dbId > 0) parts.push(`DB ID ${dbId}`);
+      el.switchbotCommandSubText.textContent = parts.join(' / ') || '識別子なし';
+    }
+
+    const cards = [
+      detailCard('部屋', roomLabel),
+      detailCard('状態', `<span class="switchbot-badge ${badge.className}">${u.escapeHtml(badge.label)}</span>`, false, true),
+      detailCard('パスワード名', record.passcode_name || '—'),
+      detailCard('発行パスワード', passwordValue !== '' ? `<code>${u.escapeHtml(passwordValue)}</code>` : '未保存', false, true),
+      detailCard('有効開始', record.start_at || '—'),
+      detailCard('有効終了', record.end_at || '—'),
+      detailCard('要求時刻', record.requested_at || '—'),
+      detailCard('更新時刻', record.updated_at || '—'),
+      detailCard('Webhook受信時刻', record.webhook_received_at || '未受信'),
+      detailCard('commandId', record.command_id ? `<code>${u.escapeHtml(record.command_id)}</code>` : '未取得', false, true),
+      detailCard('deviceId', record.device_id ? `<code>${u.escapeHtml(record.device_id)}</code>` : '—', false, true),
+      detailCard('デバイス名', record.device_name || '—'),
+      detailCard('eventName', record.event_name || '—'),
+      detailCard('結果メッセージ', record.result || '—'),
+      detailCard('保存JSONパス', data.detail_json_path ? `<code>${u.escapeHtml(data.detail_json_path)}</code>` : '未保存', true, true),
+    ];
+
+    if (el.switchbotCommandDetailGrid) {
+      el.switchbotCommandDetailGrid.innerHTML = cards.join('');
+    }
+    if (el.switchbotCommandDetailJson) {
+      el.switchbotCommandDetailJson.textContent = detailJson;
+    }
+  }
+
+  function detailCard(label, value, full = false, allowHtml = false) {
+    const renderedValue = allowHtml ? String(value) : u.escapeHtml(String(value ?? ''));
+    return `
+      <section class="detail-card ${full ? 'full' : ''}">
+        <div class="detail-label">${u.escapeHtml(label)}</div>
+        <div class="detail-value">${renderedValue}</div>
+      </section>
     `;
   }
 

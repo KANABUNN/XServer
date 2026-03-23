@@ -90,5 +90,11 @@
     switchbotWebhookSyncBtn: document.getElementById('switchbotWebhookSyncBtn'),
     switchbotWebhookToggleBtn: document.getElementById('switchbotWebhookToggleBtn'),
     switchbotCommandList: document.getElementById('switchbotCommandList'),
+    switchbotCommandDialog: document.getElementById('switchbotCommandDialog'),
+    switchbotCommandSubText: document.getElementById('switchbotCommandSubText'),
+    switchbotCommandDetailStatus: document.getElementById('switchbotCommandDetailStatus'),
+    switchbotCommandDetailGrid: document.getElementById('switchbotCommandDetailGrid'),
+    switchbotCommandDetailJson: document.getElementById('switchbotCommandDetailJson'),
+    switchbotCommandCloseBtn: document.getElementById('switchbotCommandCloseBtn'),
   };
 })();

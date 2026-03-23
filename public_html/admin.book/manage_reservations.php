@@ -89,6 +89,10 @@ try {
             handle_switchbot_webhook_toggle($cfg);
             break;
 
+        case 'switchbot_command_detail':
+            handle_switchbot_command_detail($cfg);
+            break;
+
         default:
             json_response(['ok' => false, 'message' => '不正な action です。'], 400);
     }
@@ -288,6 +292,30 @@ function handle_switchbot_create_key(array $cfg): void
 }
 
 
+
+function handle_switchbot_command_detail(array $cfg): void
+{
+    $localRequestId = trim((string)($_GET['local_request_id'] ?? ''));
+    $id = (int)($_GET['id'] ?? 0);
+
+    if ($localRequestId === '' && $id < 1) {
+        json_response(['ok' => false, 'message' => 'local_request_id または id を指定してください。'], 400);
+    }
+
+    $detail = switchbot_get_request_detail($cfg, $localRequestId, $id);
+    if (!is_array($detail)) {
+        json_response(['ok' => false, 'message' => '指定した発行履歴が見つかりません。'], 404);
+    }
+
+    json_response([
+        'ok' => true,
+        'record' => $detail['record'] ?? null,
+        'detail_json' => $detail['detail_json'] ?? null,
+        'detail_json_path' => (string)($detail['detail_json_path'] ?? ''),
+        'detail_json_exists' => (bool)($detail['detail_json_exists'] ?? false),
+        'message' => '発行済みパスワード詳細を取得しました。',
+    ]);
+}
 
 function handle_switchbot_webhook_sync(array $cfg): void
 {

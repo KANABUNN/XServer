@@ -1161,6 +1161,162 @@ function switchbot_list_recent_commands(array $cfg, int $limit = 20): array
     }, $records), 0, max(1, $limit));
 }
 
+function switchbot_find_request_row(array $cfg, string $localRequestId = '', int $id = 0): ?array
+{
+    try {
+        $pdo = switchbot_db_connect($cfg);
+    } catch (Throwable $e) {
+        return null;
+    }
+
+    $table = switchbot_request_table_name($cfg);
+    if ($localRequestId !== '') {
+        $stmt = $pdo->prepare("SELECT * FROM `{$table}` WHERE local_request_id = :local_request_id LIMIT 1");
+        $stmt->execute([':local_request_id' => $localRequestId]);
+        $row = $stmt->fetch();
+        return is_array($row) ? $row : null;
+    }
+
+    if ($id > 0) {
+        $stmt = $pdo->prepare("SELECT * FROM `{$table}` WHERE id = :id LIMIT 1");
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+        return is_array($row) ? $row : null;
+    }
+
+    return null;
+}
+
+function switchbot_find_command_record(array $cfg, string $localRequestId = '', int $id = 0): ?array
+{
+    $records = switchbot_read_command_records($cfg);
+
+    if ($localRequestId !== '') {
+        foreach ($records as $record) {
+            if ((string)($record['local_request_id'] ?? '') === $localRequestId) {
+                return is_array($record) ? $record : null;
+            }
+        }
+    }
+
+    if ($id > 0) {
+        foreach ($records as $record) {
+            if ((int)($record['id'] ?? 0) === $id) {
+                return is_array($record) ? $record : null;
+            }
+        }
+    }
+
+    return null;
+}
+
+function switchbot_resolve_detail_json_absolute_path(array $cfg, string $detailJsonPath = ''): ?string
+{
+    $relative = trim($detailJsonPath);
+    if ($relative === '') {
+        return null;
+    }
+
+    $storageDir = realpath(switchbot_ensure_storage_dir($cfg));
+    if ($storageDir === false) {
+        return null;
+    }
+
+    $candidate = rtrim($storageDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim(str_replace(['\\', '..'], ['/', ''], $relative), '/');
+    if (!is_file($candidate)) {
+        return null;
+    }
+
+    $realCandidate = realpath($candidate);
+    if ($realCandidate === false) {
+        return null;
+    }
+
+    $prefix = rtrim(str_replace('\\', '/', $storageDir), '/');
+    $normalizedCandidate = str_replace('\\', '/', $realCandidate);
+    if (!str_starts_with($normalizedCandidate, $prefix . '/')) {
+        return null;
+    }
+
+    return $realCandidate;
+}
+
+function switchbot_read_request_detail_json(array $cfg, string $detailJsonPath = '', string $localRequestId = ''): ?array
+{
+    $path = switchbot_resolve_detail_json_absolute_path($cfg, $detailJsonPath);
+    if ($path === null && $localRequestId !== '') {
+        $candidate = switchbot_ensure_detail_dir($cfg) . DIRECTORY_SEPARATOR . $localRequestId . '.json';
+        if (is_file($candidate)) {
+            $path = $candidate;
+        }
+    }
+
+    if ($path === null || !is_file($path)) {
+        return null;
+    }
+
+    $raw = file_get_contents($path);
+    if ($raw === false) {
+        throw new RuntimeException('SwitchBot 詳細 JSON を読み込めませんでした。');
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [
+            '_raw' => $raw,
+            '_decode_error' => true,
+        ];
+    }
+
+    return $decoded;
+}
+
+function switchbot_get_request_detail(array $cfg, string $localRequestId = '', int $id = 0): ?array
+{
+    $dbRow = switchbot_find_request_row($cfg, $localRequestId, $id);
+    $record = $dbRow;
+
+    if (!is_array($record)) {
+        $record = switchbot_find_command_record($cfg, $localRequestId, $id);
+        if (!is_array($record)) {
+            return null;
+        }
+    }
+
+    $detailJsonPath = trim((string)($record['detail_json_path'] ?? ''));
+    $effectiveLocalRequestId = trim((string)($record['local_request_id'] ?? ''));
+    $detailJson = switchbot_read_request_detail_json($cfg, $detailJsonPath, $effectiveLocalRequestId);
+
+    return [
+        'record' => [
+            'id' => (int)($record['id'] ?? 0),
+            'local_request_id' => (string)($record['local_request_id'] ?? ''),
+            'command_id' => (string)($record['command_id'] ?? ''),
+            'room_code' => (string)($record['room_code'] ?? ''),
+            'room_label' => (string)($record['room_label'] ?? ''),
+            'device_id' => (string)($record['device_id'] ?? ''),
+            'device_name' => (string)($record['device_name'] ?? ''),
+            'passcode_name' => (string)($record['passcode_name'] ?? ''),
+            'passcode' => (string)($record['passcode'] ?? ''),
+            'start_at' => (string)($record['start_at'] ?? ''),
+            'end_at' => (string)($record['end_at'] ?? ''),
+            'status' => (string)($record['status'] ?? ''),
+            'result' => (string)($record['result'] ?? ''),
+            'requested_at' => (string)($record['requested_at'] ?? ''),
+            'updated_at' => (string)($record['updated_at'] ?? ''),
+            'webhook_received_at' => (string)($record['webhook_received_at'] ?? ''),
+            'detail_json_path' => $detailJsonPath,
+            'event_name' => (string)($record['event_name'] ?? ''),
+            'event_device_type' => (string)($record['event_device_type'] ?? ''),
+            'event_device_mac' => (string)($record['event_device_mac'] ?? ''),
+            'time_of_sample' => $record['time_of_sample'] ?? null,
+        ],
+        'detail_json' => $detailJson,
+        'detail_json_path' => $detailJsonPath,
+        'detail_json_exists' => is_array($detailJson),
+    ];
+}
+
 function switchbot_validate_webhook_secret(array $cfg, ?string $providedToken): bool
 {
     $expected = switchbot_config($cfg)['webhook_secret'];

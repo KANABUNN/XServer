@@ -286,6 +286,34 @@
   </div>
 
 
+  <dialog id="switchbotCommandDialog" class="detail-dialog">
+    <div class="dialog-shell">
+      <div class="dialog-head">
+        <div>
+          <h2>発行済みパスワード詳細</h2>
+          <p id="switchbotCommandSubText" class="dialog-sub">local_request_id -</p>
+        </div>
+        <button type="button" class="ghost" id="switchbotCommandCloseBtn">閉じる</button>
+      </div>
+
+      <div id="switchbotCommandDetailStatus" class="status"></div>
+
+      <div id="switchbotCommandDetailGrid" class="detail-grid">
+        <div class="detail-empty">詳細を読み込んでいます…</div>
+      </div>
+
+      <section class="switchbot-detail-section">
+        <div class="switchbot-room-header switchbot-detail-head">
+          <div>
+            <h3>保存済み詳細JSON</h3>
+            <p class="dialog-sub">JSON に保持している詳細設定と API 応答 / webhook 情報です。</p>
+          </div>
+        </div>
+        <pre id="switchbotCommandDetailJson" class="switchbot-json-view">読み込み前です。</pre>
+      </section>
+    </div>
+  </dialog>
+
   <dialog id="detailDialog" class="detail-dialog">
     <form method="dialog" class="dialog-shell">
       <div class="dialog-head">

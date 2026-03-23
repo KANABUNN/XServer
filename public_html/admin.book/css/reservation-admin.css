@@ -985,3 +985,57 @@ td code {
     text-align: left;
   }
 }
+
+
+.switchbot-command-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.switchbot-command-code {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.switchbot-command-code .switchbot-urlbox-label {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.switchbot-detail-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.switchbot-detail-head {
+  margin-bottom: 10px;
+}
+
+.switchbot-detail-head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.switchbot-json-view {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  max-height: 420px;
+}
+
+@media (max-width: 1100px) {
+  .switchbot-command-actions {
+    align-items: flex-start;
+  }
+}

@@ -12,6 +12,7 @@
     u.bindDialogBackdropClose(el.calendarAddDialog);
     u.bindDialogBackdropClose(el.detailDialog);
     u.bindDialogBackdropClose(el.calendarManageDialog);
+    u.bindDialogBackdropClose(el.switchbotCommandDialog);
   }
 
   async function init() {
