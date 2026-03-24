@@ -443,10 +443,6 @@
       if (Admin.calendar.state.loaded) {
         await loadReservations();
       }
-
-      setTimeout(() => {
-        if (el.calendarAddDialog.open) el.calendarAddDialog.close();
-      }, 350);
     } catch (err) {
       u.setElementStatus(el.calendarAddStatus, err.message || '登録に失敗しました。', 'error');
     }
@@ -477,7 +473,9 @@
     if (el.calendarManageUsageStart) el.calendarManageUsageStart.value = '';
     if (el.calendarManageUsageEnd) el.calendarManageUsageEnd.value = '';
 
-    u.setElementStatus(el.calendarManageStatus, '');
+    if (!el.calendarManageDialog.open) {
+      u.setElementStatus(el.calendarManageStatus, '');
+    }
     renderManageList();
 
     if (!el.calendarManageDialog.open) el.calendarManageDialog.showModal();
