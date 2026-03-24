@@ -226,7 +226,10 @@
       <div class="mail-form-grid">
         <label class="field field-wide">
           <span>宛先メールアドレス <strong style="color: var(--danger)">*</strong></span>
-          <input id="reservationMailTo" type="email" inputmode="email" placeholder="例：user@example.jp" autocomplete="email" required>
+          <div class="mail-address-row">
+            <input id="reservationMailTo" type="email" inputmode="email" placeholder="例：user@example.jp" autocomplete="email" required>
+            <button id="reservationMailAppendBeneBtn" type="button" class="secondary mail-domain-btn">@bene.fit.ac.jp を追加</button>
+          </div>
         </label>
 
         <label class="field">

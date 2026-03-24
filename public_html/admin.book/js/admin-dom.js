@@ -67,6 +67,7 @@
     // Reservation mail view
     reservationMailReloadBtn: document.getElementById('reservationMailReloadBtn'),
     reservationMailTo: document.getElementById('reservationMailTo'),
+    reservationMailAppendBeneBtn: document.getElementById('reservationMailAppendBeneBtn'),
     reservationMailReservationSelect: document.getElementById('reservationMailReservationSelect'),
     reservationMailPasscodeSelect: document.getElementById('reservationMailPasscodeSelect'),
     reservationMailMetaText: document.getElementById('reservationMailMetaText'),

@@ -21,6 +21,7 @@
   function bindEvents() {
     const el = Admin.el;
     el.reservationMailReloadBtn?.addEventListener('click', () => loadOptions());
+    el.reservationMailAppendBeneBtn?.addEventListener('click', () => appendBeneDomain());
     el.reservationMailReservationSelect?.addEventListener('change', () => {
       renderReservationSummary();
       renderPasscodeOptions();
@@ -30,6 +31,38 @@
       renderPasscodeSummary();
     });
     el.reservationMailSendBtn?.addEventListener('click', () => sendMail());
+  }
+
+  function appendBeneDomain() {
+    const el = Admin.el;
+    const domain = '@bene.fit.ac.jp';
+    const input = el.reservationMailTo;
+    if (!input) return;
+
+    const current = String(input.value || '').trim();
+    if (!current) {
+      input.value = domain;
+      input.focus();
+      input.setSelectionRange(0, 0);
+      u.setElementStatus(el.reservationMailStatusText, '宛先欄に @bene.fit.ac.jp を入力しました。学内アカウント名を先頭に入力してください。');
+      return;
+    }
+
+    if (current.toLowerCase().endsWith(domain)) {
+      u.setElementStatus(el.reservationMailStatusText, '宛先欄には既に @bene.fit.ac.jp が含まれています。');
+      input.focus();
+      return;
+    }
+
+    if (current.includes('@')) {
+      u.setElementStatus(el.reservationMailStatusText, '別のドメインが既に入力されているため、自動追加は行いませんでした。', 'error');
+      input.focus();
+      return;
+    }
+
+    input.value = current + domain;
+    input.focus();
+    u.setElementStatus(el.reservationMailStatusText, '@bene.fit.ac.jp を追加しました。');
   }
 
   async function loadOptions() {

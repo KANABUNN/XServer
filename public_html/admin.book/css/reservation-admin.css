@@ -1067,6 +1067,22 @@ td code {
   gap: 14px;
 }
 
+.mail-address-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.mail-address-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mail-domain-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .mail-summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1124,5 +1140,10 @@ td code {
   .mail-form-grid,
   .mail-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mail-address-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
