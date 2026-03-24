@@ -192,7 +192,6 @@ function build_reservation_completion_html(array $data): string
     $useDate = (string)($data['use_date'] ?? '');
     $usageTime = (string)($data['usage_time'] ?? '');
     $peopleCount = (string)($data['people_count'] ?? '');
-    $passcodeName = (string)($data['passcode_name'] ?? '');
     $passcode = (string)($data['passcode'] ?? '');
     $passcodePeriod = (string)($data['passcode_period'] ?? '');
     $sentAt = (string)($data['sent_at'] ?? '');
@@ -202,7 +201,6 @@ function build_reservation_completion_html(array $data): string
     $useDateHtml = reservation_mail_html_escape($useDate !== '' ? $useDate : '—');
     $usageTimeHtml = reservation_mail_html_escape($usageTime !== '' ? $usageTime : '未登録');
     $peopleCountHtml = reservation_mail_html_escape($peopleCount !== '' ? $peopleCount . '人' : '未登録');
-    $passcodeNameHtml = reservation_mail_html_escape($passcodeName !== '' ? $passcodeName : '—');
     $passcodeHtml = reservation_mail_html_escape($passcode);
     $passcodePeriodHtml = reservation_mail_html_escape($passcodePeriod !== '' ? $passcodePeriod : '—');
     $sentAtHtml = reservation_mail_html_escape($sentAt);
@@ -268,10 +266,6 @@ function build_reservation_completion_html(array $data): string
               <div style="border:1px solid #dbeafe; background-color:#eff6ff; border-radius:12px; padding:18px 18px 16px 18px;">
                 <div style="margin:0 0 10px 0; font-size:18px; font-weight:bold; color:#1d4ed8;">入室用パスワード</div>
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
-                  <tr>
-                    <td style="width:140px; padding:8px 0; font-size:13px; font-weight:bold; color:#1e3a8a;">パスワード名</td>
-                    <td style="padding:8px 0; font-size:14px; line-height:1.7; color:#1f2937;">{$passcodeNameHtml}</td>
-                  </tr>
                   <tr>
                     <td style="width:140px; padding:8px 0; font-size:13px; font-weight:bold; color:#1e3a8a; vertical-align:top;">パスワード</td>
                     <td style="padding:8px 0;">

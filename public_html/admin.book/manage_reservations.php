@@ -1115,7 +1115,6 @@ function handle_reservation_mail_send(PDO $pdo, array $cfg): void
     $useDate = trim((string)($reservation['use_date'] ?? ''));
     $usageTime = trim((string)($reservation['usage_time'] ?? ''));
     $peopleCount = trim((string)($reservation['people_count'] ?? ''));
-    $passcodeName = trim((string)($passcode['passcode_name'] ?? ''));
     $passcodeValue = trim((string)($passcode['passcode'] ?? ''));
     $passcodeStartAt = trim((string)($passcode['start_at'] ?? ''));
     $passcodeEndAt = trim((string)($passcode['end_at'] ?? ''));
@@ -1132,7 +1131,6 @@ function handle_reservation_mail_send(PDO $pdo, array $cfg): void
         'use_date' => $useDate,
         'usage_time' => $usageTime,
         'people_count' => $peopleCount,
-        'passcode_name' => $passcodeName,
         'passcode' => $passcodeValue,
         'passcode_period' => $passcodePeriod,
         'sent_at' => $sentAt,
@@ -1149,7 +1147,6 @@ function handle_reservation_mail_send(PDO $pdo, array $cfg): void
         '人数: ' . ($peopleCount !== '' ? $peopleCount . '人' : '未登録'),
         '',
         '【入室用パスワード】',
-        'パスワード名: ' . ($passcodeName !== '' ? $passcodeName : '—'),
         'パスワード: ' . $passcodeValue,
         '有効期間: ' . ($passcodePeriod !== '' ? $passcodePeriod : '—'),
         '',
