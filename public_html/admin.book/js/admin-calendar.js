@@ -573,7 +573,7 @@
       if (el.calendarManageUsageEnd) el.calendarManageUsageEnd.value = '';
 
       await loadReservations();
-      openManage(useDate, roomCode);
+      renderManageList();
     } catch (err) {
       u.setElementStatus(el.calendarManageStatus, err.message || 'カレンダー追加に失敗しました。', 'error');
     }
@@ -607,7 +607,7 @@
 
       u.setElementStatus(el.calendarManageStatus, data.message || '削除しました。', 'ok');
       await loadReservations();
-      openManage(payload.useDate, payload.roomCode);
+      renderManageList();
     } catch (err) {
       u.setElementStatus(el.calendarManageStatus, err.message || 'カレンダー削除に失敗しました。', 'error');
     }
