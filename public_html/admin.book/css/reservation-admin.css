@@ -1147,3 +1147,24 @@ td code {
     align-items: stretch;
   }
 }
+
+/* ===== 管理画面全体の表示テキストを選択不可にする ===== */
+html,
+body,
+body * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* ===== 入力系は通常どおり操作可能にする ===== */
+input,
+textarea,
+select {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
