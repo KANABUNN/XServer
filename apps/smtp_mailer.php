@@ -10,13 +10,13 @@ function send_mail_smtp(array $cfg, array $mailData): void
     try {
         // SMTPサーバーの設定
         $mail->isSMTP();
-        $mail->Host       = $cfg['smtp_host'];
-        $mail->Port       = (int)$cfg['smtp_port'];
+        $mail->Host       = (string)($cfg['smtp_host'] ?? '');
+        $mail->Port       = (int)($cfg['smtp_port'] ?? 465);
         $mail->SMTPAuth   = true;
-        $mail->Username   = $cfg['smtp_user'];
-        $mail->Password   = $cfg['smtp_pass'];
+        $mail->Username   = (string)($cfg['smtp_user'] ?? '');
+        $mail->Password   = (string)($cfg['smtp_pass'] ?? '');
         if (!empty($cfg['smtp_secure'])) {
-            $mail->SMTPSecure = $cfg['smtp_secure'];
+            $mail->SMTPSecure = (string)$cfg['smtp_secure'];
         }
 
         // メールの基本設定
@@ -24,28 +24,52 @@ function send_mail_smtp(array $cfg, array $mailData): void
         $mail->CharSet  = 'UTF-8';
         $mail->Encoding = 'quoted-printable';
 
-        // 送信元は固定
-        $mail->setFrom($cfg['from_addr'], $cfg['from_name']);
-        $mail->addAddress($mailData['to']);
-
-        // 返信先としてユーザーの mail を入れる
-        if (!empty($mailData['reply_to'])) {
-            $mail->addReplyTo($mailData['reply_to']);
+        $fromAddr = (string)($cfg['from_addr'] ?? '');
+        $fromName = (string)($cfg['from_name'] ?? '');
+        if ($fromAddr === '') {
+            throw new RuntimeException('送信元メールアドレスが未設定です。');
         }
 
-        // 本文の改行コードをCRLFに統一
-        $plain = PHPMailer::normalizeBreaks((string)$mailData['body'], "\r\n");
+        $to = trim((string)($mailData['to'] ?? ''));
+        if ($to === '') {
+            throw new RuntimeException('宛先メールアドレスが未指定です。');
+        }
 
-        // 件名と本文をセット
-        $mail->Subject = $mailData['subject'];
-        $mail->Body    = $mailData['html_body'];
+        // 送信元 / 宛先
+        $mail->setFrom($fromAddr, $fromName);
+        $mail->addAddress($to);
+
+        if (!empty($mailData['cc'])) {
+            $mail->addCC((string)$mailData['cc']);
+        }
+        if (!empty($mailData['bcc'])) {
+            $mail->addBCC((string)$mailData['bcc']);
+        }
+
+        // 返信先
+        if (!empty($mailData['reply_to'])) {
+            $mail->addReplyTo((string)$mailData['reply_to']);
+        }
+
+        $htmlBody = (string)($mailData['html_body'] ?? '');
+        $plainBody = (string)($mailData['body'] ?? '');
+        if ($plainBody === '') {
+            $plainBody = trim(strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $htmlBody)));
+        }
+        $plain = PHPMailer::normalizeBreaks($plainBody, "\r\n");
+
+        $mail->Subject = (string)($mailData['subject'] ?? '');
+        $mail->Body    = $htmlBody !== '' ? $htmlBody : nl2br(htmlspecialchars($plain, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
         $mail->AltBody = $plain;
 
-        $mail->addAttachment(
-            // 添付ファイルのパスと表示名を指定
-            $mailData['attachment']['path'],
-            $mailData['attachment']['name']
-        );
+        $attachment = $mailData['attachment'] ?? null;
+        if (is_array($attachment)) {
+            $attachmentPath = (string)($attachment['path'] ?? '');
+            $attachmentName = (string)($attachment['name'] ?? basename($attachmentPath));
+            if ($attachmentPath !== '' && is_file($attachmentPath)) {
+                $mail->addAttachment($attachmentPath, $attachmentName);
+            }
+        }
 
         $mail->send();
     } catch (Exception $e) {

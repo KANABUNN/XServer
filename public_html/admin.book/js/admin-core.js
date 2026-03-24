@@ -29,6 +29,15 @@
 
   Admin.calendar.targetReservationId = null;
 
+  // 予約通知メール側の状態
+  Admin.mail = Admin.mail || {};
+  Admin.mail.state = {
+    loaded: false,
+    initialized: false,
+    reservations: [],
+    passcodes: [],
+  };
+
   // 借用部屋管理（SwitchBot）側の状態
   Admin.switchbot = Admin.switchbot || {};
   Admin.switchbot.state = {

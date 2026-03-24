@@ -17,6 +17,7 @@
       <nav class="sidebar-nav">
         <button type="button" class="sidebar-link is-active" data-view-target="applicationView">予約申請状況</button>
         <button type="button" class="sidebar-link" data-view-target="calendarView">予約状況管理</button>
+        <button type="button" class="sidebar-link" data-view-target="mailView">予約通知メール</button>
         <button type="button" class="sidebar-link" data-view-target="switchbotView">借用部屋管理</button>
       </nav>
     </aside>
@@ -198,6 +199,80 @@
             <tr><td colspan="6" class="empty">読み込み前です。</td></tr>
           </tbody>
         </table>
+      </div>
+    </section>
+  </div>
+</section>
+
+
+      <section id="mailView" class="content-view">
+  <div class="wrap">
+    <header class="page-head">
+      <div>
+        <h1>予約通知メール</h1>
+        <p class="lead">確定済み予約と発行済みパスコードを選択し、予約確定と入室用パスワードをメール送信します。</p>
+      </div>
+      <div class="head-actions">
+        <button id="reservationMailReloadBtn" type="button" class="secondary">候補を再読込</button>
+      </div>
+    </header>
+
+    <section class="panel">
+      <div class="mail-note">
+        <strong>送信内容</strong>
+        <p>既存の SMTP 設定を利用して HTML メールを送信します。予約内容・利用日時のリマインド・部屋のパスワードを 1 通にまとめて案内します。</p>
+      </div>
+
+      <div class="mail-form-grid">
+        <label class="field field-wide">
+          <span>宛先メールアドレス <strong style="color: var(--danger)">*</strong></span>
+          <input id="reservationMailTo" type="email" inputmode="email" placeholder="例：user@example.jp" autocomplete="email" required>
+        </label>
+
+        <label class="field">
+          <span>確定済み予約 <strong style="color: var(--danger)">*</strong></span>
+          <select id="reservationMailReservationSelect" required>
+            <option value="">読み込み前です</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>発行済みパスコード <strong style="color: var(--danger)">*</strong></span>
+          <select id="reservationMailPasscodeSelect" required>
+            <option value="">読み込み前です</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="meta-row">
+        <div class="meta" id="reservationMailMetaText">候補を読み込みます。</div>
+        <div class="status" id="reservationMailStatusText" aria-live="polite"></div>
+      </div>
+
+      <div class="mail-summary-grid">
+        <section class="mail-summary-card">
+          <div class="mail-summary-head">
+            <h2>予約内容</h2>
+            <p class="dialog-sub">選択した確定済み予約の内容です。</p>
+          </div>
+          <div id="reservationMailReservationSummary" class="mail-summary-list">
+            <div class="detail-empty">予約を選択してください。</div>
+          </div>
+        </section>
+
+        <section class="mail-summary-card">
+          <div class="mail-summary-head">
+            <h2>パスコード内容</h2>
+            <p class="dialog-sub">選択した発行済みパスコードの内容です。</p>
+          </div>
+          <div id="reservationMailPasscodeSummary" class="mail-summary-list">
+            <div class="detail-empty">パスコードを選択してください。</div>
+          </div>
+        </section>
+      </div>
+
+      <div class="dialog-actions mail-send-actions">
+        <button id="reservationMailSendBtn" type="button">メール送信</button>
       </div>
     </section>
   </div>
@@ -476,6 +551,7 @@
   <script src="./js/admin-sidebar.js" defer></script>
   <script src="./js/admin-application.js" defer></script>
   <script src="./js/admin-calendar.js" defer></script>
+  <script src="./js/admin-mail.js" defer></script>
   <script src="./js/admin-room-access.js" defer></script>
   <script src="./js/admin-init.js" defer></script>
 </body>

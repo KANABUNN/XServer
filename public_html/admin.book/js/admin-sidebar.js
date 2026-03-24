@@ -27,6 +27,14 @@
       }
     }
 
+    if (viewId === 'mailView') {
+      if (Admin.mail && typeof Admin.mail.ensureLoaded === 'function') {
+        Admin.mail.ensureLoaded();
+      } else {
+        setStatus && setStatus('予約通知メール機能が初期化されていません。', true);
+      }
+    }
+
     if (viewId === 'switchbotView') {
       if (Admin.switchbot && typeof Admin.switchbot.ensureLoaded === 'function') {
         Admin.switchbot.ensureLoaded();

@@ -64,6 +64,18 @@
     calendarMetaText: document.getElementById('calendarMetaText'),
     calendarStatusText: document.getElementById('calendarStatusText'),
 
+    // Reservation mail view
+    reservationMailReloadBtn: document.getElementById('reservationMailReloadBtn'),
+    reservationMailTo: document.getElementById('reservationMailTo'),
+    reservationMailReservationSelect: document.getElementById('reservationMailReservationSelect'),
+    reservationMailPasscodeSelect: document.getElementById('reservationMailPasscodeSelect'),
+    reservationMailMetaText: document.getElementById('reservationMailMetaText'),
+    reservationMailStatusText: document.getElementById('reservationMailStatusText'),
+    reservationMailReservationSummary: document.getElementById('reservationMailReservationSummary'),
+    reservationMailPasscodeSummary: document.getElementById('reservationMailPasscodeSummary'),
+    reservationMailSendBtn: document.getElementById('reservationMailSendBtn'),
+
+
     // Calendar manage dialog
     calendarManageDialog: document.getElementById('calendarManageDialog'),
     calendarManageSubText: document.getElementById('calendarManageSubText'),

@@ -12,6 +12,7 @@ foreach ([__DIR__ . '/../../apps/switchbot_api.php', __DIR__ . '/../apps/switchb
 
 try {
     $cfg = load_config();
+    load_google_calendar_sync_helpers();
     $action = (string)($_REQUEST['action'] ?? 'list');
 
     switch ($action) {
@@ -53,7 +54,7 @@ try {
             if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
                 json_response(['ok' => false, 'message' => '登録は POST で呼び出してください。'], 405);
             }
-            handle_calendar_add($pdo);
+            handle_calendar_add($pdo, $cfg);
             break;
 
         case 'calendar_delete':
@@ -61,7 +62,20 @@ try {
             if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
                 json_response(['ok' => false, 'message' => '削除は POST で呼び出してください。'], 405);
             }
-            handle_calendar_delete($pdo);
+            handle_calendar_delete($pdo, $cfg);
+            break;
+
+        case 'mail_form_options':
+            $pdo = db_connect($cfg);
+            handle_mail_form_options($pdo, $cfg);
+            break;
+
+        case 'reservation_mail_send':
+            $pdo = db_connect($cfg);
+            if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+                json_response(['ok' => false, 'message' => '送信は POST で呼び出してください。'], 405);
+            }
+            handle_reservation_mail_send($pdo, $cfg);
             break;
 
         case 'switchbot_status':
@@ -113,6 +127,31 @@ try {
     }
 }
 
+
+
+function load_google_calendar_sync_helpers(): void
+{
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+
+    $candidates = [
+        __DIR__ . '/../../apps/google_calendar_sync.php',
+        __DIR__ . '/../apps/google_calendar_sync.php',
+        __DIR__ . '/apps/google_calendar_sync.php',
+    ];
+
+    foreach ($candidates as $path) {
+        if (is_file($path)) {
+            require_once $path;
+            $loaded = true;
+            return;
+        }
+    }
+
+    throw new RuntimeException('google_calendar_sync.php が見つかりません。apps 配下へ配置してください。');
+}
 
 
 function handle_switchbot_status(array $cfg): void
@@ -670,7 +709,7 @@ function handle_calendar_list(PDO $pdo): void
     ]);
 }
 
-function handle_calendar_add(PDO $pdo): void
+function handle_calendar_add(PDO $pdo, array $cfg): void
 {
     $input = get_request_payload();
 
@@ -722,7 +761,12 @@ function handle_calendar_add(PDO $pdo): void
         $placeholders[] = ':usage_time';
     }
 
+    $googleSyncEnabled = function_exists('google_calendar_sync_enabled') && google_calendar_sync_enabled($cfg);
+    $googleResult = null;
+
     try {
+        $pdo->beginTransaction();
+
         $sql = sprintf(
             'INSERT INTO %s (%s) VALUES (%s)',
             $table,
@@ -753,11 +797,44 @@ function handle_calendar_add(PDO $pdo): void
 
         $stmt->execute();
 
+        $insertedId = $map['id_column'] !== null ? (int)$pdo->lastInsertId() : null;
+
+        if ($googleSyncEnabled) {
+            $calendarId = google_calendar_require_room_calendar_id($cfg, $roomCode);
+            $googleResult = google_calendar_create_via_gas($cfg, [
+                'reservation_id' => $insertedId,
+                'use_date' => $useDate,
+                'usage_time' => $usageTime,
+                'room_code' => $roomCode,
+                'room_label' => room_code_to_label($roomCode),
+                'organization_name' => $orgName,
+                'calendar_id' => $calendarId,
+            ]);
+
+            update_calendar_google_sync_state($pdo, $table, $map, $insertedId, $useDate, $roomCode, $orgName, [
+                'google_event_id' => $googleResult['event_id'] ?? null,
+                'google_calendar_id' => $googleResult['calendar_id'] ?? $calendarId,
+                'google_sync_status' => 'synced',
+                'google_sync_error' => null,
+            ]);
+        }
+
+        $pdo->commit();
+
+        $message = $googleSyncEnabled
+            ? '確定予約を登録し、Googleカレンダーにも反映しました。'
+            : '確定予約として登録しました。';
+
         json_response([
             'ok' => true,
-            'message' => '確定予約として登録しました。',
+            'message' => $message,
+            'google_synced' => $googleSyncEnabled,
+            'google_event_id' => $googleResult['event_id'] ?? null,
         ]);
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         if ($e->getCode() === '23000') {
             json_response([
                 'ok' => false,
@@ -765,10 +842,15 @@ function handle_calendar_add(PDO $pdo): void
             ], 409);
         }
         throw $e;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
     }
 }
 
-function handle_calendar_delete(PDO $pdo): void
+function handle_calendar_delete(PDO $pdo, array $cfg): void
 {
     $input = get_request_payload();
     $table = get_calendar_table_name($pdo);
@@ -780,22 +862,112 @@ function handle_calendar_delete(PDO $pdo): void
     $roomCode = trim((string)($input['room_code'] ?? ''));
     $orgName = trim((string)($input['organization_name'] ?? ''));
 
-    if ($id > 0 && $map['id_column'] !== null) {
-        $stmt = $pdo->prepare(sprintf('DELETE FROM %s WHERE %s = :id', $table, $map['id_column']));
-        $stmt->execute([':id' => $id]);
-        if ($stmt->rowCount() < 1) {
+    $googleSyncEnabled = function_exists('google_calendar_sync_enabled') && google_calendar_sync_enabled($cfg);
+
+    $pdo->beginTransaction();
+    try {
+        $row = find_calendar_reservation_for_update($pdo, $table, $map, $id, $useDate, $roomCode, $orgName);
+        if ($row === null) {
+            $pdo->rollBack();
             json_response(['ok' => false, 'message' => '削除対象が見つかりませんでした。'], 404);
         }
-        json_response(['ok' => true, 'message' => '確定予約を削除しました。']);
+
+        $storedRoomCode = trim((string)($row['room_code'] ?? ''));
+        $storedUseDate = trim((string)($row['use_date'] ?? ''));
+        $storedOrgName = trim((string)($row['organization_name'] ?? ''));
+        $storedUsageTime = trim((string)($row['usage_time'] ?? ''));
+        $storedGoogleEventId = trim((string)($row['google_event_id'] ?? ''));
+        $storedGoogleCalendarId = trim((string)($row['google_calendar_id'] ?? ''));
+
+        $googleDeleted = false;
+        if ($googleSyncEnabled) {
+            $calendarId = $storedGoogleCalendarId !== ''
+                ? $storedGoogleCalendarId
+                : google_calendar_require_room_calendar_id($cfg, $storedRoomCode);
+
+            $deleteResult = google_calendar_delete_via_gas($cfg, [
+                'reservation_id' => $row['id'] ?? null,
+                'use_date' => $storedUseDate,
+                'usage_time' => $storedUsageTime,
+                'room_code' => $storedRoomCode,
+                'room_label' => room_code_to_label($storedRoomCode),
+                'organization_name' => $storedOrgName,
+                'calendar_id' => $calendarId,
+                'event_id' => $storedGoogleEventId,
+            ]);
+            $googleDeleted = (bool)($deleteResult['deleted'] ?? false);
+        }
+
+        if ($id > 0 && $map['id_column'] !== null) {
+            $stmt = $pdo->prepare(sprintf('DELETE FROM %s WHERE %s = :id', $table, $map['id_column']));
+            $stmt->execute([':id' => $id]);
+        } else {
+            $sql = sprintf(
+                'DELETE FROM %s WHERE %s = :use_date AND %s = :room_code AND %s = :organization_name LIMIT 1',
+                $table,
+                $map['date_column'],
+                $map['room_column'],
+                $map['org_column']
+            );
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                ':use_date' => $storedUseDate,
+                ':room_code' => $storedRoomCode,
+                ':organization_name' => $storedOrgName,
+            ]);
+        }
+
+        if ($stmt->rowCount() < 1) {
+            throw new RuntimeException('削除対象が見つかりませんでした。');
+        }
+
+        $pdo->commit();
+
+        $message = ($googleSyncEnabled && $googleDeleted)
+            ? '確定予約を削除し、Googleカレンダーからも削除しました。'
+            : '確定予約を削除しました。';
+
+        json_response([
+            'ok' => true,
+            'message' => $message,
+            'google_deleted' => $googleDeleted,
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function find_calendar_reservation_for_update(PDO $pdo, string $table, array $map, int $id, string $useDate, string $roomCode, string $orgName): ?array
+{
+    $select = sprintf(
+        'SELECT %s AS id, %s AS use_date, %s AS room_code, %s AS organization_name, %s AS people_count, %s AS usage_time, %s AS google_event_id, %s AS google_calendar_id FROM %s',
+        $map['id_select'],
+        $map['date_column'],
+        $map['room_column'],
+        $map['org_column'],
+        $map['people_count_select'],
+        $map['usage_time_select'],
+        $map['google_event_id_select'],
+        $map['google_calendar_id_select'],
+        $table
+    );
+
+    if ($id > 0 && $map['id_column'] !== null) {
+        $stmt = $pdo->prepare($select . sprintf(' WHERE %s = :id FOR UPDATE', $map['id_column']));
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+        return $row !== false ? $row : null;
     }
 
     if ($useDate === '' || $roomCode === '' || $orgName === '') {
-        json_response(['ok' => false, 'message' => '削除対象の識別情報が不足しています。'], 400);
+        return null;
     }
 
-    $sql = sprintf(
-        'DELETE FROM %s WHERE %s = :use_date AND %s = :room_code AND %s = :organization_name LIMIT 1',
-        $table,
+    $sql = $select . sprintf(
+        ' WHERE %s = :use_date AND %s = :room_code AND %s = :organization_name LIMIT 1 FOR UPDATE',
         $map['date_column'],
         $map['room_column'],
         $map['org_column']
@@ -806,12 +978,505 @@ function handle_calendar_delete(PDO $pdo): void
         ':room_code' => $roomCode,
         ':organization_name' => $orgName,
     ]);
+    $row = $stmt->fetch();
 
-    if ($stmt->rowCount() < 1) {
-        json_response(['ok' => false, 'message' => '削除対象が見つかりませんでした。'], 404);
+    return $row !== false ? $row : null;
+}
+
+function update_calendar_google_sync_state(PDO $pdo, string $table, array $map, ?int $id, string $useDate, string $roomCode, string $orgName, array $state): void
+{
+    $sets = [];
+    $params = [];
+
+    if ($map['google_event_id_column'] !== null) {
+        $sets[] = $map['google_event_id_column'] . ' = :google_event_id';
+        $params[':google_event_id'] = $state['google_event_id'] ?? null;
     }
 
-    json_response(['ok' => true, 'message' => '確定予約を削除しました。']);
+    if ($map['google_calendar_id_column'] !== null) {
+        $sets[] = $map['google_calendar_id_column'] . ' = :google_calendar_id';
+        $params[':google_calendar_id'] = $state['google_calendar_id'] ?? null;
+    }
+
+    if ($map['google_sync_status_column'] !== null) {
+        $sets[] = $map['google_sync_status_column'] . ' = :google_sync_status';
+        $params[':google_sync_status'] = $state['google_sync_status'] ?? null;
+    }
+
+    if ($map['google_sync_error_column'] !== null) {
+        $sets[] = $map['google_sync_error_column'] . ' = :google_sync_error';
+        $params[':google_sync_error'] = $state['google_sync_error'] ?? null;
+    }
+
+    if ($map['google_synced_at_column'] !== null) {
+        $sets[] = $map['google_synced_at_column'] . ' = NOW()';
+    }
+
+    if (!$sets) {
+        return;
+    }
+
+    if ($id !== null && $id > 0 && $map['id_column'] !== null) {
+        $whereSql = $map['id_column'] . ' = :target_id';
+        $params[':target_id'] = $id;
+    } else {
+        $whereSql = sprintf(
+            '%s = :use_date AND %s = :room_code AND %s = :organization_name',
+            $map['date_column'],
+            $map['room_column'],
+            $map['org_column']
+        );
+        $params[':use_date'] = $useDate;
+        $params[':room_code'] = $roomCode;
+        $params[':organization_name'] = $orgName;
+    }
+
+    $sql = sprintf('UPDATE %s SET %s WHERE %s', $table, implode(', ', $sets), $whereSql);
+    $stmt = $pdo->prepare($sql);
+    foreach ($params as $key => $value) {
+        if ($value === null) {
+            $stmt->bindValue($key, null, PDO::PARAM_NULL);
+        } else {
+            $stmt->bindValue($key, $value);
+        }
+    }
+    $stmt->execute();
+}
+
+function room_code_to_label(string $roomCode): string
+{
+    return match ($roomCode) {
+        'tamoku' => '多目的室',
+        'orange' => 'オレンジの部屋',
+        default => $roomCode,
+    };
+}
+
+
+function handle_mail_form_options(PDO $pdo, array $cfg): void
+{
+    $reservations = fetch_calendar_mail_options($pdo);
+    [$passcodes, $passcodeSourceNote] = fetch_passcode_mail_options($cfg);
+
+    json_response([
+        'ok' => true,
+        'reservations' => $reservations,
+        'passcodes' => $passcodes,
+        'passcode_source_note' => $passcodeSourceNote,
+        'message' => '予約通知メール用の候補を取得しました。',
+    ]);
+}
+
+function handle_reservation_mail_send(PDO $pdo, array $cfg): void
+{
+    $input = get_request_payload();
+    $to = trim((string)($input['to'] ?? ''));
+    $reservationToken = trim((string)($input['reservation_token'] ?? ''));
+    $passcodeToken = trim((string)($input['passcode_token'] ?? ''));
+
+    if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
+        json_response(['ok' => false, 'message' => '宛先メールアドレスが不正です。'], 400);
+    }
+    if ($reservationToken === '') {
+        json_response(['ok' => false, 'message' => '確定済み予約を選択してください。'], 400);
+    }
+    if ($passcodeToken === '') {
+        json_response(['ok' => false, 'message' => '発行済みパスコードを選択してください。'], 400);
+    }
+
+    $reservationSelector = decode_mail_selection_token($reservationToken, 'reservation');
+    $passcodeSelector = decode_mail_selection_token($passcodeToken, 'passcode');
+
+    $reservation = find_calendar_reservation_for_mail($pdo, $reservationSelector);
+    if (!is_array($reservation)) {
+        json_response(['ok' => false, 'message' => '選択された確定済み予約が見つかりませんでした。'], 404);
+    }
+
+    $passcode = find_passcode_for_mail($cfg, $passcodeSelector);
+    if (!is_array($passcode)) {
+        json_response(['ok' => false, 'message' => '選択された発行済みパスコードが見つかりませんでした。'], 404);
+    }
+
+    $reservationRoomCode = trim((string)($reservation['room_code'] ?? ''));
+    $passcodeRoomCode = trim((string)($passcode['room_code'] ?? ''));
+    if ($reservationRoomCode !== '' && $passcodeRoomCode !== '' && $reservationRoomCode !== $passcodeRoomCode) {
+        json_response(['ok' => false, 'message' => '選択した予約とパスコードの部屋が一致していません。'], 400);
+    }
+
+    $status = trim((string)($passcode['status'] ?? ''));
+    if (in_array($status, ['error', 'api_error'], true)) {
+        json_response(['ok' => false, 'message' => '失敗状態のパスコードは送信できません。'], 400);
+    }
+
+    ensure_mailer_dependencies();
+
+    $roomName = room_code_to_label_for_mail($reservationRoomCode ?: $passcodeRoomCode);
+    $organizationName = trim((string)($reservation['organization_name'] ?? ''));
+    $useDate = trim((string)($reservation['use_date'] ?? ''));
+    $usageTime = trim((string)($reservation['usage_time'] ?? ''));
+    $peopleCount = trim((string)($reservation['people_count'] ?? ''));
+    $passcodeName = trim((string)($passcode['passcode_name'] ?? ''));
+    $passcodeValue = trim((string)($passcode['passcode'] ?? ''));
+    $passcodeStartAt = trim((string)($passcode['start_at'] ?? ''));
+    $passcodeEndAt = trim((string)($passcode['end_at'] ?? ''));
+    $passcodePeriod = build_passcode_period_label($passcodeStartAt, $passcodeEndAt);
+    $sentAt = (new DateTimeImmutable('now', new DateTimeZone((string)($cfg['switchbot']['timezone'] ?? 'Asia/Tokyo'))))->format('Y-m-d H:i:s');
+
+    if ($passcodeValue === '') {
+        json_response(['ok' => false, 'message' => '選択したパスコードに通知用の値が保存されていません。'], 400);
+    }
+
+    $htmlBody = build_reservation_completion_html([
+        'room_name' => $roomName,
+        'organization_name' => $organizationName,
+        'use_date' => $useDate,
+        'usage_time' => $usageTime,
+        'people_count' => $peopleCount,
+        'passcode_name' => $passcodeName,
+        'passcode' => $passcodeValue,
+        'passcode_period' => $passcodePeriod,
+        'sent_at' => $sentAt,
+    ]);
+
+    $plainLines = [
+        $roomName . ' の予約が確定しました。',
+        '',
+        '【予約内容】',
+        '予約部屋: ' . ($roomName !== '' ? $roomName : '—'),
+        '使用日: ' . ($useDate !== '' ? $useDate : '—'),
+        '利用時間: ' . ($usageTime !== '' ? $usageTime : '未登録'),
+        '団体名: ' . ($organizationName !== '' ? $organizationName : '—'),
+        '人数: ' . ($peopleCount !== '' ? $peopleCount . '人' : '未登録'),
+        '',
+        '【入室用パスワード】',
+        'パスワード名: ' . ($passcodeName !== '' ? $passcodeName : '—'),
+        'パスワード: ' . $passcodeValue,
+        '有効期間: ' . ($passcodePeriod !== '' ? $passcodePeriod : '—'),
+        '',
+        '送信日時: ' . $sentAt,
+        '',
+        '※ このメールは自動送信です。',
+        '※ 入室用パスワードは第三者へ共有しないでください。',
+    ];
+
+    send_mail_smtp($cfg, [
+        'to' => $to,
+        'subject' => ($roomName !== '' ? $roomName . ' の予約確定のお知らせ' : '予約確定のお知らせ'),
+        'body' => implode("\r\n", $plainLines),
+        'html_body' => $htmlBody,
+    ]);
+
+    json_response([
+        'ok' => true,
+        'message' => '予約通知メールを送信しました。',
+    ]);
+}
+
+function fetch_calendar_mail_options(PDO $pdo): array
+{
+    $table = get_calendar_table_name($pdo);
+    $columns = get_table_columns($pdo, $table);
+    $map = resolve_calendar_column_map($columns);
+
+    $sql = sprintf(
+        'SELECT %s AS id, %s AS use_date, %s AS room_code, %s AS organization_name, %s AS people_count, %s AS usage_time
+         FROM %s
+         ORDER BY CASE WHEN %s >= CURRENT_DATE() THEN 0 ELSE 1 END ASC, %s ASC, %s ASC, %s ASC
+         LIMIT 300',
+        $map['id_select'],
+        $map['date_column'],
+        $map['room_column'],
+        $map['org_column'],
+        $map['people_count_select'],
+        $map['usage_time_select'],
+        $table,
+        $map['date_column'],
+        $map['date_column'],
+        $map['room_column'],
+        $map['org_column']
+    );
+
+    $rows = $pdo->query($sql)->fetchAll();
+    return array_map(static function (array $row): array {
+        $payload = [
+            'id' => (int)($row['id'] ?? 0),
+            'use_date' => (string)($row['use_date'] ?? ''),
+            'room_code' => (string)($row['room_code'] ?? ''),
+            'organization_name' => (string)($row['organization_name'] ?? ''),
+            'usage_time' => (string)($row['usage_time'] ?? ''),
+        ];
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'use_date' => (string)($row['use_date'] ?? ''),
+            'room_code' => (string)($row['room_code'] ?? ''),
+            'organization_name' => (string)($row['organization_name'] ?? ''),
+            'people_count' => ($row['people_count'] ?? null) === null ? '' : trim((string)$row['people_count']),
+            'usage_time' => (string)($row['usage_time'] ?? ''),
+            'selection_token' => encode_mail_selection_token('reservation', $payload),
+        ];
+    }, $rows);
+}
+
+function fetch_passcode_mail_options(array $cfg): array
+{
+    try {
+        $pdo = switchbot_db_connect($cfg);
+        $table = switchbot_request_table_name($cfg);
+        $stmt = $pdo->prepare('SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :table LIMIT 1');
+        $stmt->execute([':table' => $table]);
+        $found = $stmt->fetchColumn();
+        if (!is_string($found) || $found === '') {
+            return [[], 'SwitchBot パスコードテーブルが見つかりません。'];
+        }
+
+        $sql = "SELECT id, local_request_id, room_code, room_label, passcode_name, passcode, start_at, end_at, status, result, webhook_received_at, updated_at
+                FROM `{$table}`
+                WHERE passcode IS NOT NULL AND passcode <> '' AND status NOT IN ('error', 'api_error')
+                ORDER BY updated_at DESC, id DESC
+                LIMIT 300";
+        $rows = $pdo->query($sql)->fetchAll();
+
+        $items = array_map(static function (array $row): array {
+            $payload = [
+                'id' => (int)($row['id'] ?? 0),
+                'local_request_id' => (string)($row['local_request_id'] ?? ''),
+            ];
+            $status = (string)($row['status'] ?? '');
+            return [
+                'id' => (int)($row['id'] ?? 0),
+                'local_request_id' => (string)($row['local_request_id'] ?? ''),
+                'room_code' => (string)($row['room_code'] ?? ''),
+                'room_label' => (string)($row['room_label'] ?? ''),
+                'passcode_name' => (string)($row['passcode_name'] ?? ''),
+                'passcode' => (string)($row['passcode'] ?? ''),
+                'start_at' => (string)($row['start_at'] ?? ''),
+                'end_at' => (string)($row['end_at'] ?? ''),
+                'status' => $status,
+                'status_label' => passcode_status_label_for_mail($status, (string)($row['result'] ?? '')),
+                'webhook_received_at' => (string)($row['webhook_received_at'] ?? ''),
+                'updated_at' => (string)($row['updated_at'] ?? ''),
+                'selection_token' => encode_mail_selection_token('passcode', $payload),
+            ];
+        }, $rows);
+
+        return [$items, 'SwitchBot パスコード DB を参照しています。'];
+    } catch (Throwable $e) {
+        return [[], 'SwitchBot パスコード候補を取得できませんでした。'];
+    }
+}
+
+function encode_mail_selection_token(string $kind, array $payload): string
+{
+    $json = json_encode([
+        'kind' => $kind,
+        'payload' => $payload,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        throw new RuntimeException('選択トークンを生成できませんでした。');
+    }
+    return rtrim(strtr(base64_encode($json), '+/', '-_'), '=');
+}
+
+function decode_mail_selection_token(string $token, string $expectedKind): array
+{
+    $padding = strlen($token) % 4;
+    if ($padding > 0) {
+        $token .= str_repeat('=', 4 - $padding);
+    }
+    $raw = base64_decode(strtr($token, '-_', '+/'), true);
+    if ($raw === false || $raw === '') {
+        throw new RuntimeException('選択トークンの形式が不正です。');
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded) || ($decoded['kind'] ?? '') !== $expectedKind || !is_array($decoded['payload'] ?? null)) {
+        throw new RuntimeException('選択トークンの内容が不正です。');
+    }
+    return $decoded['payload'];
+}
+
+function find_calendar_reservation_for_mail(PDO $pdo, array $selector): ?array
+{
+    $table = get_calendar_table_name($pdo);
+    $columns = get_table_columns($pdo, $table);
+    $map = resolve_calendar_column_map($columns);
+
+    $selectSql = sprintf(
+        'SELECT %s AS id, %s AS use_date, %s AS room_code, %s AS organization_name, %s AS people_count, %s AS usage_time FROM %s',
+        $map['id_select'],
+        $map['date_column'],
+        $map['room_column'],
+        $map['org_column'],
+        $map['people_count_select'],
+        $map['usage_time_select'],
+        $table
+    );
+
+    $id = (int)($selector['id'] ?? 0);
+    if ($id > 0 && $map['id_column'] !== null) {
+        $stmt = $pdo->prepare($selectSql . sprintf(' WHERE %s = :id LIMIT 1', $map['id_column']));
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+        return is_array($row) ? $row : null;
+    }
+
+    $useDate = trim((string)($selector['use_date'] ?? ''));
+    $roomCode = trim((string)($selector['room_code'] ?? ''));
+    $organizationName = trim((string)($selector['organization_name'] ?? ''));
+    $usageTime = trim((string)($selector['usage_time'] ?? ''));
+
+    if ($useDate === '' || $roomCode === '' || $organizationName === '') {
+        return null;
+    }
+
+    $sql = $selectSql . sprintf(
+        ' WHERE %s = :use_date AND %s = :room_code AND %s = :organization_name',
+        $map['date_column'],
+        $map['room_column'],
+        $map['org_column']
+    );
+    $params = [
+        ':use_date' => $useDate,
+        ':room_code' => $roomCode,
+        ':organization_name' => $organizationName,
+    ];
+    if ($usageTime !== '' && $map['usage_time_column'] !== null) {
+        $sql .= sprintf(' AND %s = :usage_time', $map['usage_time_column']);
+        $params[':usage_time'] = $usageTime;
+    }
+    $sql .= ' LIMIT 1';
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $row = $stmt->fetch();
+
+    return is_array($row) ? $row : null;
+}
+
+function find_passcode_for_mail(array $cfg, array $selector): ?array
+{
+    $pdo = switchbot_db_connect($cfg);
+    $table = switchbot_request_table_name($cfg);
+
+    $stmt = $pdo->prepare('SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :table LIMIT 1');
+    $stmt->execute([':table' => $table]);
+    $found = $stmt->fetchColumn();
+    if (!is_string($found) || $found === '') {
+        return null;
+    }
+
+    $id = (int)($selector['id'] ?? 0);
+    if ($id > 0) {
+        $stmt = $pdo->prepare("SELECT * FROM `{$table}` WHERE id = :id LIMIT 1");
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+        return is_array($row) ? $row : null;
+    }
+
+    $localRequestId = trim((string)($selector['local_request_id'] ?? ''));
+    if ($localRequestId === '') {
+        return null;
+    }
+
+    $stmt = $pdo->prepare("SELECT * FROM `{$table}` WHERE local_request_id = :local_request_id LIMIT 1");
+    $stmt->execute([':local_request_id' => $localRequestId]);
+    $row = $stmt->fetch();
+    return is_array($row) ? $row : null;
+}
+
+function ensure_mailer_dependencies(): void
+{
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+
+    $autoloadCandidates = [
+        __DIR__ . '/../../vendor/autoload.php',
+        __DIR__ . '/../vendor/autoload.php',
+        __DIR__ . '/vendor/autoload.php',
+    ];
+    $autoloadFound = false;
+    foreach ($autoloadCandidates as $path) {
+        if (is_file($path)) {
+            require_once $path;
+            $autoloadFound = true;
+            break;
+        }
+    }
+    if (!$autoloadFound) {
+        throw new RuntimeException('PHPMailer の autoload.php が見つかりません。vendor の配置を確認してください。');
+    }
+
+    $templateCandidates = [
+        __DIR__ . '/../../apps/mail_html_templates.php',
+        __DIR__ . '/../apps/mail_html_templates.php',
+        __DIR__ . '/apps/mail_html_templates.php',
+    ];
+    $templateFound = false;
+    foreach ($templateCandidates as $path) {
+        if (is_file($path)) {
+            require_once $path;
+            $templateFound = true;
+            break;
+        }
+    }
+    if (!$templateFound) {
+        throw new RuntimeException('mail_html_templates.php が見つかりません。');
+    }
+
+    $mailerCandidates = [
+        __DIR__ . '/../../apps/smtp_mailer.php',
+        __DIR__ . '/../apps/smtp_mailer.php',
+        __DIR__ . '/apps/smtp_mailer.php',
+    ];
+    $mailerFound = false;
+    foreach ($mailerCandidates as $path) {
+        if (is_file($path)) {
+            require_once $path;
+            $mailerFound = true;
+            break;
+        }
+    }
+    if (!$mailerFound) {
+        throw new RuntimeException('smtp_mailer.php が見つかりません。');
+    }
+
+    $loaded = true;
+}
+
+function room_code_to_label_for_mail(string $roomCode): string
+{
+    return match ($roomCode) {
+        'tamoku' => '多目的室',
+        'orange' => 'オレンジの部屋',
+        default => $roomCode,
+    };
+}
+
+function passcode_status_label_for_mail(string $status, string $result = ''): string
+{
+    return match ($status) {
+        'success' => '成功',
+        'accepted' => '受付済み',
+        'queued' => '処理待ち',
+        'error' => $result !== '' ? '失敗: ' . $result : '失敗',
+        'api_error' => $result !== '' ? 'APIエラー: ' . $result : 'APIエラー',
+        default => $status !== '' ? $status : '不明',
+    };
+}
+
+function build_passcode_period_label(string $startAt, string $endAt): string
+{
+    if ($startAt !== '' && $endAt !== '') {
+        return $startAt . ' 〜 ' . $endAt;
+    }
+    if ($startAt !== '') {
+        return $startAt;
+    }
+    if ($endAt !== '') {
+        return $endAt;
+    }
+    return '';
 }
 
 function build_where_sql(string $q, string $room, string $dateFrom, string $dateTo, ?array &$params): string
@@ -969,6 +1634,11 @@ function resolve_calendar_column_map(array $columns): array
     $orgColumn = first_existing_column($columns, ['organization_name', 'org_name', 'organization']);
     $peopleCountColumn = first_existing_column($columns, ['people_count']);
     $usageTimeColumn = first_existing_column($columns, ['usage_time']);
+    $googleEventIdColumn = first_existing_column($columns, ['google_event_id']);
+    $googleCalendarIdColumn = first_existing_column($columns, ['google_calendar_id']);
+    $googleSyncStatusColumn = first_existing_column($columns, ['google_sync_status']);
+    $googleSyncedAtColumn = first_existing_column($columns, ['google_synced_at']);
+    $googleSyncErrorColumn = first_existing_column($columns, ['google_sync_error']);
 
     if ($dateColumn === null || $roomColumn === null || $orgColumn === null) {
         throw new RuntimeException('カレンダー予約テーブルの列構成を特定できませんでした。');
@@ -984,6 +1654,13 @@ function resolve_calendar_column_map(array $columns): array
         'people_count_select' => $peopleCountColumn !== null ? $peopleCountColumn : 'NULL',
         'usage_time_column' => $usageTimeColumn,
         'usage_time_select' => $usageTimeColumn !== null ? $usageTimeColumn : 'NULL',
+        'google_event_id_column' => $googleEventIdColumn,
+        'google_event_id_select' => $googleEventIdColumn !== null ? $googleEventIdColumn : 'NULL',
+        'google_calendar_id_column' => $googleCalendarIdColumn,
+        'google_calendar_id_select' => $googleCalendarIdColumn !== null ? $googleCalendarIdColumn : 'NULL',
+        'google_sync_status_column' => $googleSyncStatusColumn,
+        'google_synced_at_column' => $googleSyncedAtColumn,
+        'google_sync_error_column' => $googleSyncErrorColumn,
     ];
 }
 
