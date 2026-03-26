@@ -32,6 +32,7 @@
         <p class="lead">予約申請の検索・詳細確認・ダウンロード・削除・確定登録を行えます。</p>
       </div>
       <div class="head-actions">
+        <button id="applicationCsvExportBtn" type="button" class="secondary">CSV出力</button>
         <button id="reloadBtn" type="button" class="secondary">再読込</button>
       </div>
     </header>
@@ -159,6 +160,7 @@
         <p class="lead">確定予約（カレンダー）の月間表示と一覧確認を行えます。</p>
       </div>
       <div class="head-actions">
+        <button id="calendarCsvExportBtn" type="button" class="secondary">CSV出力</button>
         <button id="calendarReloadBtn" type="button" class="secondary">再読込</button>
       </div>
     </header>
@@ -240,7 +242,8 @@
         <p class="lead">確定済み予約と発行済みパスコードを選択し、予約確定と入室用パスワードをメール送信します。</p>
       </div>
       <div class="head-actions">
-        <button id="reservationMailReloadBtn" type="button" class="secondary">候補を再読込</button>
+        <button id="reservationMailCsvExportBtn" type="button" class="secondary">送信履歴CSV</button>
+        <button id="reservationMailReloadBtn" type="button" class="secondary">候補・履歴を再読込</button>
       </div>
     </header>
 
@@ -304,6 +307,41 @@
       <div class="dialog-actions mail-send-actions">
         <button id="reservationMailSendBtn" type="button">メール送信</button>
       </div>
+
+      <section class="mail-history-section">
+        <div class="switchbot-room-header">
+          <div>
+            <h2>送信履歴</h2>
+            <p class="dialog-sub" id="reservationMailHistoryMetaText">読み込み前です。</p>
+          </div>
+        </div>
+
+        <div class="meta-row switchbot-meta-row-tight">
+          <div class="status" id="reservationMailHistoryStatusText" aria-live="polite"></div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>送信日時</th>
+                <th>状態</th>
+                <th>宛先</th>
+                <th>件名</th>
+                <th>部屋</th>
+                <th>使用日</th>
+                <th>団体名</th>
+                <th>パスワード</th>
+                <th>エラー</th>
+              </tr>
+            </thead>
+            <tbody id="reservationMailHistoryBody">
+              <tr><td colspan="10" class="empty">読み込み前です。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </section>
   </div>
 </section>

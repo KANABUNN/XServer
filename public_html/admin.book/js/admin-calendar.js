@@ -130,6 +130,7 @@
     });
 
     el.calendarReloadBtn?.addEventListener('click', () => loadReservations());
+    el.calendarCsvExportBtn?.addEventListener('click', () => exportCsv());
     el.calendarPrevMonthBtn?.addEventListener('click', () => moveMonth(-1));
     el.calendarNextMonthBtn?.addEventListener('click', () => moveMonth(1));
     el.calendarTodayBtn?.addEventListener('click', () => {
@@ -196,6 +197,21 @@
       resetManageForm();
       el.calendarManageDialog.close();
     });
+  }
+
+
+  function exportCsv() {
+    const el = Admin.el;
+    const cs = Admin.calendar.state;
+    const url = new URL(Admin.apiPath, window.location.href);
+    url.searchParams.set('action', 'export_csv');
+    url.searchParams.set('type', 'calendar');
+    url.searchParams.set('month', cs.month || u.formatMonthValue(new Date()));
+    const roomCode = String(el.calendarRoomFilter?.value || '').trim();
+    if (roomCode) {
+      url.searchParams.set('room_code', roomCode);
+    }
+    window.location.href = url.toString();
   }
 
   function moveMonth(diff) {

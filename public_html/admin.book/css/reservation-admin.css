@@ -1213,3 +1213,37 @@ select {
   -ms-user-select: text;
   user-select: text;
 }
+
+.head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.mail-history-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.mail-log-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mail-log-badge.is-sent {
+  background: #e9f7ee;
+  color: #2e7d32;
+}
+
+.mail-log-badge.is-failed {
+  background: #fdecec;
+  color: #c62828;
+}

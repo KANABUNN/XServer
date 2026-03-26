@@ -19,6 +19,7 @@
     searchBtn: document.getElementById('searchBtn'),
     clearBtn: document.getElementById('clearBtn'),
     reloadBtn: document.getElementById('reloadBtn'),
+    applicationCsvExportBtn: document.getElementById('applicationCsvExportBtn'),
     prevPageBtn: document.getElementById('prevPageBtn'),
     nextPageBtn: document.getElementById('nextPageBtn'),
     pageInfo: document.getElementById('pageInfo'),
@@ -59,6 +60,7 @@
 
     // Calendar view
     calendarReloadBtn: document.getElementById('calendarReloadBtn'),
+    calendarCsvExportBtn: document.getElementById('calendarCsvExportBtn'),
     calendarMonthInput: document.getElementById('calendarMonthInput'),
     calendarRoomFilter: document.getElementById('calendarRoomFilter'),
     calendarPrevMonthBtn: document.getElementById('calendarPrevMonthBtn'),
@@ -73,6 +75,7 @@
 
     // Reservation mail view
     reservationMailReloadBtn: document.getElementById('reservationMailReloadBtn'),
+    reservationMailCsvExportBtn: document.getElementById('reservationMailCsvExportBtn'),
     reservationMailTo: document.getElementById('reservationMailTo'),
     reservationMailAppendBeneBtn: document.getElementById('reservationMailAppendBeneBtn'),
     reservationMailReservationSelect: document.getElementById('reservationMailReservationSelect'),
@@ -82,6 +85,9 @@
     reservationMailReservationSummary: document.getElementById('reservationMailReservationSummary'),
     reservationMailPasscodeSummary: document.getElementById('reservationMailPasscodeSummary'),
     reservationMailSendBtn: document.getElementById('reservationMailSendBtn'),
+    reservationMailHistoryMetaText: document.getElementById('reservationMailHistoryMetaText'),
+    reservationMailHistoryStatusText: document.getElementById('reservationMailHistoryStatusText'),
+    reservationMailHistoryBody: document.getElementById('reservationMailHistoryBody'),
 
 
     // Calendar manage dialog

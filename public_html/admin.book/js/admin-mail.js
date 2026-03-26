@@ -1,5 +1,6 @@
 /* admin-mail.js
  * - 予約通知メール（確定予約 + 発行済みパスコードの送信）
+ * - 送信履歴表示 / CSV 出力
  */
 (function () {
   'use strict';
@@ -15,12 +16,18 @@
     }
     if (state.loaded) return;
     state.loaded = true;
-    loadOptions();
+    loadAll();
+  }
+
+  async function loadAll() {
+    await loadOptions();
+    await loadHistory();
   }
 
   function bindEvents() {
     const el = Admin.el;
-    el.reservationMailReloadBtn?.addEventListener('click', () => loadOptions());
+    el.reservationMailReloadBtn?.addEventListener('click', () => loadAll());
+    el.reservationMailCsvExportBtn?.addEventListener('click', () => exportHistoryCsv());
     el.reservationMailAppendBeneBtn?.addEventListener('click', () => appendBeneDomain());
     el.reservationMailReservationSelect?.addEventListener('change', () => {
       renderReservationSummary();
@@ -93,7 +100,7 @@
         extra.push(String(data.passcode_source_note));
       }
       el.reservationMailMetaText.textContent = `確定予約 ${state.reservations.length} 件 / パスコード ${state.passcodes.length} 件${extra.length ? ' / ' + extra.join(' / ') : ''}`;
-      u.setElementStatus(el.reservationMailStatusText, data.message || '');
+      u.setElementStatus(el.reservationMailStatusText, data.message || '', 'ok');
     } catch (err) {
       state.reservations = [];
       state.passcodes = [];
@@ -104,6 +111,43 @@
       el.reservationMailMetaText.textContent = '候補を読み込めませんでした。';
       u.setElementStatus(el.reservationMailStatusText, err.message || '候補の取得に失敗しました。', 'error');
     }
+  }
+
+  async function loadHistory() {
+    const el = Admin.el;
+    const state = Admin.mail.state;
+    const url = new URL(Admin.apiPath, window.location.href);
+    url.searchParams.set('action', 'mail_history_list');
+    url.searchParams.set('limit', '100');
+
+    u.setElementStatus(el.reservationMailHistoryStatusText, '送信履歴を読み込んでいます…');
+
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || '送信履歴の取得に失敗しました。');
+      }
+
+      state.historyRows = Array.isArray(data.rows) ? data.rows : [];
+      renderHistory();
+      el.reservationMailHistoryMetaText.textContent = data.available
+        ? `最新 ${state.historyRows.length} 件を表示しています。`
+        : '送信履歴テーブルが未作成です。';
+      u.setElementStatus(el.reservationMailHistoryStatusText, data.message || '', data.available ? 'ok' : '');
+    } catch (err) {
+      state.historyRows = [];
+      renderHistory();
+      el.reservationMailHistoryMetaText.textContent = '送信履歴を読み込めませんでした。';
+      u.setElementStatus(el.reservationMailHistoryStatusText, err.message || '送信履歴の取得に失敗しました。', 'error');
+    }
+  }
+
+  function exportHistoryCsv() {
+    const url = new URL(Admin.apiPath, window.location.href);
+    url.searchParams.set('action', 'export_csv');
+    url.searchParams.set('type', 'mail_history');
+    window.location.href = url.toString();
   }
 
   function getSelectedReservation() {
@@ -237,6 +281,39 @@
     ].join('');
   }
 
+  function renderHistory() {
+    const el = Admin.el;
+    const rows = Admin.mail.state.historyRows || [];
+    if (!el.reservationMailHistoryBody) return;
+
+    if (!rows.length) {
+      el.reservationMailHistoryBody.innerHTML = '<tr><td colspan="10" class="empty">送信履歴はまだありません。</td></tr>';
+      return;
+    }
+
+    el.reservationMailHistoryBody.innerHTML = rows.map((row) => {
+      const statusClass = String(row.send_status || '').trim() === 'failed' ? 'is-failed' : 'is-sent';
+      const hasPassword = String(row.passcode_name || '').trim() !== '' || String(row.passcode || '').trim() !== '';
+      const passwordLabel = hasPassword
+        ? `${String(row.passcode_name || '名称未設定')} / #${String(row.passcode || '')}`
+        : '—';
+      return `
+        <tr>
+          <td>${u.escapeHtml(String(row.id || ''))}</td>
+          <td>${u.escapeHtml(String(row.sent_at || ''))}</td>
+          <td><span class="mail-log-badge ${statusClass}">${u.escapeHtml(String(row.send_status_label || row.send_status || '—'))}</span></td>
+          <td>${u.escapeHtml(String(row.to_email || ''))}</td>
+          <td>${u.escapeHtml(String(row.mail_subject || ''))}</td>
+          <td>${u.escapeHtml(String(row.room_label || u.roomLabel(row.room_code || '')))}</td>
+          <td>${u.escapeHtml(String(row.use_date || ''))}</td>
+          <td>${u.escapeHtml(String(row.organization_name || ''))}</td>
+          <td><code>${u.escapeHtml(passwordLabel)}</code></td>
+          <td>${u.escapeHtml(String(row.error_message || ''))}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
   async function sendMail() {
     const el = Admin.el;
     const to = String(el.reservationMailTo?.value || '').trim();
@@ -267,8 +344,10 @@
       }
 
       u.setElementStatus(el.reservationMailStatusText, data.message || 'メールを送信しました。', 'ok');
+      await loadHistory();
     } catch (err) {
       u.setElementStatus(el.reservationMailStatusText, err.message || 'メール送信に失敗しました。', 'error');
+      await loadHistory();
     } finally {
       el.reservationMailSendBtn.disabled = false;
     }
@@ -277,5 +356,7 @@
   Admin.mail = Object.assign(Admin.mail || {}, {
     ensureLoaded,
     loadOptions,
+    loadHistory,
+    loadAll,
   });
 })();

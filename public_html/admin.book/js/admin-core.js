@@ -38,6 +38,7 @@
     initialized: false,
     reservations: [],
     passcodes: [],
+    historyRows: [],
   };
 
   // 借用部屋管理（SwitchBot）側の状態

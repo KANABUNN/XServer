@@ -362,6 +362,16 @@
     }
   }
 
+
+  function exportCsv() {
+    const url = buildListUrl();
+    url.searchParams.set('action', 'export_csv');
+    url.searchParams.set('type', 'applications');
+    url.searchParams.delete('page');
+    url.searchParams.delete('per_page');
+    window.location.href = url.toString();
+  }
+
   function resetFilters() {
     const el = Admin.el;
     const state = Admin.state;
@@ -392,6 +402,7 @@
     });
 
     el.reloadBtn.addEventListener('click', () => loadRows());
+    el.applicationCsvExportBtn?.addEventListener('click', () => exportCsv());
 
     el.searchInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {

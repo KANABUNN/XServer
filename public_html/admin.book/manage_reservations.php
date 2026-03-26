@@ -86,6 +86,16 @@ try {
             handle_mail_form_options($pdo, $cfg);
             break;
 
+        case 'mail_history_list':
+            $pdo = db_connect($cfg);
+            handle_mail_history_list($pdo);
+            break;
+
+        case 'export_csv':
+            $pdo = db_connect($cfg);
+            handle_export_csv($pdo);
+            break;
+
         case 'reservation_mail_send':
             $pdo = db_connect($cfg);
             if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
@@ -1347,6 +1357,7 @@ function handle_reservation_mail_send(PDO $pdo, array $cfg): void
         'sent_at' => $sentAt,
     ]);
 
+    $subject = ($roomName !== '' ? $roomName . ' の予約確定のお知らせ' : '予約確定のお知らせ');
     $plainLines = [
         $roomName . ' の予約が確定しました。',
         '',
@@ -1367,18 +1378,433 @@ function handle_reservation_mail_send(PDO $pdo, array $cfg): void
         '※ 入室用パスワードは第三者へ共有しないでください。',
     ];
 
-    send_mail_smtp($cfg, [
-        'to' => $to,
-        'subject' => ($roomName !== '' ? $roomName . ' の予約確定のお知らせ' : '予約確定のお知らせ'),
-        'body' => implode("\r\n", $plainLines),
-        'html_body' => $htmlBody,
-    ]);
+    $historyPayload = [
+        'to_email' => $to,
+        'mail_subject' => $subject,
+        'send_status' => 'sent',
+        'error_message' => null,
+        'reservation_calendar_id' => max(0, (int)($reservation['id'] ?? 0)),
+        'reservation_source_id' => max(0, (int)($reservation['reservation_id'] ?? 0)),
+        'room_code' => $reservationRoomCode !== '' ? $reservationRoomCode : $passcodeRoomCode,
+        'room_label' => $roomName,
+        'use_date' => $useDate,
+        'organization_name' => $organizationName,
+        'people_count' => $peopleCount !== '' ? (int)$peopleCount : null,
+        'usage_time' => $usageTime !== '' ? $usageTime : null,
+        'passcode_request_id' => max(0, (int)($passcode['id'] ?? 0)),
+        'passcode_local_request_id' => trim((string)($passcode['local_request_id'] ?? '')),
+        'passcode_name' => trim((string)($passcode['passcode_name'] ?? '')),
+        'passcode' => $passcodeValue,
+        'passcode_start_at' => $passcodeStartAt !== '' ? $passcodeStartAt : null,
+        'passcode_end_at' => $passcodeEndAt !== '' ? $passcodeEndAt : null,
+        'sent_at' => $sentAt,
+    ];
+
+    try {
+        send_mail_smtp($cfg, [
+            'to' => $to,
+            'subject' => $subject,
+            'body' => implode("\r\n", $plainLines),
+            'html_body' => $htmlBody,
+        ]);
+
+        $historySaved = save_mail_send_history($pdo, $historyPayload);
+
+        json_response([
+            'ok' => true,
+            'message' => $historySaved
+                ? '予約通知メールを送信し、送信履歴も保存しました。'
+                : '予約通知メールを送信しました。送信履歴テーブルが未作成のため、履歴保存は行われていません。',
+            'history_saved' => $historySaved,
+        ]);
+    } catch (Throwable $e) {
+        $historyPayload['send_status'] = 'failed';
+        $historyPayload['error_message'] = trim((string)$e->getMessage()) !== '' ? trim((string)$e->getMessage()) : 'メール送信に失敗しました。';
+        $historySaved = save_mail_send_history($pdo, $historyPayload);
+
+        json_response([
+            'ok' => false,
+            'message' => $historyPayload['error_message'],
+            'history_saved' => $historySaved,
+        ], 500);
+    }
+}
+
+function handle_mail_history_list(PDO $pdo): void
+{
+    $limit = max(1, min(300, (int)($_GET['limit'] ?? 100)));
+    $rows = fetch_mail_history_rows($pdo, $limit);
+    $available = get_mail_history_table_name($pdo) !== null;
 
     json_response([
         'ok' => true,
-        'message' => '予約通知メールを送信しました。',
+        'rows' => $rows,
+        'count' => count($rows),
+        'available' => $available,
+        'message' => $available
+            ? '送信履歴を取得しました。'
+            : '送信履歴テーブルが未作成のため、履歴はまだありません。SQL を適用してください。',
     ]);
 }
+
+function fetch_mail_history_rows(PDO $pdo, int $limit = 100): array
+{
+    $table = get_mail_history_table_name($pdo);
+    if ($table === null) {
+        return [];
+    }
+
+    $sql = sprintf(
+        'SELECT id, to_email, mail_subject, send_status, error_message, reservation_calendar_id, reservation_source_id, room_code, room_label, use_date, organization_name, people_count, usage_time, passcode_request_id, passcode_local_request_id, passcode_name, passcode, passcode_start_at, passcode_end_at, sent_at
+         FROM %s
+         ORDER BY sent_at DESC, id DESC
+         LIMIT :limit',
+        $table
+    );
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    $rows = $stmt->fetchAll();
+
+    return array_map(static function (array $row): array {
+        $status = trim((string)($row['send_status'] ?? 'sent'));
+        $row['send_status'] = $status;
+        $row['send_status_label'] = mail_history_status_label($status);
+        return $row;
+    }, $rows);
+}
+
+function get_mail_history_table_name(PDO $pdo): ?string
+{
+    static $tableNameResolved = false;
+    static $tableName = null;
+
+    if ($tableNameResolved) {
+        return $tableName;
+    }
+
+    $tableNameResolved = true;
+    $candidate = 'reservation_mail_send_history';
+    $stmt = $pdo->prepare('SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :table LIMIT 1');
+    $stmt->execute([':table' => $candidate]);
+    $found = $stmt->fetchColumn();
+    if (is_string($found) && $found !== '') {
+        $tableName = $candidate;
+    }
+
+    return $tableName;
+}
+
+function save_mail_send_history(PDO $pdo, array $row): bool
+{
+    $table = get_mail_history_table_name($pdo);
+    if ($table === null) {
+        return false;
+    }
+
+    $sql = sprintf(
+        'INSERT INTO %s (
+            to_email, mail_subject, send_status, error_message,
+            reservation_calendar_id, reservation_source_id,
+            room_code, room_label, use_date, organization_name, people_count, usage_time,
+            passcode_request_id, passcode_local_request_id, passcode_name, passcode,
+            passcode_start_at, passcode_end_at, sent_at
+        ) VALUES (
+            :to_email, :mail_subject, :send_status, :error_message,
+            :reservation_calendar_id, :reservation_source_id,
+            :room_code, :room_label, :use_date, :organization_name, :people_count, :usage_time,
+            :passcode_request_id, :passcode_local_request_id, :passcode_name, :passcode,
+            :passcode_start_at, :passcode_end_at, :sent_at
+        )',
+        $table
+    );
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->bindValue(':to_email', trim((string)($row['to_email'] ?? '')), PDO::PARAM_STR);
+    $stmt->bindValue(':mail_subject', trim((string)($row['mail_subject'] ?? '')), PDO::PARAM_STR);
+    $stmt->bindValue(':send_status', trim((string)($row['send_status'] ?? 'sent')), PDO::PARAM_STR);
+    bind_nullable_string($stmt, ':error_message', $row['error_message'] ?? null);
+    bind_nullable_int($stmt, ':reservation_calendar_id', $row['reservation_calendar_id'] ?? null);
+    bind_nullable_int($stmt, ':reservation_source_id', $row['reservation_source_id'] ?? null);
+    bind_nullable_string($stmt, ':room_code', $row['room_code'] ?? null);
+    bind_nullable_string($stmt, ':room_label', $row['room_label'] ?? null);
+    bind_nullable_string($stmt, ':use_date', $row['use_date'] ?? null);
+    bind_nullable_string($stmt, ':organization_name', $row['organization_name'] ?? null);
+    bind_nullable_int($stmt, ':people_count', $row['people_count'] ?? null);
+    bind_nullable_string($stmt, ':usage_time', $row['usage_time'] ?? null);
+    bind_nullable_int($stmt, ':passcode_request_id', $row['passcode_request_id'] ?? null);
+    bind_nullable_string($stmt, ':passcode_local_request_id', $row['passcode_local_request_id'] ?? null);
+    bind_nullable_string($stmt, ':passcode_name', $row['passcode_name'] ?? null);
+    bind_nullable_string($stmt, ':passcode', $row['passcode'] ?? null);
+    bind_nullable_string($stmt, ':passcode_start_at', $row['passcode_start_at'] ?? null);
+    bind_nullable_string($stmt, ':passcode_end_at', $row['passcode_end_at'] ?? null);
+    bind_nullable_string($stmt, ':sent_at', $row['sent_at'] ?? null);
+    $stmt->execute();
+
+    return true;
+}
+
+function mail_history_status_label(string $status): string
+{
+    return match ($status) {
+        'sent' => '送信成功',
+        'failed' => '送信失敗',
+        default => $status !== '' ? $status : '不明',
+    };
+}
+
+function handle_export_csv(PDO $pdo): void
+{
+    $type = trim((string)($_GET['type'] ?? ''));
+    switch ($type) {
+        case 'applications':
+            export_applications_csv($pdo);
+            return;
+        case 'calendar':
+            export_calendar_csv($pdo);
+            return;
+        case 'mail_history':
+            export_mail_history_csv($pdo);
+            return;
+        default:
+            throw new RuntimeException('CSV 出力種別が不正です。');
+    }
+}
+
+function export_applications_csv(PDO $pdo): void
+{
+    $q = trim((string)($_GET['q'] ?? ''));
+    $room = trim((string)($_GET['room'] ?? ''));
+    $status = normalize_application_status_input($_GET['status'] ?? '');
+    $dateFrom = trim((string)($_GET['date_from'] ?? ''));
+    $dateTo = trim((string)($_GET['date_to'] ?? ''));
+    $statusColumn = get_reservation_status_column($pdo);
+
+    $sortMap = [
+        'id' => 'id',
+        'created_at' => 'created_at',
+        'email' => 'email',
+        'room' => 'room',
+        'original_name' => 'original_name',
+        'stored_name' => 'stored_name',
+        'note' => 'note',
+    ];
+    if ($statusColumn !== null) {
+        $sortMap['application_status'] = $statusColumn;
+    }
+    $sortKey = (string)($_GET['sort'] ?? 'created_at');
+    $sortColumn = $sortMap[$sortKey] ?? 'created_at';
+    $dir = strtolower((string)($_GET['dir'] ?? 'desc'));
+    $dir = $dir === 'asc' ? 'ASC' : 'DESC';
+
+    $whereSql = build_where_sql($q, $room, $status, $dateFrom, $dateTo, $statusColumn, $params);
+    $statusSelect = reservation_status_select_expr($statusColumn);
+
+    $sql = <<<SQL
+SELECT
+    id,
+    created_at,
+    email,
+    room,
+    {$statusSelect} AS application_status,
+    original_name,
+    stored_name,
+    file_path,
+    note
+FROM reservations
+{$whereSql}
+ORDER BY {$sortColumn} {$dir}, id DESC
+SQL;
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll();
+
+    $csvRows = [];
+    foreach ($rows as $row) {
+        $csvRows[] = [
+            (string)($row['id'] ?? ''),
+            (string)($row['created_at'] ?? ''),
+            (string)($row['email'] ?? ''),
+            (string)($row['room'] ?? ''),
+            application_status_label_csv((string)($row['application_status'] ?? 'pending')),
+            (string)($row['original_name'] ?? ''),
+            (string)($row['stored_name'] ?? ''),
+            (string)($row['file_path'] ?? ''),
+            (string)($row['note'] ?? ''),
+        ];
+    }
+
+    output_csv_download(
+        'reservation_applications_' . date('Ymd_His') . '.csv',
+        ['ID', '受付日時', 'メールアドレス', '予約部屋', '申請ステータス', '元のファイル名', '保存後ファイル名', '保存パス', '備考'],
+        $csvRows
+    );
+}
+
+function export_calendar_csv(PDO $pdo): void
+{
+    $month = trim((string)($_GET['month'] ?? ''));
+    $roomFilter = trim((string)($_GET['room_code'] ?? ''));
+
+    $table = get_calendar_table_name($pdo);
+    $columns = get_table_columns($pdo, $table);
+    $map = resolve_calendar_column_map($columns);
+
+    $where = [];
+    $params = [];
+
+    if ($month !== '') {
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            throw new RuntimeException('month は YYYY-MM 形式で指定してください。');
+        }
+        $firstDay = DateTimeImmutable::createFromFormat('Y-m-d', $month . '-01');
+        if (!$firstDay) {
+            throw new RuntimeException('month が不正です。');
+        }
+        $nextMonth = $firstDay->modify('first day of next month');
+        $where[] = sprintf('%s >= :from_date AND %s < :to_date', $map['date_column'], $map['date_column']);
+        $params[':from_date'] = $firstDay->format('Y-m-d');
+        $params[':to_date'] = $nextMonth->format('Y-m-d');
+    }
+
+    if ($roomFilter !== '') {
+        $where[] = sprintf('%s = :room_code', $map['room_column']);
+        $params[':room_code'] = $roomFilter;
+    }
+
+    $whereSql = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
+    $sql = sprintf(
+        'SELECT %s AS id, %s AS use_date, %s AS room_code, %s AS organization_name, %s AS people_count, %s AS usage_time, %s AS reservation_id, %s AS google_sync_status
+         FROM %s%s
+         ORDER BY %s ASC, %s ASC, %s ASC',
+        $map['id_select'],
+        $map['date_column'],
+        $map['room_column'],
+        $map['org_column'],
+        $map['people_count_select'],
+        $map['usage_time_select'],
+        $map['reservation_id_select'],
+        $map['google_sync_status_column'] !== null ? $map['google_sync_status_column'] : 'NULL',
+        $table,
+        $whereSql,
+        $map['date_column'],
+        $map['room_column'],
+        $map['org_column']
+    );
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll();
+
+    $csvRows = [];
+    foreach ($rows as $row) {
+        $csvRows[] = [
+            (string)($row['id'] ?? ''),
+            (string)($row['use_date'] ?? ''),
+            room_code_to_label((string)($row['room_code'] ?? '')),
+            (string)($row['room_code'] ?? ''),
+            (string)($row['organization_name'] ?? ''),
+            ($row['people_count'] ?? null) === null ? '' : (string)$row['people_count'],
+            (string)($row['usage_time'] ?? ''),
+            ($row['reservation_id'] ?? null) === null ? '' : (string)$row['reservation_id'],
+            (string)($row['google_sync_status'] ?? ''),
+        ];
+    }
+
+    output_csv_download(
+        'confirmed_reservations_' . ($month !== '' ? str_replace('-', '', $month) . '_' : '') . date('Ymd_His') . '.csv',
+        ['確定予約ID', '使用日', '部屋名', 'room_code', '団体名', '人数', '利用時間', '元申請ID', 'Google同期状態'],
+        $csvRows
+    );
+}
+
+function export_mail_history_csv(PDO $pdo): void
+{
+    $rows = fetch_mail_history_rows($pdo, 1000000);
+    $csvRows = [];
+    foreach ($rows as $row) {
+        $csvRows[] = [
+            (string)($row['id'] ?? ''),
+            (string)($row['sent_at'] ?? ''),
+            mail_history_status_label((string)($row['send_status'] ?? '')),
+            (string)($row['to_email'] ?? ''),
+            (string)($row['mail_subject'] ?? ''),
+            (string)($row['room_label'] ?? ''),
+            (string)($row['room_code'] ?? ''),
+            (string)($row['use_date'] ?? ''),
+            (string)($row['organization_name'] ?? ''),
+            ($row['people_count'] ?? null) === null ? '' : (string)$row['people_count'],
+            (string)($row['usage_time'] ?? ''),
+            (string)($row['passcode_name'] ?? ''),
+            (string)($row['passcode'] ?? ''),
+            build_passcode_period_label((string)($row['passcode_start_at'] ?? ''), (string)($row['passcode_end_at'] ?? '')),
+            ($row['reservation_calendar_id'] ?? null) === null ? '' : (string)$row['reservation_calendar_id'],
+            ($row['reservation_source_id'] ?? null) === null ? '' : (string)$row['reservation_source_id'],
+            ($row['passcode_request_id'] ?? null) === null ? '' : (string)$row['passcode_request_id'],
+            (string)($row['passcode_local_request_id'] ?? ''),
+            (string)($row['error_message'] ?? ''),
+        ];
+    }
+
+    output_csv_download(
+        'reservation_mail_history_' . date('Ymd_His') . '.csv',
+        ['履歴ID', '送信日時', '送信状態', '宛先', '件名', '部屋名', 'room_code', '使用日', '団体名', '人数', '利用時間', 'パスワード名', 'パスワード', '有効期間', '確定予約ID', '元申請ID', 'パスコード要求ID', 'local_request_id', 'エラー内容'],
+        $csvRows
+    );
+}
+
+function output_csv_download(string $filename, array $headers, array $rows): void
+{
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename*=UTF-8\'\'' . rawurlencode($filename));
+    header('Cache-Control: private, no-store, no-cache, must-revalidate');
+
+    $fp = fopen('php://output', 'wb');
+    if ($fp === false) {
+        throw new RuntimeException('CSV 出力を開始できませんでした。');
+    }
+
+    fwrite($fp, "\xEF\xBB\xBF");
+    fputcsv($fp, $headers);
+    foreach ($rows as $row) {
+        fputcsv($fp, array_map(static fn($v) => $v === null ? '' : (string)$v, $row));
+    }
+    fclose($fp);
+    exit;
+}
+
+function application_status_label_csv(string $status): string
+{
+    return match ($status) {
+        'pending' => '未確認',
+        'reviewing' => '確認中',
+        'confirmed' => '確定',
+        'rejected' => '却下',
+        default => $status !== '' ? $status : '未確認',
+    };
+}
+
+function bind_nullable_string(PDOStatement $stmt, string $param, mixed $value): void
+{
+    $text = trim((string)($value ?? ''));
+    if ($text === '') {
+        $stmt->bindValue($param, null, PDO::PARAM_NULL);
+        return;
+    }
+    $stmt->bindValue($param, $text, PDO::PARAM_STR);
+}
+
+function bind_nullable_int(PDOStatement $stmt, string $param, mixed $value): void
+{
+    if ($value === null || $value === '') {
+        $stmt->bindValue($param, null, PDO::PARAM_NULL);
+        return;
+    }
+    $stmt->bindValue($param, (int)$value, PDO::PARAM_INT);
+}
+
 
 function fetch_calendar_mail_options(PDO $pdo): array
 {
@@ -1509,13 +1935,14 @@ function find_calendar_reservation_for_mail(PDO $pdo, array $selector): ?array
     $map = resolve_calendar_column_map($columns);
 
     $selectSql = sprintf(
-        'SELECT %s AS id, %s AS use_date, %s AS room_code, %s AS organization_name, %s AS people_count, %s AS usage_time FROM %s',
+        'SELECT %s AS id, %s AS use_date, %s AS room_code, %s AS organization_name, %s AS people_count, %s AS usage_time, %s AS reservation_id FROM %s',
         $map['id_select'],
         $map['date_column'],
         $map['room_column'],
         $map['org_column'],
         $map['people_count_select'],
         $map['usage_time_select'],
+        $map['reservation_id_select'],
         $table
     );
 
