@@ -153,7 +153,7 @@
 
   async function createUser() {
     const payload = collectFormPayload();
-    const response = await fetch(Admin.apiPath, {
+    const response = await fetch(`${Admin.apiPath}?action=admin_user_create`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ action: 'admin_user_create', ...payload }),
@@ -169,7 +169,7 @@
   async function updateUser() {
     const payload = collectFormPayload();
     if (!payload.id) throw new Error('更新対象のユーザーを選択してください。');
-    const response = await fetch(Admin.apiPath, {
+    const response = await fetch(`${Admin.apiPath}?action=admin_user_update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ action: 'admin_user_update', ...payload }),

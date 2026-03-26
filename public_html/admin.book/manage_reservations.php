@@ -22,9 +22,11 @@ foreach ([__DIR__ . '/../../apps/switchbot_api.php', __DIR__ . '/../apps/switchb
 try {
     $cfg = load_config();
     load_google_calendar_sync_helpers();
-    $action = (string)($_REQUEST['action'] ?? 'list');
+    $requestPayload = get_request_payload();
+    $requestData = is_array($requestPayload) ? array_merge($_REQUEST, $requestPayload) : $_REQUEST;
+    $action = (string)($requestData['action'] ?? 'list');
 
-    $requiredPermission = manage_required_permission_for_action($action, $_REQUEST);
+    $requiredPermission = manage_required_permission_for_action($action, $requestData);
     if ($requiredPermission !== null) {
         admin_auth_require_permission($requiredPermission, $__adminUser);
     }
@@ -183,7 +185,7 @@ try {
     error_log('[manage_reservations] ' . $e->getMessage());
     error_log('[manage_reservations] ' . $e->getFile() . ':' . $e->getLine());
 
-    $actionForError = (string)($_REQUEST['action'] ?? '');
+    $actionForError = (string)($requestData['action'] ?? ($_REQUEST['action'] ?? ''));
     $isSwitchBotAction = str_starts_with($actionForError, 'switchbot_');
 
     if (!headers_sent()) {
