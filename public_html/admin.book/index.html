@@ -51,6 +51,17 @@
         </label>
 
         <label class="field">
+          <span>申請ステータス</span>
+          <select id="statusFilter">
+            <option value="">すべて</option>
+            <option value="pending">未確認</option>
+            <option value="reviewing">確認中</option>
+            <option value="confirmed">確定</option>
+            <option value="rejected">却下</option>
+          </select>
+        </label>
+
+        <label class="field">
           <span>受付日（開始）</span>
           <input id="dateFromInput" type="date">
         </label>
@@ -69,6 +80,7 @@
             <option value="room">予約部屋</option>
             <option value="original_name">元の名前</option>
             <option value="stored_name">保存後の名前</option>
+            <option value="application_status">申請ステータス</option>
           </select>
         </label>
 
@@ -115,6 +127,7 @@
               <th>受付日時</th>
               <th>メールアドレス</th>
               <th>予約部屋</th>
+              <th>申請ステータス</th>
               <th>元の名前</th>
               <th>保存後の名前</th>
               <th>備考</th>
@@ -122,7 +135,7 @@
             </tr>
           </thead>
           <tbody id="tableBody">
-            <tr><td colspan="8" class="empty">データを読み込んでいます…</td></tr>
+            <tr><td colspan="9" class="empty">データを読み込んでいます…</td></tr>
           </tbody>
         </table>
       </div>
@@ -422,6 +435,19 @@
         <div class="detail-empty">詳細を読み込んでいます…</div>
       </div>
 
+      <div class="detail-status-editor">
+        <label class="field">
+          <span>申請ステータス</span>
+          <select id="detailApplicationStatusSelect">
+            <option value="pending">未確認</option>
+            <option value="reviewing">確認中</option>
+            <option value="confirmed">確定</option>
+            <option value="rejected">却下</option>
+          </select>
+        </label>
+        <button id="detailApplicationStatusSaveBtn" type="button" class="secondary">ステータス更新</button>
+      </div>
+
       <div class="dialog-actions">
         <button id="detailDownloadBtn" type="button">ダウンロード</button>
         <button id="detailDeleteBtn" type="button" class="danger">削除</button>
@@ -516,7 +542,7 @@
         <div class="calendar-form-grid">
           <label class="field">
             <span>使用日</span>
-            <input type="date" id="calendarManageUseDate" readonly>
+            <input type="date" id="calendarManageUseDate">
           </label>
 
           <label class="field">
@@ -555,6 +581,7 @@
         <p class="status" id="calendarManageStatus"></p>
 
         <div class="dialog-actions" style="justify-content:flex-end;margin-top:12px;">
+          <button type="button" id="calendarManageCancelEditBtn" class="ghost" hidden>編集をやめる</button>
           <button type="button" id="calendarManageAddBtn">追加</button>
         </div>
       </div>

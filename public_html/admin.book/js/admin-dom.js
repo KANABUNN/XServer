@@ -10,6 +10,7 @@
     // Application list filters
     searchInput: document.getElementById('searchInput'),
     roomFilter: document.getElementById('roomFilter'),
+    statusFilter: document.getElementById('statusFilter'),
     dateFromInput: document.getElementById('dateFromInput'),
     dateToInput: document.getElementById('dateToInput'),
     sortFieldSelect: document.getElementById('sortFieldSelect'),
@@ -33,6 +34,8 @@
     detailGrid: document.getElementById('detailGrid'),
     detailSubText: document.getElementById('detailSubText'),
     detailStatus: document.getElementById('detailStatus'),
+    detailApplicationStatusSelect: document.getElementById('detailApplicationStatusSelect'),
+    detailApplicationStatusSaveBtn: document.getElementById('detailApplicationStatusSaveBtn'),
     detailDownloadBtn: document.getElementById('detailDownloadBtn'),
     detailDeleteBtn: document.getElementById('detailDeleteBtn'),
 
@@ -93,6 +96,7 @@
     calendarManageUsageEnd: document.getElementById('calendarManageUsageEnd'),
     calendarManageStatus: document.getElementById('calendarManageStatus'),
     calendarManageAddBtn: document.getElementById('calendarManageAddBtn'),
+    calendarManageCancelEditBtn: document.getElementById('calendarManageCancelEditBtn'),
     calendarManageCloseBtn: document.getElementById('calendarManageCloseBtn'),
 
     // SwitchBot room access view

@@ -51,6 +51,12 @@ function google_calendar_delete_via_gas(array $cfg, array $payload): array
     return google_calendar_post_to_gas($cfg, $payload);
 }
 
+function google_calendar_update_via_gas(array $cfg, array $payload): array
+{
+    $payload['action'] = 'update';
+    return google_calendar_post_to_gas($cfg, $payload);
+}
+
 function google_calendar_post_to_gas(array $cfg, array $payload): array
 {
     if (!google_calendar_sync_enabled($cfg)) {

@@ -16,6 +16,7 @@
     totalPages: 1,
     currentRows: [],
     lastDetailId: null,
+    detailRow: null,
   };
 
   // カレンダー（確定予約）側の状態
@@ -25,6 +26,7 @@
     month: "",
     reservations: [],
     selectedDate: "",
+    editingReservationId: null,
   };
 
   Admin.calendar.targetReservationId = null;
@@ -51,6 +53,12 @@
     roomLabelMap: {
       tamoku: "多目的室",
       orange: "オレンジの部屋",
+    },
+    applicationStatusMap: {
+      pending: "未確認",
+      reviewing: "確認中",
+      confirmed: "確定",
+      rejected: "却下",
     },
     weekdayLabels: ["日", "月", "火", "水", "木", "金", "土"],
   };

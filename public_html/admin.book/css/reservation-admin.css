@@ -301,12 +301,56 @@ td code {
   font-size: 12px;
 }
 
+.detail-status-editor {
+  margin-top: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.detail-status-editor .field {
+  min-width: 220px;
+  margin: 0;
+}
+
 .status-error {
   color: var(--danger);
 }
 
 .status-ok {
   color: #2e7d32;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-badge-pending {
+  background: #eef2f7;
+  color: #455468;
+}
+
+.status-badge-reviewing {
+  background: #fff4e5;
+  color: #9a6700;
+}
+
+.status-badge-confirmed {
+  background: #e9f7ee;
+  color: #2e7d32;
+}
+
+.status-badge-rejected {
+  background: #fdecec;
+  color: #c62828;
 }
 
 .file-badge {
@@ -621,6 +665,7 @@ td code {
   flex-shrink: 0;
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 @media (max-width: 760px) {

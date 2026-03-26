@@ -79,6 +79,19 @@
     return `${start}~${end}`;
   }
 
+  function parseUsageTimeString(value) {
+    const textValue = String(value || '').trim();
+    if (!textValue || !textValue.includes('~')) {
+      return { start: '', end: '' };
+    }
+
+    const [start, end] = textValue.split('~');
+    return {
+      start: String(start || '').trim(),
+      end: String(end || '').trim(),
+    };
+  }
+
   function initTimeSelects() {
     const el = Admin.el;
     populateTimeSelect(el.calendarUsageStart, '開始');
@@ -152,19 +165,37 @@
     });
 
     el.calendarManageList?.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-action="calendar-delete"]');
+      const button = event.target.closest('[data-action]');
       if (!button) return;
 
-      deleteReservation({
-        id: Number(button.dataset.id || 0) || null,
-        useDate: button.dataset.useDate || '',
-        roomCode: button.dataset.roomCode || '',
-        orgName: button.dataset.orgName || '',
-      });
+      if (button.dataset.action === 'calendar-edit') {
+        startManageEdit({
+          id: Number(button.dataset.id || 0) || null,
+          useDate: button.dataset.useDate || '',
+          roomCode: button.dataset.roomCode || '',
+          orgName: button.dataset.orgName || '',
+          peopleCount: button.dataset.peopleCount || '',
+          usageTime: button.dataset.usageTime || '',
+        });
+        return;
+      }
+
+      if (button.dataset.action === 'calendar-delete') {
+        deleteReservation({
+          id: Number(button.dataset.id || 0) || null,
+          useDate: button.dataset.useDate || '',
+          roomCode: button.dataset.roomCode || '',
+          orgName: button.dataset.orgName || '',
+        });
+      }
     });
 
     el.calendarManageAddBtn?.addEventListener('click', () => submitManageAdd());
-    el.calendarManageCloseBtn?.addEventListener('click', () => el.calendarManageDialog.close());
+    el.calendarManageCancelEditBtn?.addEventListener('click', () => resetManageForm());
+    el.calendarManageCloseBtn?.addEventListener('click', () => {
+      resetManageForm();
+      el.calendarManageDialog.close();
+    });
   }
 
   function moveMonth(diff) {
@@ -483,9 +514,47 @@
       if (Admin.calendar.state.loaded) {
         await loadReservations();
       }
+      if (Admin.application && typeof Admin.application.loadRows === 'function') {
+        await Admin.application.loadRows();
+      }
     } catch (err) {
       u.setElementStatus(el.calendarAddStatus, err.message || '登録に失敗しました。', 'error');
     }
+  }
+
+  function resetManageForm(preserveDate = true) {
+    const el = Admin.el;
+    const cs = Admin.calendar.state;
+
+    cs.editingReservationId = null;
+    if (!preserveDate && el.calendarManageUseDate) el.calendarManageUseDate.value = '';
+    if (el.calendarManageRoomCode) el.calendarManageRoomCode.value = el.calendarRoomFilter?.value || '';
+    if (el.calendarManageOrgName) el.calendarManageOrgName.value = '';
+    if (el.calendarManagePeopleCount) el.calendarManagePeopleCount.value = '';
+    if (el.calendarManageUsageStart) el.calendarManageUsageStart.value = '';
+    if (el.calendarManageUsageEnd) el.calendarManageUsageEnd.value = '';
+    if (el.calendarManageAddBtn) el.calendarManageAddBtn.textContent = '追加';
+    if (el.calendarManageCancelEditBtn) el.calendarManageCancelEditBtn.hidden = true;
+  }
+
+  function startManageEdit(entry) {
+    const el = Admin.el;
+    const cs = Admin.calendar.state;
+
+    cs.editingReservationId = Number(entry.id || 0) || null;
+    if (!cs.editingReservationId) return;
+
+    if (el.calendarManageUseDate) el.calendarManageUseDate.value = String(entry.useDate || '');
+    if (el.calendarManageRoomCode) el.calendarManageRoomCode.value = String(entry.roomCode || '');
+    if (el.calendarManageOrgName) el.calendarManageOrgName.value = String(entry.orgName || '');
+    if (el.calendarManagePeopleCount) el.calendarManagePeopleCount.value = String(entry.peopleCount || '');
+
+    const usage = parseUsageTimeString(entry.usageTime || '');
+    if (el.calendarManageUsageStart) el.calendarManageUsageStart.value = usage.start;
+    if (el.calendarManageUsageEnd) el.calendarManageUsageEnd.value = usage.end;
+    if (el.calendarManageAddBtn) el.calendarManageAddBtn.textContent = '更新';
+    if (el.calendarManageCancelEditBtn) el.calendarManageCancelEditBtn.hidden = false;
+    u.setElementStatus(el.calendarManageStatus, `ID ${cs.editingReservationId} を編集中です。`);
   }
 
   function openManage(dateKey, presetRoom = '') {
@@ -502,16 +571,13 @@
 
     el.calendarManageUseDate.value = cs.selectedDate;
     if (el.calendarManageSubText) el.calendarManageSubText.textContent = `日付 ${cs.selectedDate}`;
+
+    resetManageForm();
     if (presetRoom) {
       el.calendarManageRoomCode.value = presetRoom;
     } else if (el.calendarRoomFilter?.value) {
       el.calendarManageRoomCode.value = el.calendarRoomFilter.value;
     }
-
-    el.calendarManageOrgName.value = '';
-    if (el.calendarManagePeopleCount) el.calendarManagePeopleCount.value = '';
-    if (el.calendarManageUsageStart) el.calendarManageUsageStart.value = '';
-    if (el.calendarManageUsageEnd) el.calendarManageUsageEnd.value = '';
 
     if (!el.calendarManageDialog.open) {
       u.setElementStatus(el.calendarManageStatus, '');
@@ -538,6 +604,8 @@
         `data-use-date="${u.escapeHtml(entry.use_date || '')}"`,
         `data-room-code="${u.escapeHtml(entry.room_code || '')}"`,
         `data-org-name="${u.escapeHtml(entry.organization_name || '')}"`,
+        `data-people-count="${u.escapeHtml(String(entry.people_count || ''))}"`,
+        `data-usage-time="${u.escapeHtml(String(entry.usage_time || ''))}"`,
       ].filter(Boolean).join(' ');
 
       const metaParts = [entry.organization_name || '—'];
@@ -552,6 +620,7 @@
             <div class="calendar-manage-item-meta">${u.escapeHtml(metaParts.join(' / '))}</div>
           </div>
           <div class="calendar-manage-item-actions">
+            <button type="button" class="secondary" data-action="calendar-edit" ${attrs}>編集</button>
             <button type="button" class="danger" data-action="calendar-delete" ${attrs}>削除</button>
           </div>
         </div>
@@ -561,6 +630,8 @@
 
   async function submitManageAdd() {
     const el = Admin.el;
+    const cs = Admin.calendar.state;
+    const isEdit = Boolean(cs.editingReservationId);
 
     const useDate = (el.calendarManageUseDate?.value || '').trim();
     const roomCode = (el.calendarManageRoomCode?.value || '').trim();
@@ -587,35 +658,43 @@
       return;
     }
 
-    u.setElementStatus(el.calendarManageStatus, '追加しています…');
+    u.setElementStatus(el.calendarManageStatus, isEdit ? '更新しています…' : '追加しています…');
 
     try {
-      const res = await fetch(`${Admin.apiPath}?action=calendar_add`, {
+      const action = isEdit ? 'calendar_update' : 'calendar_add';
+      const payload = {
+        id: isEdit ? cs.editingReservationId : null,
+        use_date: useDate,
+        room_code: roomCode,
+        organization_name: orgName,
+        people_count: peopleCount,
+        usage_time: usageTime,
+      };
+
+      const res = await fetch(`${Admin.apiPath}?action=${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          use_date: useDate,
-          room_code: roomCode,
-          organization_name: orgName,
-          people_count: peopleCount,
-          usage_time: usageTime,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
-        throw new Error(data.message || 'カレンダー追加に失敗しました。');
+        throw new Error(data.message || (isEdit ? 'カレンダー更新に失敗しました。' : 'カレンダー追加に失敗しました。'));
       }
 
-      u.setElementStatus(el.calendarManageStatus, data.message || '追加しました。', 'ok');
-      el.calendarManageOrgName.value = '';
-      if (el.calendarManagePeopleCount) el.calendarManagePeopleCount.value = '';
-      if (el.calendarManageUsageStart) el.calendarManageUsageStart.value = '';
-      if (el.calendarManageUsageEnd) el.calendarManageUsageEnd.value = '';
+      u.setElementStatus(el.calendarManageStatus, data.message || (isEdit ? '更新しました。' : '追加しました。'), 'ok');
 
       await loadReservations();
+      if (Admin.application && typeof Admin.application.loadRows === 'function') {
+        await Admin.application.loadRows();
+      }
+
+      cs.selectedDate = useDate;
+      if (el.calendarManageSubText) el.calendarManageSubText.textContent = `日付 ${cs.selectedDate}`;
+      resetManageForm(true);
+      if (el.calendarManageUseDate) el.calendarManageUseDate.value = useDate;
       renderManageList();
     } catch (err) {
-      u.setElementStatus(el.calendarManageStatus, err.message || 'カレンダー追加に失敗しました。', 'error');
+      u.setElementStatus(el.calendarManageStatus, err.message || (isEdit ? 'カレンダー更新に失敗しました。' : 'カレンダー追加に失敗しました。'), 'error');
     }
   }
 
@@ -646,7 +725,13 @@
       }
 
       u.setElementStatus(el.calendarManageStatus, data.message || '削除しました。', 'ok');
+      if (Admin.calendar.state.editingReservationId && Number(Admin.calendar.state.editingReservationId) === Number(payload.id || 0)) {
+        resetManageForm();
+      }
       await loadReservations();
+      if (Admin.application && typeof Admin.application.loadRows === 'function') {
+        await Admin.application.loadRows();
+      }
       renderManageList();
     } catch (err) {
       u.setElementStatus(el.calendarManageStatus, err.message || 'カレンダー削除に失敗しました。', 'error');

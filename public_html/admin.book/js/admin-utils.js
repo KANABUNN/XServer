@@ -41,6 +41,7 @@
       id: 'ID',
       email: 'メールアドレス',
       room: '予約部屋',
+      application_status: '申請ステータス',
       original_name: '元の名前',
       stored_name: '保存後の名前',
       note: '備考',
@@ -78,6 +79,16 @@
 
   function nl2br(value) {
     return String(value).replace(/\n/g, '<br>');
+  }
+
+  function applicationStatusLabel(value) {
+    const map = (Admin.constants && Admin.constants.applicationStatusMap) || {};
+    return map[String(value || '').trim()] || '未確認';
+  }
+
+  function applicationStatusClass(value) {
+    const normalized = String(value || '').trim() || 'pending';
+    return `status-badge-${normalized}`;
   }
 
   function roomLabel(code) {
@@ -222,6 +233,8 @@
     shortenText,
     nl2br,
     roomLabel,
+    applicationStatusLabel,
+    applicationStatusClass,
     normalizePeopleCountForSend,
     peopleCountLabel,
     usageTimeLabel,

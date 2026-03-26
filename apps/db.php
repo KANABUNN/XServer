@@ -82,19 +82,30 @@ function save_reservation_with_uploaded_file(PDO $pdo, array $cfg, array $mailDa
         }
         $savedToDisk = true;
 
-        $stmt = $pdo->prepare(
-            'INSERT INTO reservations (email, room, note, original_name, stored_name, file_path) '
-            . 'VALUES (:email, :room, :note, :original_name, :stored_name, :file_path)'
-        );
-
-        $stmt->execute([
+        $statusColumn = reservation_status_column($pdo);
+        $insertColumns = ['email', 'room', 'note', 'original_name', 'stored_name', 'file_path'];
+        $placeholders = [':email', ':room', ':note', ':original_name', ':stored_name', ':file_path'];
+        $params = [
             ':email'         => $email,
             ':room'          => $room,
             ':note'          => $note !== '' ? $note : null,
             ':original_name' => reservation_trim_for_db($originalName, 255),
             ':stored_name'   => $storedName,
             ':file_path'     => reservation_trim_for_db($dbPath, 500),
-        ]);
+        ];
+
+        if ($statusColumn !== null) {
+            $insertColumns[] = $statusColumn;
+            $placeholders[] = ':application_status';
+            $params[':application_status'] = 'pending';
+        }
+
+        $stmt = $pdo->prepare(
+            'INSERT INTO reservations (' . implode(', ', $insertColumns) . ') '
+            . 'VALUES (' . implode(', ', $placeholders) . ')'
+        );
+
+        $stmt->execute($params);
 
         $pdo->commit();
     } catch (Throwable $e) {
@@ -142,4 +153,34 @@ function reservation_trim_for_db(string $value, int $maxLength): string
     }
 
     return substr($value, 0, $maxLength);
+}
+
+
+function reservation_status_column(PDO $pdo): ?string
+{
+    static $cacheInitialized = false;
+    static $cache = null;
+    if ($cacheInitialized) {
+        return $cache;
+    }
+
+    $cacheInitialized = true;
+    $stmt = $pdo->query('SHOW COLUMNS FROM `reservations`');
+    $columns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $names = [];
+    foreach ($columns as $column) {
+        $field = (string)($column['Field'] ?? '');
+        if ($field !== '') {
+            $names[] = $field;
+        }
+    }
+
+    foreach (['application_status', 'status'] as $candidate) {
+        if (in_array($candidate, $names, true)) {
+            $cache = $candidate;
+            return $cache;
+        }
+    }
+
+    return null;
 }

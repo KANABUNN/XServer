@@ -20,11 +20,13 @@
 
     const q = el.searchInput.value.trim();
     const room = el.roomFilter.value.trim();
+    const status = el.statusFilter?.value.trim() || '';
     const dateFrom = el.dateFromInput.value;
     const dateTo = el.dateToInput.value;
 
     if (q) url.searchParams.set('q', q);
     if (room) url.searchParams.set('room', room);
+    if (status) url.searchParams.set('status', status);
     if (dateFrom) url.searchParams.set('date_from', dateFrom);
     if (dateTo) url.searchParams.set('date_to', dateTo);
 
@@ -60,7 +62,7 @@
     const state = Admin.state;
 
     u.setStatus('読み込み中です…');
-    el.tableBody.innerHTML = '<tr><td colspan="8" class="empty">読み込み中です…</td></tr>';
+    el.tableBody.innerHTML = '<tr><td colspan="9" class="empty">読み込み中です…</td></tr>';
 
     try {
       const res = await fetch(buildListUrl(), { cache: 'no-store' });
@@ -80,7 +82,7 @@
       u.setStatus('');
     } catch (err) {
       state.currentRows = [];
-      el.tableBody.innerHTML = `<tr><td colspan="8" class="empty">${u.escapeHtml(err.message || 'エラー')}</td></tr>`;
+      el.tableBody.innerHTML = `<tr><td colspan="9" class="empty">${u.escapeHtml(err.message || 'エラー')}</td></tr>`;
       el.metaText.textContent = '読み込みに失敗しました。';
       renderActiveFilters({});
       updatePager();
@@ -93,32 +95,39 @@
     const cardList = el.applicationCardList;
 
     if (!rows.length) {
-      el.tableBody.innerHTML = '<tr><td colspan="8" class="empty">該当データはありません。</td></tr>';
+      el.tableBody.innerHTML = '<tr><td colspan="9" class="empty">該当データはありません。</td></tr>';
       if (cardList) {
         cardList.innerHTML = '<div class="card-empty">この条件の申請データはありません。</div>';
       }
       return;
     }
 
-    el.tableBody.innerHTML = rows.map((row) => `
-      <tr>
-        <td>${u.escapeHtml(String(row.id ?? ''))}</td>
-        <td>${u.escapeHtml(String(row.created_at ?? ''))}</td>
-        <td>${u.escapeHtml(String(row.email ?? ''))}</td>
-        <td>${u.escapeHtml(String(row.room ?? ''))}</td>
-        <td><code>${u.escapeHtml(String(row.original_name ?? ''))}</code></td>
-        <td><code>${u.escapeHtml(String(row.stored_name ?? ''))}</code></td>
-        <td>${u.escapeHtml(u.shortenText(String(row.note ?? ''), 60))}</td>
-        <td>
-          <div class="actions">
-            <button type="button" data-action="detail" data-id="${Number(row.id)}">詳細</button>
-            <button type="button" class="secondary" data-action="calendar" data-id="${Number(row.id)}">確定</button>
-            <button type="button" data-action="download" data-id="${Number(row.id)}">DL</button>
-            <button type="button" class="danger" data-action="delete" data-id="${Number(row.id)}">削除</button>
-          </div>
-        </td>
-      </tr>
-    `).join('');
+    el.tableBody.innerHTML = rows.map((row) => {
+      const statusCode = String(row.application_status || 'pending');
+      const statusLabel = u.applicationStatusLabel(statusCode);
+      const statusClass = u.applicationStatusClass(statusCode);
+      return `
+        <tr>
+          <td>${u.escapeHtml(String(row.id ?? ''))}</td>
+          <td>${u.escapeHtml(String(row.created_at ?? ''))}</td>
+          <td>${u.escapeHtml(String(row.email ?? ''))}</td>
+          <td>${u.escapeHtml(String(row.room ?? ''))}</td>
+          <td><span class="status-badge ${u.escapeHtml(statusClass)}">${u.escapeHtml(statusLabel)}</span></td>
+          <td><code>${u.escapeHtml(String(row.original_name ?? ''))}</code></td>
+          <td><code>${u.escapeHtml(String(row.stored_name ?? ''))}</code></td>
+          <td>${u.escapeHtml(u.shortenText(String(row.note ?? ''), 60))}</td>
+          <td>
+            <div class="actions">
+              <button type="button" data-action="detail" data-id="${Number(row.id)}">詳細</button>
+              <button type="button" class="secondary" data-action="calendar" data-id="${Number(row.id)}">確定</button>
+              <button type="button" data-action="download" data-id="${Number(row.id)}">DL</button>
+              <button type="button" class="danger" data-action="delete" data-id="${Number(row.id)}">削除</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
     if (cardList) {
       cardList.innerHTML = rows.map((row) => {
         const id = Number(row.id);
@@ -128,6 +137,9 @@
         const originalName = u.escapeHtml(String(row.original_name ?? ''));
         const storedName = u.escapeHtml(String(row.stored_name ?? ''));
         const note = u.escapeHtml(u.shortenText(String(row.note ?? ''), 140));
+        const statusCode = String(row.application_status || 'pending');
+        const statusLabel = u.escapeHtml(u.applicationStatusLabel(statusCode));
+        const statusClass = u.escapeHtml(u.applicationStatusClass(statusCode));
 
         return `
           <article class="data-card" data-id="${id}">
@@ -144,6 +156,7 @@
             <dl class="card-kv">
               <dt>メール</dt><dd>${email || '—'}</dd>
               <dt>部屋</dt><dd>${room || '—'}</dd>
+              <dt>申請ステータス</dt><dd><span class="status-badge ${statusClass}">${statusLabel}</span></dd>
               <dt>元の名前</dt><dd><code>${originalName || '—'}</code></dd>
               <dt>保存後</dt><dd><code>${storedName || '—'}</code></dd>
               <dt>備考</dt><dd>${note || '—'}</dd>
@@ -174,11 +187,12 @@
     const chips = [];
     if (filters.q) chips.push(`検索: ${filters.q}`);
     if (filters.room) chips.push(`部屋: ${filters.room}`);
+    if (filters.status) chips.push(`申請ステータス: ${u.applicationStatusLabel(filters.status)}`);
     if (filters.date_from) chips.push(`開始日: ${filters.date_from}`);
     if (filters.date_to) chips.push(`終了日: ${filters.date_to}`);
     chips.push(`並び替え: ${u.labelForSort(filters.sort || el.sortFieldSelect.value)} / ${(filters.dir || el.sortDirSelect.value) === 'asc' ? '昇順' : '降順'}`);
     chips.push(`表示件数: ${el.perPageSelect.value}`);
-    el.activeFilters.innerHTML = chips.map((text) => `<span class="chip">${u.escapeHtml(text)}</span>`).join('');
+    el.activeFilters.innerHTML = chips.map((chipText) => `<span class="chip">${u.escapeHtml(chipText)}</span>`).join('');
   }
 
   function updatePager() {
@@ -196,6 +210,7 @@
     const state = Admin.state;
 
     state.lastDetailId = id;
+    state.detailRow = null;
     el.detailSubText.textContent = `ID ${id}`;
     u.setElementStatus(el.detailStatus, '詳細を読み込み中です…');
     el.detailGrid.innerHTML = '<div class="detail-empty">詳細を読み込んでいます…</div>';
@@ -212,7 +227,8 @@
         throw new Error(data.message || '詳細取得に失敗しました。');
       }
 
-      renderDetail(data.row || {});
+      state.detailRow = data.row || {};
+      renderDetail(state.detailRow);
       u.setElementStatus(el.detailStatus, '');
     } catch (err) {
       el.detailGrid.innerHTML = `<div class="detail-empty">${u.escapeHtml(err.message || '詳細取得に失敗しました。')}</div>`;
@@ -229,11 +245,15 @@
       ? '<span class="file-badge ok">保存ファイル: あり</span>'
       : '<span class="file-badge missing">保存ファイル: なし</span>';
 
+    const statusCode = String(row.application_status || 'pending');
+    const statusLabel = u.applicationStatusLabel(statusCode);
+
     el.detailGrid.innerHTML = [
       detailCard('受付ID', u.escapeHtml(String(row.id ?? ''))),
       detailCard('受付日時', u.escapeHtml(String(row.created_at ?? ''))),
       detailCard('メールアドレス', u.escapeHtml(String(row.email ?? ''))),
       detailCard('予約部屋', u.escapeHtml(String(row.room ?? ''))),
+      detailCard('申請ステータス', `<span class="status-badge ${u.escapeHtml(u.applicationStatusClass(statusCode))}">${u.escapeHtml(statusLabel)}</span>`),
       detailCard('備考', row.note ? u.nl2br(u.escapeHtml(String(row.note))) : '（なし）', true),
       detailCard('元のファイル名', `<code>${u.escapeHtml(String(row.original_name ?? ''))}</code>`),
       detailCard('保存後の名前', `<code>${u.escapeHtml(String(row.stored_name ?? ''))}</code>`),
@@ -251,6 +271,13 @@
     el.detailDeleteBtn.disabled = !row.id;
     el.detailDownloadBtn.dataset.id = String(row.id ?? '');
     el.detailDeleteBtn.dataset.id = String(row.id ?? '');
+    if (el.detailApplicationStatusSelect) {
+      el.detailApplicationStatusSelect.value = statusCode;
+      el.detailApplicationStatusSelect.disabled = !row.id;
+    }
+    if (el.detailApplicationStatusSaveBtn) {
+      el.detailApplicationStatusSaveBtn.disabled = !row.id;
+    }
   }
 
   function detailCard(label, valueHtml, full = false) {
@@ -308,12 +335,40 @@
     }
   }
 
+  async function saveApplicationStatus() {
+    const el = Admin.el;
+    const state = Admin.state;
+    const id = Number(state.lastDetailId || 0);
+    const applicationStatus = String(el.detailApplicationStatusSelect?.value || '').trim();
+    if (!id || !applicationStatus) return;
+
+    u.setElementStatus(el.detailStatus, '申請ステータスを更新しています…');
+    try {
+      const res = await fetch(`${Admin.apiPath}?action=application_status_update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, application_status: applicationStatus })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || '申請ステータスの更新に失敗しました。');
+      }
+
+      u.setElementStatus(el.detailStatus, data.message || '申請ステータスを更新しました。', 'ok');
+      await loadRows();
+      await openDetail(id);
+    } catch (err) {
+      u.setElementStatus(el.detailStatus, err.message || '申請ステータスの更新に失敗しました。', 'error');
+    }
+  }
+
   function resetFilters() {
     const el = Admin.el;
     const state = Admin.state;
 
     el.searchInput.value = '';
     el.roomFilter.value = '';
+    if (el.statusFilter) el.statusFilter.value = '';
     el.dateFromInput.value = '';
     el.dateToInput.value = '';
     el.sortFieldSelect.value = 'created_at';
@@ -345,12 +400,14 @@
       }
     });
 
-    [el.roomFilter, el.dateFromInput, el.dateToInput, el.sortFieldSelect, el.sortDirSelect, el.perPageSelect].forEach((inputEl) => {
-      inputEl.addEventListener('change', () => {
-        state.page = 1;
-        loadRows();
+    [el.roomFilter, el.statusFilter, el.dateFromInput, el.dateToInput, el.sortFieldSelect, el.sortDirSelect, el.perPageSelect]
+      .filter(Boolean)
+      .forEach((inputEl) => {
+        inputEl.addEventListener('change', () => {
+          state.page = 1;
+          loadRows();
+        });
       });
-    });
 
     el.prevPageBtn.addEventListener('click', () => {
       if (state.page <= 1) return;
@@ -397,6 +454,8 @@
       const id = Number(el.detailDeleteBtn.dataset.id || 0);
       if (id) deleteRow(id);
     });
+
+    el.detailApplicationStatusSaveBtn?.addEventListener('click', () => saveApplicationStatus());
   }
 
   Admin.application = {
