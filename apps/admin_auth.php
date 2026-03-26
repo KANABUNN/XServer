@@ -171,6 +171,146 @@ function admin_auth_pick_primary_role(array $roleKeys): string
     return $bestRole;
 }
 
+
+function admin_auth_normalize_role_keys(array $roleKeys): array
+{
+    $normalized = [];
+    foreach ($roleKeys as $roleKey) {
+        $roleKey = trim((string)$roleKey);
+        if ($roleKey === '') {
+            continue;
+        }
+        $normalized[$roleKey] = $roleKey;
+    }
+
+    if ($normalized === []) {
+        $normalized['viewer'] = 'viewer';
+    }
+
+    return array_values($normalized);
+}
+
+function admin_auth_role_permissions_map(): array
+{
+    return [
+        'viewer' => [
+            'application.view',
+            'calendar.view',
+            'mail.view',
+            'application.export',
+            'calendar.export',
+            'mail.export',
+        ],
+        'user' => [
+            'application.view',
+            'application.download',
+            'application.delete',
+            'application.status.update',
+            'calendar.view',
+            'calendar.create',
+            'calendar.update',
+            'calendar.delete',
+            'application.export',
+            'calendar.export',
+            'mail.view',
+            'mail.form.view',
+            'mail.send',
+            'mail.export',
+            'access.view',
+            'access.edit',
+        ],
+        'admin' => [
+            'application.view',
+            'application.download',
+            'application.delete',
+            'application.status.update',
+            'calendar.view',
+            'calendar.create',
+            'calendar.update',
+            'calendar.delete',
+            'application.export',
+            'calendar.export',
+            'mail.view',
+            'mail.form.view',
+            'mail.send',
+            'mail.export',
+            'access.view',
+            'access.edit',
+            'admin.user.manage',
+            'admin.role.manage',
+            'admin.audit.view',
+            'admin.system.manage',
+        ],
+    ];
+}
+
+function admin_auth_all_permissions(): array
+{
+    static $all = null;
+    if (is_array($all)) {
+        return $all;
+    }
+
+    $all = [];
+    foreach (admin_auth_role_permissions_map() as $permissions) {
+        foreach ($permissions as $permission) {
+            $all[$permission] = $permission;
+        }
+    }
+    return array_values($all);
+}
+
+function admin_auth_permissions_for_roles(array $roleKeys): array
+{
+    $roleKeys = admin_auth_normalize_role_keys($roleKeys);
+    $map = admin_auth_role_permissions_map();
+    $permissions = [];
+
+    foreach ($roleKeys as $roleKey) {
+        foreach (($map[$roleKey] ?? []) as $permission) {
+            $permissions[$permission] = $permission;
+        }
+    }
+
+    return array_values($permissions);
+}
+
+function admin_auth_user_role_keys(array $user): array
+{
+    $roleKeys = $user['role_keys'] ?? [];
+    if (!is_array($roleKeys)) {
+        $roleKeys = [$user['role_key'] ?? 'viewer'];
+    }
+    return admin_auth_normalize_role_keys($roleKeys);
+}
+
+function admin_auth_user_has_role(array $user, string $roleKey): bool
+{
+    return in_array($roleKey, admin_auth_user_role_keys($user), true);
+}
+
+function admin_auth_user_permissions(array $user): array
+{
+    $permissions = $user['permissions'] ?? [];
+    if (is_array($permissions) && $permissions !== []) {
+        return array_values(array_unique(array_map('strval', $permissions)));
+    }
+    return admin_auth_permissions_for_roles(admin_auth_user_role_keys($user));
+}
+
+function admin_auth_has_permission(array $user, string $permission): bool
+{
+    if ($permission === '') {
+        return true;
+    }
+
+    if (admin_auth_user_has_role($user, 'admin')) {
+        return true;
+    }
+
+    return in_array($permission, admin_auth_user_permissions($user), true);
+}
+
 function admin_auth_schema_sql(): string
 {
     return <<<SQL
@@ -372,14 +512,19 @@ function admin_auth_login_user(array $user): void
 {
     admin_auth_bootstrap();
     session_regenerate_id(true);
+
+    $roleKeys = admin_auth_user_role_keys($user);
+    $primaryRole = (string)($user['role_key'] ?? admin_auth_pick_primary_role($roleKeys));
+
     $_SESSION['admin_user'] = [
         'id' => (int)($user['id'] ?? 0),
         'login_id' => (string)($user['login_id'] ?? ''),
         'display_name' => (string)($user['display_name'] ?? ''),
         'email' => (string)($user['email'] ?? ''),
-        'role_key' => (string)($user['role_key'] ?? 'viewer'),
-        'role_label' => admin_auth_role_label((string)($user['role_key'] ?? 'viewer')),
-        'role_keys' => array_values(array_filter(array_map('strval', (array)($user['role_keys'] ?? [])))),
+        'role_key' => $primaryRole,
+        'role_label' => admin_auth_role_label($primaryRole),
+        'role_keys' => $roleKeys,
+        'permissions' => admin_auth_permissions_for_roles($roleKeys),
         'last_login_at' => (string)($user['last_login_at'] ?? ''),
         'logged_in_at' => date('c'),
     ];
@@ -392,6 +537,17 @@ function admin_auth_current_user(): ?array
     if (!is_array($user) || (int)($user['id'] ?? 0) < 1) {
         return null;
     }
+
+    $roleKeys = admin_auth_user_role_keys($user);
+    $primaryRole = (string)($user['role_key'] ?? admin_auth_pick_primary_role($roleKeys));
+    $permissions = admin_auth_permissions_for_roles($roleKeys);
+
+    $user['role_keys'] = $roleKeys;
+    $user['role_key'] = $primaryRole;
+    $user['role_label'] = admin_auth_role_label($primaryRole);
+    $user['permissions'] = $permissions;
+    $_SESSION['admin_user'] = $user;
+
     return $user;
 }
 
@@ -453,6 +609,20 @@ function admin_auth_send_json(array $payload, int $statusCode = 200): void
     header('Content-Type: application/json; charset=UTF-8');
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
+}
+
+function admin_auth_require_permission(string $permission, ?array $user = null): array
+{
+    $user = $user ?: admin_auth_require_login();
+    if (admin_auth_has_permission($user, $permission)) {
+        return $user;
+    }
+
+    admin_auth_send_json([
+        'ok' => false,
+        'message' => 'この操作を実行する権限がありません。',
+        'required_permission' => $permission,
+    ], 403);
 }
 
 function admin_auth_require_login(array $options = []): array

@@ -7,9 +7,21 @@
   const Admin = (window.Admin = window.Admin || {});
   const { setStatus } = Admin.utils || {};
 
+  const viewPermissionMap = {
+    applicationView: 'application.view',
+    calendarView: 'calendar.view',
+    mailView: 'mail.view',
+    switchbotView: 'access.view',
+  };
+
+  function isViewAllowed(viewId) {
+    const permission = viewPermissionMap[viewId] || '';
+    return !permission || Admin.hasPermission(permission);
+  }
+
   function switchView(viewId) {
     const { contentViews, sidebarLinks } = Admin.el || {};
-    if (!viewId || !contentViews || !contentViews.length) return;
+    if (!viewId || !contentViews || !contentViews.length || !isViewAllowed(viewId)) return;
 
     contentViews.forEach((view) => {
       view.classList.toggle('is-active', view.id === viewId);
@@ -49,9 +61,22 @@
     if (!sidebarLinks || !sidebarLinks.length || !contentViews || !contentViews.length) return;
 
     sidebarLinks.forEach((btn) => {
+      const allowed = isViewAllowed(btn.dataset.viewTarget || '');
+      btn.hidden = !allowed;
       btn.addEventListener('click', () => switchView(btn.dataset.viewTarget));
     });
+
+    contentViews.forEach((view) => {
+      view.hidden = !isViewAllowed(view.id || '');
+      if (view.hidden) {
+        view.classList.remove('is-active');
+      }
+    });
+
+    const firstAllowed = sidebarLinks.find((btn) => !btn.hidden)?.dataset.viewTarget || '';
+    const activeAllowed = sidebarLinks.find((btn) => btn.classList.contains('is-active') && !btn.hidden)?.dataset.viewTarget || '';
+    switchView(activeAllowed || firstAllowed);
   }
 
-  Admin.sidebar = { switchView, init };
+  Admin.sidebar = { switchView, init, isViewAllowed };
 })();

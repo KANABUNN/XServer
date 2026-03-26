@@ -7,6 +7,17 @@
 
   const Admin = (window.Admin = window.Admin || {});
   Admin.bootstrap = window.AdminBootstrap || {};
+  Admin.currentUser = (Admin.bootstrap && Admin.bootstrap.currentUser) || {};
+  const grantedPermissions = new Set(Array.isArray(Admin.currentUser.permissions) ? Admin.currentUser.permissions.map(String) : []);
+
+  Admin.permissions = Array.from(grantedPermissions);
+  Admin.hasPermission = function hasPermission(permission) {
+    if (!permission) return true;
+    return grantedPermissions.has(String(permission));
+  };
+  Admin.hasAnyPermission = function hasAnyPermission(permissions) {
+    return Array.isArray(permissions) && permissions.some((permission) => Admin.hasPermission(permission));
+  };
 
   // API（js/ は index.php と同階層）
   Admin.apiPath = 'manage_reservations.php';

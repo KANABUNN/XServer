@@ -8,8 +8,28 @@
   const Admin = (window.Admin = window.Admin || {});
   const u = Admin.utils;
 
+  function can(permission) {
+    return Admin.hasPermission(permission);
+  }
+
+  function applyPermissionUi() {
+    const el = Admin.el;
+    const canCompose = can('mail.form.view');
+    const canSend = can('mail.send');
+    const canExport = can('mail.export');
+
+    if (el.mailComposeArea) el.mailComposeArea.hidden = !canCompose;
+    if (el.mailViewerNotice) el.mailViewerNotice.hidden = canCompose;
+    if (el.reservationMailSendBtn) {
+      el.reservationMailSendBtn.hidden = !canSend;
+      el.reservationMailSendBtn.disabled = !canSend;
+    }
+    if (el.reservationMailCsvExportBtn) el.reservationMailCsvExportBtn.hidden = !canExport;
+  }
+
   function ensureLoaded() {
     const state = Admin.mail.state;
+    applyPermissionUi();
     if (!state.initialized) {
       bindEvents();
       state.initialized = true;
@@ -20,8 +40,25 @@
   }
 
   async function loadAll() {
-    await loadOptions();
+    if (can('mail.form.view')) {
+      await loadOptions();
+    } else {
+      resetComposeForViewer();
+    }
     await loadHistory();
+  }
+
+  function resetComposeForViewer() {
+    const el = Admin.el;
+    const state = Admin.mail.state;
+    state.reservations = [];
+    state.passcodes = [];
+    renderReservationOptions();
+    renderReservationSummary();
+    renderPasscodeOptions();
+    renderPasscodeSummary();
+    if (el.reservationMailMetaText) el.reservationMailMetaText.textContent = '閲覧者ロールでは送信候補・パスコードは表示されません。';
+    u.setElementStatus(el.reservationMailStatusText, '送信履歴のみ閲覧できます。');
   }
 
   function bindEvents() {
@@ -144,6 +181,10 @@
   }
 
   function exportHistoryCsv() {
+    if (!can('mail.export')) {
+      u.setElementStatus(Admin.el.reservationMailHistoryStatusText, 'CSV 出力権限がありません。', 'error');
+      return;
+    }
     const url = new URL(Admin.apiPath, window.location.href);
     url.searchParams.set('action', 'export_csv');
     url.searchParams.set('type', 'mail_history');
@@ -316,6 +357,10 @@
 
   async function sendMail() {
     const el = Admin.el;
+    if (!can('mail.send')) {
+      u.setElementStatus(el.reservationMailStatusText, 'メール送信権限がありません。', 'error');
+      return;
+    }
     const to = String(el.reservationMailTo?.value || '').trim();
     const reservationToken = String(el.reservationMailReservationSelect?.value || '');
     const passcodeToken = String(el.reservationMailPasscodeSelect?.value || '');

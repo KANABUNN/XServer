@@ -9,7 +9,7 @@ foreach ([__DIR__ . '/../../apps/admin_auth.php', __DIR__ . '/../apps/admin_auth
     }
 }
 
-admin_auth_require_login();
+$__adminUser = admin_auth_require_login();
 
 foreach ([__DIR__ . '/../../apps/switchbot_api.php', __DIR__ . '/../apps/switchbot_api.php', __DIR__ . '/apps/switchbot_api.php'] as $__switchbotHelper) {
     if (is_file($__switchbotHelper)) {
@@ -23,6 +23,11 @@ try {
     $cfg = load_config();
     load_google_calendar_sync_helpers();
     $action = (string)($_REQUEST['action'] ?? 'list');
+
+    $requiredPermission = manage_required_permission_for_action($action, $_REQUEST);
+    if ($requiredPermission !== null) {
+        admin_auth_require_permission($requiredPermission, $__adminUser);
+    }
 
     switch ($action) {
         case 'list':
@@ -163,6 +168,39 @@ try {
 }
 
 
+
+
+
+function manage_required_permission_for_action(string $action, array $request): ?string
+{
+    return match ($action) {
+        'list', 'detail', 'rooms' => 'application.view',
+        'download' => 'application.download',
+        'delete' => 'application.delete',
+        'calendar_list' => 'calendar.view',
+        'calendar_add' => 'calendar.create',
+        'calendar_delete' => 'calendar.delete',
+        'calendar_update' => 'calendar.update',
+        'application_status_update' => 'application.status.update',
+        'mail_form_options' => 'mail.form.view',
+        'mail_history_list' => 'mail.view',
+        'reservation_mail_send' => 'mail.send',
+        'switchbot_status', 'switchbot_command_detail' => 'access.view',
+        'switchbot_create_key', 'switchbot_webhook_sync', 'switchbot_webhook_toggle' => 'access.edit',
+        'export_csv' => manage_required_permission_for_export((string)($request['type'] ?? '')),
+        default => null,
+    };
+}
+
+function manage_required_permission_for_export(string $type): ?string
+{
+    return match ($type) {
+        'applications' => 'application.export',
+        'calendar' => 'calendar.export',
+        'mail_history' => 'mail.export',
+        default => null,
+    };
+}
 
 function load_google_calendar_sync_helpers(): void
 {

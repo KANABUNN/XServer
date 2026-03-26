@@ -7,10 +7,15 @@
   const Admin = (window.Admin = window.Admin || {});
   const u = Admin.utils;
 
+  function can(permission) {
+    return Admin.hasPermission(permission);
+  }
+
   const ROOM_CODES = ['tamoku', 'orange'];
 
   function ensureLoaded() {
     const state = Admin.switchbot.state;
+    if (!can('access.view')) return;
     if (state.loaded) return;
     state.loaded = true;
     loadStatus();
@@ -111,8 +116,13 @@
     }
 
     if (el.switchbotWebhookToggleBtn) {
-      el.switchbotWebhookToggleBtn.disabled = !registered && !enabled;
+      el.switchbotWebhookToggleBtn.hidden = !can('access.edit');
+      el.switchbotWebhookToggleBtn.disabled = !can('access.edit') || (!registered && !enabled);
       el.switchbotWebhookToggleBtn.textContent = enabled ? '無効化' : '有効化';
+    }
+    if (el.switchbotWebhookSyncBtn) {
+      el.switchbotWebhookSyncBtn.hidden = !can('access.edit');
+      el.switchbotWebhookSyncBtn.disabled = !can('access.edit');
     }
 
     if (webhook.query_error) {
@@ -356,7 +366,7 @@
     const deviceId = roomState.device_id ? `<code>${u.escapeHtml(roomState.device_id)}</code>` : '—';
     const note = roomState.note ? `<p class="switchbot-room-note">${u.escapeHtml(roomState.note)}</p>` : '';
     const statusTone = roomState.ready ? 'ok' : roomState.configured ? '' : 'error';
-    const disabled = roomState.ready ? '' : 'disabled';
+    const disabled = roomState.ready && can('access.edit') ? '' : 'disabled';
     const statusLabel = roomState.ready ? '準備完了' : roomState.configured ? '確認待ち' : '未設定';
 
     return `
@@ -463,6 +473,10 @@
 
   async function submitCreateKey(roomCode) {
     const statusEl = document.getElementById(`switchbotRoomStatus_${roomCode}`);
+    if (!can('access.edit')) {
+      u.setElementStatus(statusEl, 'パスワード発行権限がありません。', 'error');
+      return;
+    }
     try {
       const payload = readForm(roomCode);
       u.setElementStatus(statusEl, 'SwitchBot へ送信しています…');
@@ -492,10 +506,18 @@
   }
 
   async function submitWebhookSync() {
+    if (!can('access.edit')) {
+      u.setElementStatus(Admin.el.switchbotWebhookStatusText, 'Webhook 更新権限がありません。', 'error');
+      return;
+    }
     await runWebhookAction('switchbot_webhook_sync', {}, 'Webhook を更新しています…');
   }
 
   async function submitWebhookToggle() {
+    if (!can('access.edit')) {
+      u.setElementStatus(Admin.el.switchbotWebhookStatusText, 'Webhook 更新権限がありません。', 'error');
+      return;
+    }
     const status = Admin.switchbot.state.status || {};
     const webhook = status.webhook || {};
     const enable = !(webhook.current_url_registered && webhook.current_url_enabled === true);

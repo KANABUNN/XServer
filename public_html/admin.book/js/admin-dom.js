@@ -35,6 +35,7 @@
     detailGrid: document.getElementById('detailGrid'),
     detailSubText: document.getElementById('detailSubText'),
     detailStatus: document.getElementById('detailStatus'),
+    detailStatusEditor: document.querySelector('.detail-status-editor'),
     detailApplicationStatusSelect: document.getElementById('detailApplicationStatusSelect'),
     detailApplicationStatusSaveBtn: document.getElementById('detailApplicationStatusSaveBtn'),
     detailDownloadBtn: document.getElementById('detailDownloadBtn'),
@@ -75,6 +76,8 @@
 
     // Reservation mail view
     reservationMailReloadBtn: document.getElementById('reservationMailReloadBtn'),
+    mailComposeArea: document.getElementById('mailComposeArea'),
+    mailViewerNotice: document.getElementById('mailViewerNotice'),
     reservationMailCsvExportBtn: document.getElementById('reservationMailCsvExportBtn'),
     reservationMailTo: document.getElementById('reservationMailTo'),
     reservationMailAppendBeneBtn: document.getElementById('reservationMailAppendBeneBtn'),

@@ -7,6 +7,18 @@
   const Admin = (window.Admin = window.Admin || {});
   const u = Admin.utils;
 
+  function can(permission) {
+    return Admin.hasPermission(permission);
+  }
+
+  function canEditAnyCalendar() {
+    return Admin.hasAnyPermission(['calendar.create', 'calendar.update', 'calendar.delete']);
+  }
+
+  function manageActionLabel() {
+    return canEditAnyCalendar() ? '管理' : '詳細';
+  }
+
   function guessRoomCode(value) {
     const v = String(value || '').trim().toLowerCase();
     if (v === 'tamoku' || v === 'orange') return v;
@@ -170,6 +182,10 @@
       if (!button) return;
 
       if (button.dataset.action === 'calendar-edit') {
+        if (!can('calendar.update')) {
+          u.setElementStatus(el.calendarManageStatus, '編集権限がありません。', 'error');
+          return;
+        }
         startManageEdit({
           id: Number(button.dataset.id || 0) || null,
           useDate: button.dataset.useDate || '',
@@ -182,6 +198,10 @@
       }
 
       if (button.dataset.action === 'calendar-delete') {
+        if (!can('calendar.delete')) {
+          u.setElementStatus(el.calendarManageStatus, '削除権限がありません。', 'error');
+          return;
+        }
         deleteReservation({
           id: Number(button.dataset.id || 0) || null,
           useDate: button.dataset.useDate || '',
@@ -195,6 +215,7 @@
     el.calendarManageCancelEditBtn?.addEventListener('click', () => resetManageForm());
     el.calendarManageCloseBtn?.addEventListener('click', () => {
       resetManageForm();
+      applyManagePermissions();
       el.calendarManageDialog.close();
     });
   }
@@ -202,6 +223,10 @@
 
   function exportCsv() {
     const el = Admin.el;
+    if (!can('calendar.export')) {
+      u.setElementStatus(el.calendarStatusText, 'CSV 出力権限がありません。', 'error');
+      return;
+    }
     const cs = Admin.calendar.state;
     const url = new URL(Admin.apiPath, window.location.href);
     url.searchParams.set('action', 'export_csv');
@@ -330,7 +355,7 @@
             ${bodyHtml}
           </div>
           <div class="calendar-day-tools">
-            <button type="button" class="secondary calendar-day-manage" data-action="calendar-manage" data-date="${dateKey}">管理</button>
+            <button type="button" class="secondary calendar-day-manage" data-action="calendar-manage" data-date="${dateKey}">${manageActionLabel()}</button>
           </div>
         </div>
       `);
@@ -374,7 +399,7 @@
         <td>${u.escapeHtml(u.usageTimeLabel(entry.usage_time))}</td>
         <td>
           <div class="calendar-list-actions">
-            <button type="button" class="secondary" data-action="calendar-manage" data-date="${u.escapeHtml(entry.use_date || '')}">管理</button>
+            <button type="button" class="secondary" data-action="calendar-manage" data-date="${u.escapeHtml(entry.use_date || '')}">${manageActionLabel()}</button>
           </div>
         </td>
       </tr>
@@ -396,7 +421,7 @@
                 <div class="card-sub">${room}</div>
               </div>
               <div class="card-head-right">
-                <button type="button" class="secondary" data-action="calendar-manage" data-date="${dateRaw}">管理</button>
+                <button type="button" class="secondary" data-action="calendar-manage" data-date="${dateRaw}">${manageActionLabel()}</button>
               </div>
             </header>
 
@@ -446,6 +471,10 @@
   }
 
   function openAdd(reservationId) {
+    if (!can('calendar.create')) {
+      u.setStatus('確定予約登録権限がありません。', true);
+      return;
+    }
     const el = Admin.el;
     const state = Admin.state;
 
@@ -474,6 +503,10 @@
 
   async function submitAdd() {
     const el = Admin.el;
+    if (!can('calendar.create')) {
+      u.setElementStatus(el.calendarAddStatus, '確定予約登録権限がありません。', 'error');
+      return;
+    }
     const cs = Admin.calendar;
 
     if (!cs.targetReservationId) return;
@@ -538,6 +571,33 @@
     }
   }
 
+  function applyManagePermissions() {
+    const el = Admin.el;
+    const editable = canEditAnyCalendar();
+    const formSection = el.calendarManageAddBtn?.closest('.calendar-manage-section') || null;
+    if (formSection) formSection.hidden = !editable;
+
+    [
+      el.calendarManageUseDate,
+      el.calendarManageRoomCode,
+      el.calendarManageOrgName,
+      el.calendarManagePeopleCount,
+      el.calendarManageUsageStart,
+      el.calendarManageUsageEnd,
+    ].filter(Boolean).forEach((input) => {
+      input.disabled = !editable;
+    });
+
+    if (el.calendarManageAddBtn) {
+      el.calendarManageAddBtn.hidden = !editable;
+      el.calendarManageAddBtn.disabled = !editable;
+    }
+    if (el.calendarManageCancelEditBtn) {
+      el.calendarManageCancelEditBtn.hidden = true;
+      el.calendarManageCancelEditBtn.disabled = !editable;
+    }
+  }
+
   function resetManageForm(preserveDate = true) {
     const el = Admin.el;
     const cs = Admin.calendar.state;
@@ -573,6 +633,10 @@
     u.setElementStatus(el.calendarManageStatus, `ID ${cs.editingReservationId} を編集中です。`);
   }
 
+  function editableNoticeText() {
+    return canEditAnyCalendar() ? '' : '閲覧専用です。登録済み予約の確認のみ行えます。';
+  }
+
   function openManage(dateKey, presetRoom = '') {
     const el = Admin.el;
     const cs = Admin.calendar.state;
@@ -589,6 +653,7 @@
     if (el.calendarManageSubText) el.calendarManageSubText.textContent = `日付 ${cs.selectedDate}`;
 
     resetManageForm();
+    applyManagePermissions();
     if (presetRoom) {
       el.calendarManageRoomCode.value = presetRoom;
     } else if (el.calendarRoomFilter?.value) {
@@ -596,7 +661,7 @@
     }
 
     if (!el.calendarManageDialog.open) {
-      u.setElementStatus(el.calendarManageStatus, '');
+      u.setElementStatus(el.calendarManageStatus, editableNoticeText());
     }
     renderManageList();
 
@@ -629,16 +694,18 @@
       if (extraMeta) metaParts.push(extraMeta);
       if (entry.id) metaParts.push(`ID ${entry.id}`);
 
+      const actionButtons = [
+        can('calendar.update') ? `<button type="button" class="secondary" data-action="calendar-edit" ${attrs}>編集</button>` : '',
+        can('calendar.delete') ? `<button type="button" class="danger" data-action="calendar-delete" ${attrs}>削除</button>` : '',
+      ].filter(Boolean).join('');
+
       return `
         <div class="calendar-manage-item">
           <div class="calendar-manage-item-main">
             <div class="calendar-manage-item-title">${u.escapeHtml(u.roomLabel(entry.room_code))}</div>
             <div class="calendar-manage-item-meta">${u.escapeHtml(metaParts.join(' / '))}</div>
           </div>
-          <div class="calendar-manage-item-actions">
-            <button type="button" class="secondary" data-action="calendar-edit" ${attrs}>編集</button>
-            <button type="button" class="danger" data-action="calendar-delete" ${attrs}>削除</button>
-          </div>
+          <div class="calendar-manage-item-actions">${actionButtons}</div>
         </div>
       `;
     }).join('');
@@ -648,6 +715,15 @@
     const el = Admin.el;
     const cs = Admin.calendar.state;
     const isEdit = Boolean(cs.editingReservationId);
+
+    if (isEdit && !can('calendar.update')) {
+      u.setElementStatus(el.calendarManageStatus, '更新権限がありません。', 'error');
+      return;
+    }
+    if (!isEdit && !can('calendar.create')) {
+      u.setElementStatus(el.calendarManageStatus, '追加権限がありません。', 'error');
+      return;
+    }
 
     const useDate = (el.calendarManageUseDate?.value || '').trim();
     const roomCode = (el.calendarManageRoomCode?.value || '').trim();
@@ -716,6 +792,10 @@
 
   async function deleteReservation(payload) {
     const el = Admin.el;
+    if (!can('calendar.delete')) {
+      u.setElementStatus(el.calendarManageStatus, '削除権限がありません。', 'error');
+      return;
+    }
 
     const roomText = u.roomLabel(payload.roomCode);
     const orgText = payload.orgName || '（団体名なし）';
@@ -743,6 +823,7 @@
       u.setElementStatus(el.calendarManageStatus, data.message || '削除しました。', 'ok');
       if (Admin.calendar.state.editingReservationId && Number(Admin.calendar.state.editingReservationId) === Number(payload.id || 0)) {
         resetManageForm();
+        applyManagePermissions();
       }
       await loadReservations();
       if (Admin.application && typeof Admin.application.loadRows === 'function') {

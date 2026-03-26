@@ -7,6 +7,10 @@
   const Admin = (window.Admin = window.Admin || {});
   const u = Admin.utils;
 
+  function can(permission) {
+    return Admin.hasPermission(permission);
+  }
+
   function buildListUrl() {
     const el = Admin.el;
     const state = Admin.state;
@@ -106,6 +110,12 @@
       const statusCode = String(row.application_status || 'pending');
       const statusLabel = u.applicationStatusLabel(statusCode);
       const statusClass = u.applicationStatusClass(statusCode);
+      const actions = [
+        `<button type="button" data-action="detail" data-id="${Number(row.id)}">詳細</button>`,
+        can('calendar.create') ? `<button type="button" class="secondary" data-action="calendar" data-id="${Number(row.id)}">確定</button>` : '',
+        can('application.download') ? `<button type="button" data-action="download" data-id="${Number(row.id)}">DL</button>` : '',
+        can('application.delete') ? `<button type="button" class="danger" data-action="delete" data-id="${Number(row.id)}">削除</button>` : '',
+      ].filter(Boolean).join('');
       return `
         <tr>
           <td>${u.escapeHtml(String(row.id ?? ''))}</td>
@@ -117,12 +127,7 @@
           <td><code>${u.escapeHtml(String(row.stored_name ?? ''))}</code></td>
           <td>${u.escapeHtml(u.shortenText(String(row.note ?? ''), 60))}</td>
           <td>
-            <div class="actions">
-              <button type="button" data-action="detail" data-id="${Number(row.id)}">詳細</button>
-              <button type="button" class="secondary" data-action="calendar" data-id="${Number(row.id)}">確定</button>
-              <button type="button" data-action="download" data-id="${Number(row.id)}">DL</button>
-              <button type="button" class="danger" data-action="delete" data-id="${Number(row.id)}">削除</button>
-            </div>
+            <div class="actions">${actions || '<span class="dialog-sub">閲覧のみ</span>'}</div>
           </td>
         </tr>
       `;
@@ -164,9 +169,9 @@
 
             <div class="actions card-actions">
               <button type="button" data-action="detail" data-id="${id}">詳細</button>
-              <button type="button" class="secondary" data-action="calendar" data-id="${id}">確定</button>
-              <button type="button" data-action="download" data-id="${id}">DL</button>
-              <button type="button" class="danger" data-action="delete" data-id="${id}">削除</button>
+              ${can('calendar.create') ? `<button type="button" class="secondary" data-action="calendar" data-id="${id}">確定</button>` : ''}
+              ${can('application.download') ? `<button type="button" data-action="download" data-id="${id}">DL</button>` : ''}
+              ${can('application.delete') ? `<button type="button" class="danger" data-action="delete" data-id="${id}">削除</button>` : ''}
             </div>
           </article>
         `;
@@ -267,16 +272,24 @@
       ),
     ].join('');
 
-    el.detailDownloadBtn.disabled = !row.id;
-    el.detailDeleteBtn.disabled = !row.id;
+    const canDownload = can('application.download');
+    const canDelete = can('application.delete');
+    const canUpdateStatus = can('application.status.update');
+
+    el.detailDownloadBtn.hidden = !canDownload;
+    el.detailDeleteBtn.hidden = !canDelete;
+    if (el.detailStatusEditor) el.detailStatusEditor.hidden = !canUpdateStatus;
+
+    el.detailDownloadBtn.disabled = !row.id || !canDownload;
+    el.detailDeleteBtn.disabled = !row.id || !canDelete;
     el.detailDownloadBtn.dataset.id = String(row.id ?? '');
     el.detailDeleteBtn.dataset.id = String(row.id ?? '');
     if (el.detailApplicationStatusSelect) {
       el.detailApplicationStatusSelect.value = statusCode;
-      el.detailApplicationStatusSelect.disabled = !row.id;
+      el.detailApplicationStatusSelect.disabled = !row.id || !canUpdateStatus;
     }
     if (el.detailApplicationStatusSaveBtn) {
-      el.detailApplicationStatusSaveBtn.disabled = !row.id;
+      el.detailApplicationStatusSaveBtn.disabled = !row.id || !canUpdateStatus;
     }
   }
 
@@ -290,6 +303,10 @@
   }
 
   function downloadRow(id) {
+    if (!can('application.download')) {
+      u.setStatus('ダウンロード権限がありません。', true);
+      return;
+    }
     const url = new URL(Admin.apiPath, window.location.href);
     url.searchParams.set('action', 'download');
     url.searchParams.set('id', String(id));
@@ -298,6 +315,10 @@
 
   async function deleteRow(id) {
     const el = Admin.el;
+    if (!can('application.delete')) {
+      u.setStatus('削除権限がありません。', true);
+      return;
+    }
     const state = Admin.state;
 
     if (!id) return;
@@ -337,6 +358,10 @@
 
   async function saveApplicationStatus() {
     const el = Admin.el;
+    if (!can('application.status.update')) {
+      u.setElementStatus(el.detailStatus, '申請ステータス更新権限がありません。', 'error');
+      return;
+    }
     const state = Admin.state;
     const id = Number(state.lastDetailId || 0);
     const applicationStatus = String(el.detailApplicationStatusSelect?.value || '').trim();
@@ -364,6 +389,10 @@
 
 
   function exportCsv() {
+    if (!can('application.export')) {
+      u.setStatus('CSV 出力権限がありません。', true);
+      return;
+    }
     const url = buildListUrl();
     url.searchParams.set('action', 'export_csv');
     url.searchParams.set('type', 'applications');
@@ -443,8 +472,10 @@
           openDetail(id);
           break;
         case 'calendar':
-          if (Admin.calendar && typeof Admin.calendar.openAdd === 'function') {
+          if (can('calendar.create') && Admin.calendar && typeof Admin.calendar.openAdd === 'function') {
             Admin.calendar.openAdd(id);
+          } else {
+            u.setStatus('確定予約登録権限がありません。', true);
           }
           break;
         case 'download':

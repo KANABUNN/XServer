@@ -22,6 +22,8 @@ $user = admin_auth_require_login();
       'display_name' => (string)($user['display_name'] ?? ''),
       'role_key' => (string)($user['role_key'] ?? 'viewer'),
       'role_label' => (string)($user['role_label'] ?? '閲覧者'),
+      'role_keys' => array_values(array_map('strval', (array)($user['role_keys'] ?? []))),
+      'permissions' => array_values(array_map('strval', admin_auth_user_permissions($user))),
     ],
   ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;</script>
   <link rel="stylesheet" href="./css/reservation-admin.css">
@@ -276,6 +278,12 @@ $user = admin_auth_require_login();
     </header>
 
     <section class="panel">
+      <div id="mailViewerNotice" class="mail-note" hidden>
+        <strong>閲覧専用</strong>
+        <p>このロールでは送信候補やパスコードは表示されません。送信履歴と CSV 出力のみ利用できます。</p>
+      </div>
+
+      <div id="mailComposeArea">
       <div class="mail-note">
         <strong>送信内容</strong>
         <p>既存の SMTP 設定を利用して HTML メールを送信します。予約内容・利用日時のリマインド・部屋のパスワードを 1 通にまとめて案内します。</p>
@@ -334,6 +342,7 @@ $user = admin_auth_require_login();
 
       <div class="dialog-actions mail-send-actions">
         <button id="reservationMailSendBtn" type="button">メール送信</button>
+      </div>
       </div>
 
       <section class="mail-history-section">
