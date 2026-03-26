@@ -12,6 +12,7 @@
     calendarView: 'calendar.view',
     mailView: 'mail.view',
     switchbotView: 'access.view',
+    adminView: 'admin.user.manage',
   };
 
   function isViewAllowed(viewId) {
@@ -52,6 +53,14 @@
         Admin.switchbot.ensureLoaded();
       } else {
         setStatus && setStatus('借用部屋管理機能が初期化されていません。', true);
+      }
+    }
+
+    if (viewId === 'adminView') {
+      if (Admin.adminView && typeof Admin.adminView.ensureLoaded === 'function') {
+        Admin.adminView.ensureLoaded();
+      } else {
+        setStatus && setStatus('管理設定機能が初期化されていません。', true);
       }
     }
   }

@@ -5,7 +5,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../apps/admin_auth.php';
 
 admin_auth_bootstrap();
-
 $errorMessage = '';
 $infoMessage = '';
 $setupAllowed = true;
@@ -31,6 +30,7 @@ try {
 }
 
 if ($setupAllowed && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    admin_auth_require_csrf();
     $values['login_id'] = trim((string)($_POST['login_id'] ?? ''));
     $values['display_name'] = trim((string)($_POST['display_name'] ?? ''));
     $values['email'] = trim((string)($_POST['email'] ?? ''));
@@ -42,11 +42,16 @@ if ($setupAllowed && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $errorMessage = '確認用パスワードが一致しません。';
     } else {
         try {
-            admin_auth_create_user($pdo, [
+            $createdId = admin_auth_create_user($pdo, [
                 'login_id' => $values['login_id'],
                 'display_name' => $values['display_name'],
                 'email' => $values['email'],
                 'password' => $password,
+                'role_key' => $values['role_key'],
+            ]);
+            admin_auth_write_audit_log($pdo, null, 'admin.bootstrap.create', 'admin_user', $createdId, [
+                'login_id' => $values['login_id'],
+                'display_name' => $values['display_name'],
                 'role_key' => $values['role_key'],
             ]);
             header('Location: login.php?created=1', true, 302);
@@ -84,6 +89,7 @@ if ($setupAllowed && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
       <?php if ($setupAllowed): ?>
       <form method="post" class="auth-form" autocomplete="on">
+        <?php echo admin_auth_csrf_field(); ?>
         <div class="auth-grid">
           <label class="auth-field">
             <span>ログインID</span>

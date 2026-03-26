@@ -36,6 +36,10 @@
       Admin.switchbot.bindEvents();
     }
 
+    if (Admin.adminView && typeof Admin.adminView.bindEvents === 'function') {
+      Admin.adminView.bindEvents();
+    }
+
     initDialogsBackdrop();
 
     // 初回ロード（申請一覧）

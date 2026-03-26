@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../apps/admin_auth.php';
 
 $user = admin_auth_require_login();
+$csrfToken = admin_auth_get_csrf_token();
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -15,6 +16,7 @@ $user = admin_auth_require_login();
   <meta name="admin-user-display-name" content="<?php echo admin_auth_h((string)($user['display_name'] ?? '')); ?>">
   <meta name="admin-user-role" content="<?php echo admin_auth_h((string)($user['role_key'] ?? 'viewer')); ?>">
   <meta name="admin-user-role-label" content="<?php echo admin_auth_h((string)($user['role_label'] ?? '閲覧者')); ?>">
+  <meta name="admin-csrf-token" content="<?php echo admin_auth_h($csrfToken); ?>">
   <script>window.AdminBootstrap = <?php echo json_encode([
     'currentUser' => [
       'id' => (int)($user['id'] ?? 0),
@@ -25,6 +27,7 @@ $user = admin_auth_require_login();
       'role_keys' => array_values(array_map('strval', (array)($user['role_keys'] ?? []))),
       'permissions' => array_values(array_map('strval', admin_auth_user_permissions($user))),
     ],
+    'csrfToken' => $csrfToken,
   ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;</script>
   <link rel="stylesheet" href="./css/reservation-admin.css">
   <link rel="stylesheet" href="./css/reservation-admin-responsive.css">
@@ -42,6 +45,7 @@ $user = admin_auth_require_login();
         <button type="button" class="sidebar-link" data-view-target="calendarView">予約状況管理</button>
         <button type="button" class="sidebar-link" data-view-target="switchbotView">借用部屋管理</button>
         <button type="button" class="sidebar-link" data-view-target="mailView">予約通知メール</button>
+        <button type="button" class="sidebar-link" data-view-target="adminView">管理設定</button>
       </nav>
 
       <div class="sidebar-user">
@@ -49,7 +53,10 @@ $user = admin_auth_require_login();
           <strong><?php echo admin_auth_h((string)($user['display_name'] ?? '')); ?></strong>
           <span><?php echo admin_auth_h((string)($user['role_label'] ?? '閲覧者')); ?> / <?php echo admin_auth_h((string)($user['login_id'] ?? '')); ?></span>
         </div>
-        <a href="logout.php" class="sidebar-logout-link">ログアウト</a>
+        <form method="post" action="logout.php" class="sidebar-logout-form">
+          <?php echo admin_auth_csrf_field(); ?>
+          <button type="submit" class="sidebar-logout-link">ログアウト</button>
+        </form>
       </div>
     </aside>
 
@@ -462,6 +469,133 @@ $user = admin_auth_require_login();
   </div>
 </section>
 
+        <section id="adminView" class="content-view">
+  <div class="wrap">
+    <header class="page-head">
+      <div>
+        <h1>管理設定</h1>
+        <p class="lead">管理者アカウントの管理と監査ログの確認を行います。</p>
+      </div>
+      <div class="head-actions">
+        <button id="adminReloadBtn" type="button" class="secondary">再読込</button>
+      </div>
+    </header>
+
+    <section class="panel admin-users-section">
+      <div class="page-head page-head-compact">
+        <div>
+          <h2>管理者アカウント</h2>
+          <p class="lead">viewer / user / admin の割り当てと有効・無効の管理を行えます。</p>
+        </div>
+      </div>
+
+      <div class="calendar-form-grid">
+        <input type="hidden" id="adminUserId">
+
+        <label class="field">
+          <span>ログインID</span>
+          <input type="text" id="adminLoginId" maxlength="100" placeholder="例：admin.taro">
+        </label>
+
+        <label class="field">
+          <span>表示名</span>
+          <input type="text" id="adminDisplayName" maxlength="100" placeholder="例：総務 太郎">
+        </label>
+
+        <label class="field field-wide">
+          <span>メールアドレス</span>
+          <input type="email" id="adminEmail" maxlength="255" placeholder="例：admin@example.jp">
+        </label>
+
+        <label class="field">
+          <span>ロール</span>
+          <select id="adminRoleKey">
+            <option value="viewer">閲覧者 (viewer)</option>
+            <option value="user">編集者 (user)</option>
+            <option value="admin">管理者 (admin)</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>状態</span>
+          <select id="adminIsActive">
+            <option value="1">有効</option>
+            <option value="0">無効</option>
+          </select>
+        </label>
+
+        <label class="field field-wide">
+          <span>パスワード <small>※更新時は空欄で変更なし</small></span>
+          <input type="password" id="adminPassword" minlength="10" placeholder="10文字以上">
+        </label>
+      </div>
+
+      <div class="toolbar admin-toolbar">
+        <button id="adminUserCreateBtn" type="button">新規作成</button>
+        <button id="adminUserUpdateBtn" type="button">更新保存</button>
+        <button id="adminUserResetBtn" type="button" class="secondary">入力をクリア</button>
+      </div>
+
+      <div class="meta-row">
+        <div class="meta" id="adminUsersMetaText">管理者アカウントを読み込みます。</div>
+        <div class="status" id="adminUsersStatusText" aria-live="polite"></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>ログインID</th>
+              <th>表示名</th>
+              <th>メールアドレス</th>
+              <th>ロール</th>
+              <th>状態</th>
+              <th>最終ログイン</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="adminUsersBody">
+            <tr><td colspan="8" class="empty">読み込み前です。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel admin-audit-section">
+      <div class="page-head page-head-compact">
+        <div>
+          <h2>監査ログ</h2>
+          <p class="lead">重要操作の履歴を新しい順で表示します。</p>
+        </div>
+      </div>
+
+      <div class="meta-row">
+        <div class="meta" id="adminAuditMetaText">監査ログを読み込みます。</div>
+        <div class="status" id="adminAuditStatusText" aria-live="polite"></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>日時</th>
+              <th>操作者</th>
+              <th>操作</th>
+              <th>対象</th>
+              <th>概要</th>
+            </tr>
+          </thead>
+          <tbody id="adminAuditBody">
+            <tr><td colspan="6" class="empty">読み込み前です。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+      </section>
+
     </main>
   </div>
 
@@ -494,7 +628,8 @@ $user = admin_auth_require_login();
     </div>
   </dialog>
 
-  <dialog id="detailDialog" class="detail-dialog">
+
+<dialog id="detailDialog" class="detail-dialog">
     <form method="dialog" class="dialog-shell">
       <div class="dialog-head">
         <div>
@@ -672,6 +807,7 @@ $user = admin_auth_require_login();
   <script src="./js/admin-calendar.js" defer></script>
   <script src="./js/admin-mail.js" defer></script>
   <script src="./js/admin-room-access.js" defer></script>
+  <script src="./js/admin-admin.js" defer></script>
   <script src="./js/admin-init.js" defer></script>
 </body>
 </html>

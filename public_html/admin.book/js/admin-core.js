@@ -8,9 +8,18 @@
   const Admin = (window.Admin = window.Admin || {});
   Admin.bootstrap = window.AdminBootstrap || {};
   Admin.currentUser = (Admin.bootstrap && Admin.bootstrap.currentUser) || {};
-  const grantedPermissions = new Set(Array.isArray(Admin.currentUser.permissions) ? Admin.currentUser.permissions.map(String) : []);
+  Admin.csrfToken = (Admin.bootstrap && Admin.bootstrap.csrfToken) || document.querySelector('meta[name="admin-csrf-token"]')?.content || '';
+  let grantedPermissions = new Set(Array.isArray(Admin.currentUser.permissions) ? Admin.currentUser.permissions.map(String) : []);
 
   Admin.permissions = Array.from(grantedPermissions);
+  Admin.setPermissions = function setPermissions(permissions) {
+    grantedPermissions = new Set(Array.isArray(permissions) ? permissions.map(String) : []);
+    Admin.permissions = Array.from(grantedPermissions);
+  };
+  Admin.hasRole = function hasRole(roleKey) {
+    const roles = Array.isArray(Admin.currentUser.role_keys) ? Admin.currentUser.role_keys.map(String) : [String(Admin.currentUser.role_key || '')];
+    return roles.includes(String(roleKey));
+  };
   Admin.hasPermission = function hasPermission(permission) {
     if (!permission) return true;
     return grantedPermissions.has(String(permission));
@@ -38,6 +47,9 @@
       const headers = new Headers(options.headers || {});
       if (!headers.has('X-Requested-With')) {
         headers.set('X-Requested-With', 'fetch');
+      }
+      if (Admin.csrfToken && !headers.has('X-CSRF-Token')) {
+        headers.set('X-CSRF-Token', Admin.csrfToken);
       }
       options.headers = headers;
 
@@ -96,6 +108,14 @@
     busy: false,
   };
 
+  Admin.adminView = Admin.adminView || {};
+  Admin.adminView.state = {
+    loaded: false,
+    users: [],
+    auditRows: [],
+    editingUserId: null,
+  };
+
   // 表示用定数
   Admin.constants = {
     roomLabelMap: {
@@ -107,6 +127,11 @@
       reviewing: '確認中',
       confirmed: '確定',
       rejected: '却下',
+    },
+    roleLabelMap: {
+      viewer: '閲覧者',
+      user: '編集者',
+      admin: '管理者',
     },
     weekdayLabels: ['日', '月', '火', '水', '木', '金', '土'],
   };

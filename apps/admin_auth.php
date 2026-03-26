@@ -70,7 +70,6 @@ function admin_auth_is_https(): bool
     return (int)($_SERVER['SERVER_PORT'] ?? 0) === 443;
 }
 
-
 function admin_auth_base_path(): string
 {
     $scriptName = (string)($_SERVER['SCRIPT_NAME'] ?? '');
@@ -170,7 +169,6 @@ function admin_auth_pick_primary_role(array $roleKeys): string
 
     return $bestRole;
 }
-
 
 function admin_auth_normalize_role_keys(array $roleKeys): array
 {
@@ -311,6 +309,56 @@ function admin_auth_has_permission(array $user, string $permission): bool
     return in_array($permission, admin_auth_user_permissions($user), true);
 }
 
+function admin_auth_get_csrf_token(bool $forceRegenerate = false): string
+{
+    admin_auth_bootstrap();
+    if ($forceRegenerate || !is_string($_SESSION['admin_csrf_token'] ?? null) || ($_SESSION['admin_csrf_token'] ?? '') === '') {
+        $_SESSION['admin_csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return (string)$_SESSION['admin_csrf_token'];
+}
+
+function admin_auth_csrf_field(): string
+{
+    return '<input type="hidden" name="_csrf" value="' . admin_auth_h(admin_auth_get_csrf_token()) . '">';
+}
+
+function admin_auth_validate_csrf_token(?string $token): bool
+{
+    admin_auth_bootstrap();
+    $expected = (string)($_SESSION['admin_csrf_token'] ?? '');
+    $provided = (string)$token;
+    if ($expected === '' || $provided === '') {
+        return false;
+    }
+    return hash_equals($expected, $provided);
+}
+
+function admin_auth_require_csrf(): void
+{
+    $token = (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['_csrf'] ?? ''));
+    if (admin_auth_validate_csrf_token($token)) {
+        return;
+    }
+
+    $accept = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+    $expectsJson = str_contains($accept, 'application/json')
+        || strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'fetch';
+
+    if ($expectsJson) {
+        admin_auth_send_json([
+            'ok' => false,
+            'message' => 'CSRF トークンが無効です。ページを再読み込みしてからやり直してください。',
+            'login_url' => admin_auth_login_url(),
+        ], 403);
+    }
+
+    http_response_code(403);
+    header('Content-Type: text/plain; charset=UTF-8');
+    echo 'CSRF トークンが無効です。';
+    exit;
+}
+
 function admin_auth_schema_sql(): string
 {
     return <<<SQL
@@ -350,6 +398,24 @@ CREATE TABLE IF NOT EXISTS admin_user_roles (
     CONSTRAINT fk_admin_user_roles_role FOREIGN KEY (role_id) REFERENCES admin_roles (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS admin_audit_logs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    actor_user_id INT UNSIGNED DEFAULT NULL,
+    actor_login_id VARCHAR(100) DEFAULT NULL,
+    actor_display_name VARCHAR(100) DEFAULT NULL,
+    action VARCHAR(100) NOT NULL,
+    target_type VARCHAR(100) DEFAULT NULL,
+    target_id VARCHAR(191) DEFAULT NULL,
+    summary_json LONGTEXT DEFAULT NULL,
+    ip_address VARCHAR(64) DEFAULT NULL,
+    user_agent VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_admin_audit_logs_created_at (created_at),
+    KEY idx_admin_audit_logs_actor_user_id (actor_user_id),
+    KEY idx_admin_audit_logs_action (action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT INTO admin_roles (role_key, role_name)
 VALUES
     ('viewer', '閲覧者'),
@@ -361,6 +427,12 @@ SQL;
 
 function admin_auth_install_schema(PDO $pdo): void
 {
+    static $installedForRequest = false;
+    if ($installedForRequest) {
+        return;
+    }
+    $installedForRequest = true;
+
     $sql = admin_auth_schema_sql();
     $statements = array_filter(array_map('trim', preg_split('/;\s*(?:\R|$)/u', $sql) ?: []));
     foreach ($statements as $statement) {
@@ -370,14 +442,24 @@ function admin_auth_install_schema(PDO $pdo): void
 
 function admin_auth_count_users(PDO $pdo): int
 {
+    admin_auth_install_schema($pdo);
     $stmt = $pdo->query('SELECT COUNT(*) FROM admin_users');
+    return (int)$stmt->fetchColumn();
+}
+
+function admin_auth_fetch_role_id(PDO $pdo, string $roleKey): int
+{
+    admin_auth_install_schema($pdo);
+    $stmt = $pdo->prepare('SELECT id FROM admin_roles WHERE role_key = :role_key LIMIT 1');
+    $stmt->execute([':role_key' => $roleKey]);
     return (int)$stmt->fetchColumn();
 }
 
 function admin_auth_fetch_user_by_login(PDO $pdo, string $loginId): ?array
 {
+    admin_auth_install_schema($pdo);
     $stmt = $pdo->prepare(
-        'SELECT u.id, u.login_id, u.password_hash, u.display_name, u.email, u.is_active, u.last_login_at, '
+        'SELECT u.id, u.login_id, u.password_hash, u.display_name, u.email, u.is_active, u.last_login_at, u.created_at, u.updated_at, '
         . 'GROUP_CONCAT(r.role_key ORDER BY r.id SEPARATOR ",") AS role_keys '
         . 'FROM admin_users u '
         . 'LEFT JOIN admin_user_roles ur ON ur.user_id = u.id '
@@ -392,6 +474,37 @@ function admin_auth_fetch_user_by_login(PDO $pdo, string $loginId): ?array
         return null;
     }
 
+    return admin_auth_hydrate_user_row($row);
+}
+
+function admin_auth_fetch_user_by_id(PDO $pdo, int $userId): ?array
+{
+    admin_auth_install_schema($pdo);
+    if ($userId <= 0) {
+        return null;
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT u.id, u.login_id, u.password_hash, u.display_name, u.email, u.is_active, u.last_login_at, u.created_at, u.updated_at, '
+        . 'GROUP_CONCAT(r.role_key ORDER BY r.id SEPARATOR ",") AS role_keys '
+        . 'FROM admin_users u '
+        . 'LEFT JOIN admin_user_roles ur ON ur.user_id = u.id '
+        . 'LEFT JOIN admin_roles r ON r.id = ur.role_id '
+        . 'WHERE u.id = :id '
+        . 'GROUP BY u.id '
+        . 'LIMIT 1'
+    );
+    $stmt->execute([':id' => $userId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return null;
+    }
+
+    return admin_auth_hydrate_user_row($row);
+}
+
+function admin_auth_hydrate_user_row(array $row): array
+{
     $roles = [];
     foreach (explode(',', (string)($row['role_keys'] ?? '')) as $roleKey) {
         $roleKey = trim($roleKey);
@@ -405,37 +518,40 @@ function admin_auth_fetch_user_by_login(PDO $pdo, string $loginId): ?array
 
     $row['role_keys'] = $roles;
     $row['role_key'] = admin_auth_pick_primary_role($roles);
-
+    $row['role_label'] = admin_auth_role_label((string)$row['role_key']);
+    $row['permissions'] = admin_auth_permissions_for_roles($roles);
+    $row['is_active'] = (int)($row['is_active'] ?? 0);
     return $row;
+}
+
+function admin_auth_list_users(PDO $pdo): array
+{
+    admin_auth_install_schema($pdo);
+    $stmt = $pdo->query(
+        'SELECT u.id, u.login_id, u.display_name, u.email, u.is_active, u.last_login_at, u.created_at, u.updated_at, '
+        . 'GROUP_CONCAT(r.role_key ORDER BY r.id SEPARATOR ",") AS role_keys '
+        . 'FROM admin_users u '
+        . 'LEFT JOIN admin_user_roles ur ON ur.user_id = u.id '
+        . 'LEFT JOIN admin_roles r ON r.id = ur.role_id '
+        . 'GROUP BY u.id '
+        . 'ORDER BY u.is_active DESC, u.id ASC'
+    );
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    return array_map('admin_auth_hydrate_user_row', $rows);
 }
 
 function admin_auth_create_user(PDO $pdo, array $data): int
 {
+    admin_auth_install_schema($pdo);
     $loginId = trim((string)($data['login_id'] ?? ''));
     $password = (string)($data['password'] ?? '');
     $displayName = trim((string)($data['display_name'] ?? ''));
     $email = trim((string)($data['email'] ?? ''));
     $roleKey = trim((string)($data['role_key'] ?? 'admin'));
 
-    if ($loginId === '' || !preg_match('/\A[a-zA-Z0-9_.-]{3,100}\z/', $loginId)) {
-        throw new RuntimeException('ログインIDは 3〜100 文字の英数字・._- で入力してください。');
-    }
-    if (mb_strlen($password, 'UTF-8') < 10) {
-        throw new RuntimeException('パスワードは 10 文字以上で入力してください。');
-    }
-    if ($displayName === '') {
-        throw new RuntimeException('表示名を入力してください。');
-    }
-    if (!in_array($roleKey, ['viewer', 'user', 'admin'], true)) {
-        throw new RuntimeException('ロールの指定が不正です。');
-    }
-    if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
-        throw new RuntimeException('メールアドレスの形式が不正です。');
-    }
+    admin_auth_validate_user_payload($loginId, $displayName, $email, $roleKey, $password, true);
 
-    $roleStmt = $pdo->prepare('SELECT id FROM admin_roles WHERE role_key = :role_key LIMIT 1');
-    $roleStmt->execute([':role_key' => $roleKey]);
-    $roleId = (int)$roleStmt->fetchColumn();
+    $roleId = admin_auth_fetch_role_id($pdo, $roleKey);
     if ($roleId < 1) {
         throw new RuntimeException('admin_roles に必要なロールがありません。');
     }
@@ -460,9 +576,7 @@ function admin_auth_create_user(PDO $pdo, array $data): int
 
         $userId = (int)$pdo->lastInsertId();
 
-        $linkStmt = $pdo->prepare(
-            'INSERT INTO admin_user_roles (user_id, role_id) VALUES (:user_id, :role_id)'
-        );
+        $linkStmt = $pdo->prepare('INSERT INTO admin_user_roles (user_id, role_id) VALUES (:user_id, :role_id)');
         $linkStmt->execute([
             ':user_id' => $userId,
             ':role_id' => $roleId,
@@ -470,6 +584,14 @@ function admin_auth_create_user(PDO $pdo, array $data): int
 
         $pdo->commit();
         return $userId;
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        if ($e->getCode() === '23000') {
+            throw new RuntimeException('そのログインIDは既に使用されています。');
+        }
+        throw $e;
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
@@ -478,8 +600,137 @@ function admin_auth_create_user(PDO $pdo, array $data): int
     }
 }
 
+function admin_auth_update_user(PDO $pdo, int $userId, array $data, ?array $actorUser = null): array
+{
+    admin_auth_install_schema($pdo);
+    if ($userId <= 0) {
+        throw new RuntimeException('更新対象のユーザーIDが不正です。');
+    }
+
+    $current = admin_auth_fetch_user_by_id($pdo, $userId);
+    if ($current === null) {
+        throw new RuntimeException('更新対象のユーザーが見つかりません。');
+    }
+
+    $loginId = trim((string)($data['login_id'] ?? $current['login_id'] ?? ''));
+    $displayName = trim((string)($data['display_name'] ?? $current['display_name'] ?? ''));
+    $email = trim((string)($data['email'] ?? $current['email'] ?? ''));
+    $roleKey = trim((string)($data['role_key'] ?? $current['role_key'] ?? 'viewer'));
+    $password = (string)($data['password'] ?? '');
+    $isActive = array_key_exists('is_active', $data) ? (int)(bool)$data['is_active'] : (int)($current['is_active'] ?? 0);
+
+    admin_auth_validate_user_payload($loginId, $displayName, $email, $roleKey, $password, false);
+
+    $roleId = admin_auth_fetch_role_id($pdo, $roleKey);
+    if ($roleId < 1) {
+        throw new RuntimeException('admin_roles に必要なロールがありません。');
+    }
+
+    $currentRoleKey = (string)($current['role_key'] ?? 'viewer');
+    $wasActiveAdmin = $currentRoleKey === 'admin' && (int)($current['is_active'] ?? 0) === 1;
+    $willRemainActiveAdmin = $roleKey === 'admin' && $isActive === 1;
+    if ($wasActiveAdmin && !$willRemainActiveAdmin && admin_auth_count_active_admin_users($pdo) <= 1) {
+        throw new RuntimeException('最後の管理者を無効化または降格することはできません。');
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $params = [
+            ':id' => $userId,
+            ':login_id' => $loginId,
+            ':display_name' => $displayName,
+            ':email' => $email !== '' ? $email : null,
+            ':is_active' => $isActive,
+        ];
+
+        $setSql = 'login_id = :login_id, display_name = :display_name, email = :email, is_active = :is_active';
+        if ($password !== '') {
+            $hash = password_hash($password, PASSWORD_DEFAULT);
+            if ($hash === false) {
+                throw new RuntimeException('パスワードハッシュを生成できませんでした。');
+            }
+            $setSql .= ', password_hash = :password_hash';
+            $params[':password_hash'] = $hash;
+        }
+
+        $stmt = $pdo->prepare('UPDATE admin_users SET ' . $setSql . ' WHERE id = :id');
+        $stmt->execute($params);
+
+        $deleteRoleStmt = $pdo->prepare('DELETE FROM admin_user_roles WHERE user_id = :user_id');
+        $deleteRoleStmt->execute([':user_id' => $userId]);
+
+        $insertRoleStmt = $pdo->prepare('INSERT INTO admin_user_roles (user_id, role_id) VALUES (:user_id, :role_id)');
+        $insertRoleStmt->execute([':user_id' => $userId, ':role_id' => $roleId]);
+
+        $pdo->commit();
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        if ($e->getCode() === '23000') {
+            throw new RuntimeException('そのログインIDは既に使用されています。');
+        }
+        throw $e;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    $updated = admin_auth_fetch_user_by_id($pdo, $userId);
+    if ($updated === null) {
+        throw new RuntimeException('更新後のユーザー取得に失敗しました。');
+    }
+
+    if ($actorUser !== null && (int)($actorUser['id'] ?? 0) === $userId) {
+        if ((int)$updated['is_active'] === 1) {
+            admin_auth_login_user($updated);
+        } else {
+            admin_auth_logout();
+        }
+    }
+
+    return $updated;
+}
+
+function admin_auth_validate_user_payload(string $loginId, string $displayName, string $email, string $roleKey, string $password, bool $passwordRequired): void
+{
+    if ($loginId === '' || !preg_match('/\A[a-zA-Z0-9_.-]{3,100}\z/', $loginId)) {
+        throw new RuntimeException('ログインIDは 3〜100 文字の英数字・._- で入力してください。');
+    }
+    if ($displayName === '') {
+        throw new RuntimeException('表示名を入力してください。');
+    }
+    if (!in_array($roleKey, ['viewer', 'user', 'admin'], true)) {
+        throw new RuntimeException('ロールの指定が不正です。');
+    }
+    if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+        throw new RuntimeException('メールアドレスの形式が不正です。');
+    }
+    if ($passwordRequired && mb_strlen($password, 'UTF-8') < 10) {
+        throw new RuntimeException('パスワードは 10 文字以上で入力してください。');
+    }
+    if (!$passwordRequired && $password !== '' && mb_strlen($password, 'UTF-8') < 10) {
+        throw new RuntimeException('パスワードを変更する場合は 10 文字以上で入力してください。');
+    }
+}
+
+function admin_auth_count_active_admin_users(PDO $pdo): int
+{
+    admin_auth_install_schema($pdo);
+    $stmt = $pdo->query(
+        'SELECT COUNT(*) FROM admin_users u '
+        . 'INNER JOIN admin_user_roles ur ON ur.user_id = u.id '
+        . 'INNER JOIN admin_roles r ON r.id = ur.role_id '
+        . 'WHERE u.is_active = 1 AND r.role_key = "admin"'
+    );
+    return (int)$stmt->fetchColumn();
+}
+
 function admin_auth_attempt_login(PDO $pdo, string $loginId, string $password): ?array
 {
+    admin_auth_install_schema($pdo);
     $user = admin_auth_fetch_user_by_login($pdo, trim($loginId));
     if ($user === null) {
         return null;
@@ -505,7 +756,7 @@ function admin_auth_attempt_login(PDO $pdo, string $loginId, string $password): 
     $updateLastLoginStmt = $pdo->prepare('UPDATE admin_users SET last_login_at = NOW() WHERE id = :id');
     $updateLastLoginStmt->execute([':id' => (int)$user['id']]);
 
-    return $user;
+    return admin_auth_fetch_user_by_id($pdo, (int)$user['id']);
 }
 
 function admin_auth_login_user(array $user): void
@@ -528,6 +779,8 @@ function admin_auth_login_user(array $user): void
         'last_login_at' => (string)($user['last_login_at'] ?? ''),
         'logged_in_at' => date('c'),
     ];
+
+    admin_auth_get_csrf_token(true);
 }
 
 function admin_auth_current_user(): ?array
@@ -562,7 +815,15 @@ function admin_auth_logout(): void
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
         $params = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000, $params['path'] ?? admin_auth_base_path(), $params['domain'] ?? '', (bool)($params['secure'] ?? false), (bool)($params['httponly'] ?? true));
+        setcookie(
+            session_name(),
+            '',
+            time() - 42000,
+            $params['path'] ?? admin_auth_base_path(),
+            $params['domain'] ?? '',
+            (bool)($params['secure'] ?? false),
+            (bool)($params['httponly'] ?? true)
+        );
     }
     session_destroy();
 }
@@ -649,4 +910,72 @@ function admin_auth_require_login(array $options = []): array
 
     header('Location: ' . $loginUrl, true, 302);
     exit;
+}
+
+function admin_auth_client_ip(): string
+{
+    foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'] as $key) {
+        $value = trim((string)($_SERVER[$key] ?? ''));
+        if ($value === '') {
+            continue;
+        }
+        if ($key === 'HTTP_X_FORWARDED_FOR') {
+            $parts = array_map('trim', explode(',', $value));
+            return (string)($parts[0] ?? '');
+        }
+        return $value;
+    }
+    return '';
+}
+
+function admin_auth_write_audit_log(PDO $pdo, ?array $actorUser, string $action, ?string $targetType = null, string|int|null $targetId = null, array $summary = []): int
+{
+    admin_auth_install_schema($pdo);
+    $stmt = $pdo->prepare(
+        'INSERT INTO admin_audit_logs (actor_user_id, actor_login_id, actor_display_name, action, target_type, target_id, summary_json, ip_address, user_agent) '
+        . 'VALUES (:actor_user_id, :actor_login_id, :actor_display_name, :action, :target_type, :target_id, :summary_json, :ip_address, :user_agent)'
+    );
+
+    $summaryJson = $summary !== []
+        ? json_encode($summary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        : null;
+
+    $stmt->execute([
+        ':actor_user_id' => is_array($actorUser) && (int)($actorUser['id'] ?? 0) > 0 ? (int)$actorUser['id'] : null,
+        ':actor_login_id' => is_array($actorUser) ? ((string)($actorUser['login_id'] ?? '') !== '' ? (string)$actorUser['login_id'] : null) : null,
+        ':actor_display_name' => is_array($actorUser) ? ((string)($actorUser['display_name'] ?? '') !== '' ? (string)$actorUser['display_name'] : null) : null,
+        ':action' => $action,
+        ':target_type' => $targetType !== null && $targetType !== '' ? $targetType : null,
+        ':target_id' => $targetId !== null && (string)$targetId !== '' ? (string)$targetId : null,
+        ':summary_json' => $summaryJson,
+        ':ip_address' => ($ip = admin_auth_client_ip()) !== '' ? $ip : null,
+        ':user_agent' => ($ua = trim((string)($_SERVER['HTTP_USER_AGENT'] ?? ''))) !== '' ? mb_substr($ua, 0, 255, 'UTF-8') : null,
+    ]);
+
+    return (int)$pdo->lastInsertId();
+}
+
+function admin_auth_list_audit_logs(PDO $pdo, int $limit = 100): array
+{
+    admin_auth_install_schema($pdo);
+    $limit = max(1, min(500, $limit));
+    $stmt = $pdo->prepare(
+        'SELECT id, actor_user_id, actor_login_id, actor_display_name, action, target_type, target_id, summary_json, ip_address, user_agent, created_at '
+        . 'FROM admin_audit_logs ORDER BY id DESC LIMIT :limit'
+    );
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    return array_map(static function (array $row): array {
+        $row['summary'] = null;
+        $summaryJson = trim((string)($row['summary_json'] ?? ''));
+        if ($summaryJson !== '') {
+            $decoded = json_decode($summaryJson, true);
+            if (is_array($decoded)) {
+                $row['summary'] = $decoded;
+            }
+        }
+        return $row;
+    }, $rows);
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../apps/admin_auth.php';
 
 admin_auth_bootstrap();
+$csrfToken = admin_auth_get_csrf_token();
 
 if (admin_auth_is_logged_in()) {
     header('Location: index.php', true, 302);
@@ -25,6 +26,7 @@ try {
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '') {
+    admin_auth_require_csrf();
     $loginId = trim((string)($_POST['login_id'] ?? ''));
     $password = (string)($_POST['password'] ?? '');
     $returnTo = admin_auth_normalize_return_to((string)($_POST['return_to'] ?? $returnTo));
@@ -38,6 +40,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '') {
                 $errorMessage = 'ログインIDまたはパスワードが正しくありません。';
             } else {
                 admin_auth_login_user($user);
+                admin_auth_write_audit_log($pdo, $user, 'admin.login', 'admin_user', (int)$user['id'], [
+                    'role_key' => (string)($user['role_key'] ?? ''),
+                ]);
                 header('Location: ' . $returnTo, true, 302);
                 exit;
             }
@@ -83,6 +88,7 @@ if (isset($_GET['created']) && $_GET['created'] === '1' && $errorMessage === '')
       <?php endif; ?>
 
       <form method="post" class="auth-form" autocomplete="on">
+        <?php echo admin_auth_csrf_field(); ?>
         <input type="hidden" name="return_to" value="<?php echo admin_auth_h($returnTo); ?>">
 
         <label class="auth-field">

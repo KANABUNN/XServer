@@ -126,5 +126,24 @@
     switchbotCommandDetailGrid: document.getElementById('switchbotCommandDetailGrid'),
     switchbotCommandDetailJson: document.getElementById('switchbotCommandDetailJson'),
     switchbotCommandCloseBtn: document.getElementById('switchbotCommandCloseBtn'),
+
+    // Admin management view
+    adminReloadBtn: document.getElementById('adminReloadBtn'),
+    adminUserId: document.getElementById('adminUserId'),
+    adminLoginId: document.getElementById('adminLoginId'),
+    adminDisplayName: document.getElementById('adminDisplayName'),
+    adminEmail: document.getElementById('adminEmail'),
+    adminRoleKey: document.getElementById('adminRoleKey'),
+    adminIsActive: document.getElementById('adminIsActive'),
+    adminPassword: document.getElementById('adminPassword'),
+    adminUserCreateBtn: document.getElementById('adminUserCreateBtn'),
+    adminUserUpdateBtn: document.getElementById('adminUserUpdateBtn'),
+    adminUserResetBtn: document.getElementById('adminUserResetBtn'),
+    adminUsersMetaText: document.getElementById('adminUsersMetaText'),
+    adminUsersStatusText: document.getElementById('adminUsersStatusText'),
+    adminUsersBody: document.getElementById('adminUsersBody'),
+    adminAuditMetaText: document.getElementById('adminAuditMetaText'),
+    adminAuditStatusText: document.getElementById('adminAuditStatusText'),
+    adminAuditBody: document.getElementById('adminAuditBody'),
   };
 })();

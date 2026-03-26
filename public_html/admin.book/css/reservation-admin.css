@@ -1293,3 +1293,30 @@ select {
 .sidebar-logout-link:hover {
   background: rgba(59, 130, 246, 0.20);
 }
+
+.sidebar-logout-form {
+  margin: 0;
+}
+
+.sidebar-logout-form .sidebar-logout-link {
+  width: 100%;
+  cursor: pointer;
+}
+
+.page-head-compact {
+  margin-bottom: 12px;
+}
+
+.admin-toolbar {
+  margin-top: 12px;
+}
+
+.admin-users-section,
+.admin-audit-section {
+  margin-top: 18px;
+}
+
+.admin-audit-section td,
+.admin-users-section td {
+  vertical-align: top;
+}

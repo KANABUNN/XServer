@@ -28,6 +28,9 @@ try {
     if ($requiredPermission !== null) {
         admin_auth_require_permission($requiredPermission, $__adminUser);
     }
+    if (manage_action_requires_csrf($action, $_SERVER['REQUEST_METHOD'] ?? 'GET')) {
+        admin_auth_require_csrf();
+    }
 
     switch ($action) {
         case 'list':
@@ -147,6 +150,32 @@ try {
             handle_switchbot_command_detail($cfg);
             break;
 
+        case 'admin_user_list':
+            $pdo = db_connect($cfg);
+            handle_admin_user_list($pdo);
+            break;
+
+        case 'admin_user_create':
+            $pdo = db_connect($cfg);
+            if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+                json_response(['ok' => false, 'message' => '作成は POST で呼び出してください。'], 405);
+            }
+            handle_admin_user_create($pdo);
+            break;
+
+        case 'admin_user_update':
+            $pdo = db_connect($cfg);
+            if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+                json_response(['ok' => false, 'message' => '更新は POST で呼び出してください。'], 405);
+            }
+            handle_admin_user_update($pdo);
+            break;
+
+        case 'audit_log_list':
+            $pdo = db_connect($cfg);
+            handle_audit_log_list($pdo);
+            break;
+
         default:
             json_response(['ok' => false, 'message' => '不正な action です。'], 400);
     }
@@ -187,6 +216,8 @@ function manage_required_permission_for_action(string $action, array $request): 
         'reservation_mail_send' => 'mail.send',
         'switchbot_status', 'switchbot_command_detail' => 'access.view',
         'switchbot_create_key', 'switchbot_webhook_sync', 'switchbot_webhook_toggle' => 'access.edit',
+        'admin_user_list', 'admin_user_create', 'admin_user_update' => 'admin.user.manage',
+        'audit_log_list' => 'admin.audit.view',
         'export_csv' => manage_required_permission_for_export((string)($request['type'] ?? '')),
         default => null,
     };
@@ -200,6 +231,145 @@ function manage_required_permission_for_export(string $type): ?string
         'mail_history' => 'mail.export',
         default => null,
     };
+}
+
+function manage_action_requires_csrf(string $action, string $method): bool
+{
+    if (strtoupper($method) !== 'POST') {
+        return false;
+    }
+
+    return in_array($action, [
+        'delete',
+        'calendar_add',
+        'calendar_delete',
+        'calendar_update',
+        'application_status_update',
+        'reservation_mail_send',
+        'switchbot_create_key',
+        'switchbot_webhook_sync',
+        'switchbot_webhook_toggle',
+        'admin_user_create',
+        'admin_user_update',
+    ], true);
+}
+
+function manage_write_audit(PDO $pdo, string $action, ?string $targetType = null, string|int|null $targetId = null, array $summary = []): void
+{
+    try {
+        $actor = admin_auth_current_user();
+        admin_auth_write_audit_log($pdo, $actor, $action, $targetType, $targetId, $summary);
+    } catch (Throwable $e) {
+        error_log('[manage_reservations][audit] ' . $e->getMessage());
+    }
+}
+
+function manage_write_audit_via_auth_db(string $action, ?string $targetType = null, string|int|null $targetId = null, array $summary = []): void
+{
+    try {
+        $auditPdo = admin_auth_db_connect();
+        manage_write_audit($auditPdo, $action, $targetType, $targetId, $summary);
+    } catch (Throwable $e) {
+        error_log('[manage_reservations][audit-db] ' . $e->getMessage());
+    }
+}
+
+function handle_admin_user_list(PDO $pdo): void
+{
+    $rows = admin_auth_list_users($pdo);
+    json_response([
+        'ok' => true,
+        'rows' => array_map(static function (array $row): array {
+            unset($row['password_hash']);
+            return $row;
+        }, $rows),
+        'count' => count($rows),
+        'message' => '管理者アカウント一覧を取得しました。',
+    ]);
+}
+
+function handle_admin_user_create(PDO $pdo): void
+{
+    $input = get_request_payload();
+    $userId = admin_auth_create_user($pdo, [
+        'login_id' => trim((string)($input['login_id'] ?? '')),
+        'display_name' => trim((string)($input['display_name'] ?? '')),
+        'email' => trim((string)($input['email'] ?? '')),
+        'password' => (string)($input['password'] ?? ''),
+        'role_key' => trim((string)($input['role_key'] ?? 'viewer')),
+    ]);
+    $created = admin_auth_fetch_user_by_id($pdo, $userId);
+    manage_write_audit($pdo, 'admin.user.create', 'admin_user', $userId, [
+        'login_id' => (string)($created['login_id'] ?? ''),
+        'display_name' => (string)($created['display_name'] ?? ''),
+        'role_key' => (string)($created['role_key'] ?? ''),
+        'is_active' => (int)($created['is_active'] ?? 0),
+    ]);
+
+    json_response([
+        'ok' => true,
+        'message' => '管理者アカウントを作成しました。',
+        'row' => $created,
+    ]);
+}
+
+function handle_admin_user_update(PDO $pdo): void
+{
+    $input = get_request_payload();
+    $id = max(0, (int)($input['id'] ?? 0));
+    if ($id <= 0) {
+        json_response(['ok' => false, 'message' => '更新対象のユーザーIDが不正です。'], 400);
+    }
+
+    $before = admin_auth_fetch_user_by_id($pdo, $id);
+    if ($before === null) {
+        json_response(['ok' => false, 'message' => '更新対象のユーザーが見つかりません。'], 404);
+    }
+
+    $updated = admin_auth_update_user($pdo, $id, [
+        'login_id' => trim((string)($input['login_id'] ?? '')),
+        'display_name' => trim((string)($input['display_name'] ?? '')),
+        'email' => trim((string)($input['email'] ?? '')),
+        'password' => (string)($input['password'] ?? ''),
+        'role_key' => trim((string)($input['role_key'] ?? 'viewer')),
+        'is_active' => filter_var($input['is_active'] ?? true, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false,
+    ], admin_auth_current_user());
+
+    manage_write_audit($pdo, 'admin.user.update', 'admin_user', $id, [
+        'before' => [
+            'login_id' => (string)($before['login_id'] ?? ''),
+            'display_name' => (string)($before['display_name'] ?? ''),
+            'role_key' => (string)($before['role_key'] ?? ''),
+            'is_active' => (int)($before['is_active'] ?? 0),
+        ],
+        'after' => [
+            'login_id' => (string)($updated['login_id'] ?? ''),
+            'display_name' => (string)($updated['display_name'] ?? ''),
+            'role_key' => (string)($updated['role_key'] ?? ''),
+            'is_active' => (int)($updated['is_active'] ?? 0),
+        ],
+        'password_changed' => ((string)($input['password'] ?? '') !== ''),
+    ]);
+
+    $currentUser = admin_auth_current_user();
+    json_response([
+        'ok' => true,
+        'message' => '管理者アカウントを更新しました。',
+        'row' => $updated,
+        'current_user' => $currentUser,
+    ]);
+}
+
+function handle_audit_log_list(PDO $pdo): void
+{
+    $limit = max(1, min(300, (int)($_GET['limit'] ?? 100)));
+    $rows = admin_auth_list_audit_logs($pdo, $limit);
+    json_response([
+        'ok' => true,
+        'rows' => $rows,
+        'count' => count($rows),
+        'message' => '監査ログを取得しました。',
+    ]);
 }
 
 function load_google_calendar_sync_helpers(): void
@@ -373,6 +543,14 @@ function handle_switchbot_create_key(array $cfg): void
             ? 'SwitchBot へパスワード追加要求を送信しました。Webhook で最終結果を追跡します。'
             : 'SwitchBot へパスワード追加要求を送信しました。commandId は未返却だったため、local_request_id を基準に管理します。';
 
+        manage_write_audit_via_auth_db('switchbot.key.create', 'switchbot_request', (int)($storedRecord['id'] ?? 0), [
+            'room_code' => $roomCode,
+            'device_id' => $deviceId,
+            'local_request_id' => $localRequestId,
+            'command_id' => $commandId,
+            'passcode_name' => $name,
+        ]);
+
         json_response([
             'ok' => true,
             'room_code' => $roomCode,
@@ -436,6 +614,10 @@ function handle_switchbot_webhook_sync(array $cfg): void
     }
 
     $overview = switchbot_sync_webhook_to_current_url($cfg, $_SERVER);
+    manage_write_audit_via_auth_db('switchbot.webhook.sync', 'switchbot_webhook', null, [
+        'enabled' => (bool)($overview['enabled'] ?? false),
+        'url' => (string)($overview['url'] ?? ''),
+    ]);
     json_response([
         'ok' => true,
         'webhook' => $overview,
@@ -456,6 +638,10 @@ function handle_switchbot_webhook_toggle(array $cfg): void
     }
 
     $overview = switchbot_set_webhook_enabled_for_current_url($cfg, $_SERVER, $enable);
+    manage_write_audit_via_auth_db('switchbot.webhook.toggle', 'switchbot_webhook', null, [
+        'enabled' => $enable,
+        'url' => (string)($overview['url'] ?? ''),
+    ]);
     json_response([
         'ok' => true,
         'webhook' => $overview,
@@ -727,6 +913,14 @@ function handle_delete(PDO $pdo, array $cfg): void
             ? 'DBレコードを削除しました。保存ファイルは既に存在しませんでした。'
             : 'DBレコードと保存ファイルを削除しました。';
 
+        manage_write_audit($pdo, 'application.delete', 'reservation', $id, [
+            'email' => (string)($row['email'] ?? ''),
+            'room' => (string)($row['room'] ?? ''),
+            'stored_name' => (string)($row['stored_name'] ?? ''),
+            'file_deleted' => $fileDeleted,
+            'file_missing' => $fileMissing,
+        ]);
+
         json_response([
             'ok' => true,
             'message' => $message,
@@ -937,6 +1131,15 @@ function handle_calendar_add(PDO $pdo, array $cfg): void
             ? '確定予約を登録し、Googleカレンダーにも反映しました。'
             : '確定予約として登録しました。';
 
+        manage_write_audit($pdo, 'calendar.create', 'calendar_reservation', $insertedId ?? null, [
+            'use_date' => $useDate,
+            'room_code' => $roomCode,
+            'organization_name' => $orgName,
+            'reservation_id' => $reservationId,
+            'usage_time' => $usageTime,
+            'google_synced' => $googleSyncEnabled,
+        ]);
+
         json_response([
             'ok' => true,
             'message' => $message,
@@ -1043,6 +1246,15 @@ function handle_calendar_delete(PDO $pdo, array $cfg): void
         $message = ($googleSyncEnabled && $googleDeleted)
             ? '確定予約を削除し、Googleカレンダーからも削除しました。'
             : '確定予約を削除しました。';
+
+        manage_write_audit($pdo, 'calendar.delete', 'calendar_reservation', (int)($row['id'] ?? $id), [
+            'use_date' => $storedUseDate,
+            'room_code' => $storedRoomCode,
+            'organization_name' => $storedOrgName,
+            'usage_time' => $storedUsageTime,
+            'linked_reservation_id' => $linkedReservationId,
+            'google_deleted' => $googleDeleted,
+        ]);
 
         json_response([
             'ok' => true,
@@ -1193,6 +1405,21 @@ function handle_calendar_update(PDO $pdo, array $cfg): void
         }
 
         $pdo->commit();
+        manage_write_audit($pdo, 'calendar.update', 'calendar_reservation', $id, [
+            'before' => [
+                'use_date' => (string)($current['use_date'] ?? ''),
+                'room_code' => (string)($current['room_code'] ?? ''),
+                'organization_name' => (string)($current['organization_name'] ?? ''),
+                'usage_time' => (string)($current['usage_time'] ?? ''),
+            ],
+            'after' => [
+                'use_date' => $useDate,
+                'room_code' => $roomCode,
+                'organization_name' => $orgName,
+                'usage_time' => $usageTime,
+            ],
+            'google_synced' => $googleSyncEnabled,
+        ]);
         json_response([
             'ok' => true,
             'message' => $googleSyncEnabled
@@ -1457,6 +1684,14 @@ function handle_reservation_mail_send(PDO $pdo, array $cfg): void
 
         $historySaved = save_mail_send_history($pdo, $historyPayload);
 
+        manage_write_audit($pdo, 'mail.send', 'reservation_mail', null, [
+            'to_email' => $to,
+            'reservation_id' => (int)($reservation['id'] ?? 0),
+            'room_code' => $reservationRoomCode !== '' ? $reservationRoomCode : $passcodeRoomCode,
+            'use_date' => $useDate,
+            'history_saved' => $historySaved,
+        ]);
+
         json_response([
             'ok' => true,
             'message' => $historySaved
@@ -1468,6 +1703,15 @@ function handle_reservation_mail_send(PDO $pdo, array $cfg): void
         $historyPayload['send_status'] = 'failed';
         $historyPayload['error_message'] = trim((string)$e->getMessage()) !== '' ? trim((string)$e->getMessage()) : 'メール送信に失敗しました。';
         $historySaved = save_mail_send_history($pdo, $historyPayload);
+
+        manage_write_audit($pdo, 'mail.send.failed', 'reservation_mail', null, [
+            'to_email' => $to,
+            'reservation_id' => (int)($reservation['id'] ?? 0),
+            'room_code' => $reservationRoomCode !== '' ? $reservationRoomCode : $passcodeRoomCode,
+            'use_date' => $useDate,
+            'error_message' => $historyPayload['error_message'],
+            'history_saved' => $historySaved,
+        ]);
 
         json_response([
             'ok' => false,
@@ -2218,6 +2462,13 @@ function handle_application_status_update(PDO $pdo): void
         }
         update_reservation_application_status($pdo, $id, $status);
         $pdo->commit();
+
+        manage_write_audit($pdo, 'application.status.update', 'reservation', $id, [
+            'before' => (string)($row['application_status'] ?? ''),
+            'after' => $status,
+            'email' => (string)($row['email'] ?? ''),
+            'room' => (string)($row['room'] ?? ''),
+        ]);
 
         json_response([
             'ok' => true,
