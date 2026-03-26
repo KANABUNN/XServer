@@ -145,6 +145,12 @@
       openManage(button.dataset.date || '');
     });
 
+    el.calendarCardList?.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-action="calendar-manage"]');
+      if (!button) return;
+      openManage(button.dataset.date || '');
+    });
+
     el.calendarManageList?.addEventListener('click', (event) => {
       const button = event.target.closest('[data-action="calendar-delete"]');
       if (!button) return;
@@ -294,6 +300,7 @@
 
   function renderList() {
     const el = Admin.el;
+    const cardList = el.calendarCardList;
 
     const rows = getVisibleRows().sort((a, b) => {
       const dateCompare = String(a.use_date || '').localeCompare(String(b.use_date || ''));
@@ -305,6 +312,9 @@
 
     if (!rows.length) {
       el.calendarListBody.innerHTML = '<tr><td colspan="6" class="empty">この条件の確定予約はありません。</td></tr>';
+      if (cardList) {
+        cardList.innerHTML = '<div class="card-empty">この条件の確定予約はありません。</div>';
+      }
       return;
     }
 
@@ -322,6 +332,36 @@
         </td>
       </tr>
     `).join('');
+    if (cardList) {
+      cardList.innerHTML = rows.map((entry) => {
+        const useDate = u.escapeHtml(entry.use_date || '—');
+        const room = u.escapeHtml(u.roomLabel(entry.room_code));
+        const org = u.escapeHtml(entry.organization_name || '—');
+        const people = u.escapeHtml(u.peopleCountLabel(entry.people_count));
+        const usage = u.escapeHtml(u.usageTimeLabel(entry.usage_time));
+        const dateRaw = u.escapeHtml(entry.use_date || '');
+
+        return `
+          <article class="data-card">
+            <header class="card-head">
+              <div class="card-head-left">
+                <div class="card-title">${useDate}</div>
+                <div class="card-sub">${room}</div>
+              </div>
+              <div class="card-head-right">
+                <button type="button" class="secondary" data-action="calendar-manage" data-date="${dateRaw}">管理</button>
+              </div>
+            </header>
+
+            <dl class="card-kv">
+              <dt>団体名</dt><dd>${org}</dd>
+              <dt>人数</dt><dd>${people}</dd>
+              <dt>利用時間</dt><dd>${usage}</dd>
+            </dl>
+          </article>
+        `;
+      }).join('');
+    }
   }
 
   async function loadReservations() {

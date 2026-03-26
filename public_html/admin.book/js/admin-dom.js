@@ -25,6 +25,8 @@
     statusText: document.getElementById('statusText'),
     activeFilters: document.getElementById('activeFilters'),
     tableBody: document.getElementById('tableBody'),
+    applicationTableWrap: document.getElementById('applicationTableWrap'),
+    applicationCardList: document.getElementById('applicationCardList'),
 
     // Detail dialog
     detailDialog: document.getElementById('detailDialog'),
@@ -61,6 +63,8 @@
     calendarNextMonthBtn: document.getElementById('calendarNextMonthBtn'),
     calendarGrid: document.getElementById('calendarGrid'),
     calendarListBody: document.getElementById('calendarListBody'),
+    calendarTableWrap: document.getElementById('calendarTableWrap'),
+    calendarCardList: document.getElementById('calendarCardList'),
     calendarMetaText: document.getElementById('calendarMetaText'),
     calendarStatusText: document.getElementById('calendarStatusText'),
 

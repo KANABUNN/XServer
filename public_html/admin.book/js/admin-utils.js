@@ -126,6 +126,91 @@
     });
   }
 
+  // -------------------------------------------------------
+  // 表示形式（表 / カード）切り替え（スマホで縦スクロール読みに最適化）
+  // - body[data-view-mode] を切り替えて、CSS側で表示を制御
+  // - localStorage に保存（ユーザーが切替えたら固定）
+  // -------------------------------------------------------
+  const VIEW_MODE_KEY = 'admin.book.viewMode';
+  const VIEW_MODE_BREAKPOINT = 768; // px
+  const VALID_VIEW_MODES = ['table', 'card'];
+
+  function readStoredViewMode() {
+    try {
+      const v = localStorage.getItem(VIEW_MODE_KEY);
+      return VALID_VIEW_MODES.includes(v) ? v : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeStoredViewMode(mode) {
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, mode);
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  function resolveInitialViewMode() {
+    const stored = readStoredViewMode();
+    if (stored) return stored;
+    const mql = window.matchMedia(`(max-width: ${VIEW_MODE_BREAKPOINT}px)`);
+    return mql.matches ? 'card' : 'table';
+  }
+
+  function applyViewMode(mode) {
+    if (!VALID_VIEW_MODES.includes(mode)) return;
+
+    // body が存在しないタイミング対策
+    const body = document.body || document.documentElement;
+    if (body && body.dataset) {
+      body.dataset.viewMode = mode;
+    }
+
+    // ボタン状態（複数箇所にあってもまとめて反映）
+    document.querySelectorAll('[data-view-mode-btn]').forEach((btn) => {
+      const btnMode = btn.dataset.viewMode;
+      const active = btnMode === mode;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
+  function setViewMode(mode, persist = true) {
+    if (!VALID_VIEW_MODES.includes(mode)) return;
+    applyViewMode(mode);
+    if (persist) writeStoredViewMode(mode);
+  }
+
+  function initViewMode() {
+    // 初期適用
+    const stored = readStoredViewMode();
+    applyViewMode(stored || resolveInitialViewMode());
+
+    // ボタン（表/カード）クリック
+    document.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-view-mode-btn]');
+      if (!btn) return;
+      const mode = btn.dataset.viewMode;
+      setViewMode(mode, true);
+    });
+
+    // 未保存の場合のみ、画面幅変更に追従（保存されていれば固定）
+    const mql = window.matchMedia(`(max-width: ${VIEW_MODE_BREAKPOINT}px)`);
+    const handleChange = () => {
+      if (readStoredViewMode()) return;
+      applyViewMode(mql.matches ? 'card' : 'table');
+    };
+
+    if (mql && typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', handleChange);
+    } else if (mql && typeof mql.addListener === 'function') {
+      mql.addListener(handleChange);
+    }
+  }
+
+
   Admin.utils = {
     formatMonthValue,
     formatDateValue,
@@ -142,5 +227,8 @@
     usageTimeLabel,
     buildCalendarExtraMeta,
     bindDialogBackdropClose,
+    initViewMode,
+    setViewMode,
+    applyViewMode,
   };
 })();

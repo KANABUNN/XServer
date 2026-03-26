@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>予約データ管理</title>
   <link rel="stylesheet" href="./css/reservation-admin.css">
+  <link rel="stylesheet" href="./css/reservation-admin-responsive.css">
 </head>
 <body>
   <div class="admin-shell">
@@ -97,12 +98,16 @@
 
       <div class="meta-row">
         <div class="meta" id="metaText">読み込み前です。</div>
+        <div class="view-mode-toggle" aria-label="表示形式">
+          <button type="button" class="ghost mode-btn" data-view-mode-btn data-view-mode="table" aria-pressed="false">表</button>
+          <button type="button" class="ghost mode-btn" data-view-mode-btn data-view-mode="card" aria-pressed="false">カード</button>
+        </div>
         <div class="status" id="statusText" aria-live="polite"></div>
       </div>
 
       <div class="chips" id="activeFilters"></div>
 
-      <div class="table-wrap">
+      <div class="table-wrap js-mode-table" id="applicationTableWrap">
         <table>
           <thead>
             <tr>
@@ -121,6 +126,8 @@
           </tbody>
         </table>
       </div>
+
+      <div class="card-list js-mode-card" id="applicationCardList" aria-live="polite"></div>
 
       <div class="pagination">
         <button id="prevPageBtn" type="button" class="secondary">前へ</button>
@@ -171,6 +178,10 @@
 
       <div class="meta-row">
         <div class="meta" id="calendarMetaText">確定予約を読み込みます。</div>
+        <div class="view-mode-toggle" aria-label="表示形式">
+          <button type="button" class="ghost mode-btn" data-view-mode-btn data-view-mode="table" aria-pressed="false">表</button>
+          <button type="button" class="ghost mode-btn" data-view-mode-btn data-view-mode="card" aria-pressed="false">カード</button>
+        </div>
         <div class="status" id="calendarStatusText" aria-live="polite"></div>
       </div>
 
@@ -183,7 +194,7 @@
         <div class="empty" style="grid-column: 1 / -1;">「予約申請状況」画面の「確定」から確定予約を登録できます。</div>
       </div>
 
-      <div class="table-wrap calendar-list-wrap">
+      <div class="table-wrap calendar-list-wrap js-mode-table" id="calendarTableWrap">
         <table>
           <thead>
             <tr>
@@ -199,7 +210,10 @@
             <tr><td colspan="6" class="empty">読み込み前です。</td></tr>
           </tbody>
         </table>
-      </div>
+      
+
+      <div class="card-list js-mode-card" id="calendarCardList" aria-live="polite"></div>
+</div>
     </section>
   </div>
 </section>

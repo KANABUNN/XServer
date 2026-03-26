@@ -20,6 +20,10 @@
       Admin.sidebar.init();
     }
 
+    if (u && typeof u.initViewMode === 'function') {
+      u.initViewMode();
+    }
+
     if (Admin.application && typeof Admin.application.bindEvents === 'function') {
       Admin.application.bindEvents();
     }

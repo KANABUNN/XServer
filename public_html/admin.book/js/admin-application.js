@@ -90,9 +90,13 @@
 
   function renderRows(rows) {
     const el = Admin.el;
+    const cardList = el.applicationCardList;
 
     if (!rows.length) {
       el.tableBody.innerHTML = '<tr><td colspan="8" class="empty">該当データはありません。</td></tr>';
+      if (cardList) {
+        cardList.innerHTML = '<div class="card-empty">この条件の申請データはありません。</div>';
+      }
       return;
     }
 
@@ -115,6 +119,46 @@
         </td>
       </tr>
     `).join('');
+    if (cardList) {
+      cardList.innerHTML = rows.map((row) => {
+        const id = Number(row.id);
+        const createdAt = u.escapeHtml(String(row.created_at ?? ''));
+        const email = u.escapeHtml(String(row.email ?? ''));
+        const room = u.escapeHtml(String(row.room ?? ''));
+        const originalName = u.escapeHtml(String(row.original_name ?? ''));
+        const storedName = u.escapeHtml(String(row.stored_name ?? ''));
+        const note = u.escapeHtml(u.shortenText(String(row.note ?? ''), 140));
+
+        return `
+          <article class="data-card" data-id="${id}">
+            <header class="card-head">
+              <div class="card-head-left">
+                <div class="card-title">申請 ID #${u.escapeHtml(String(row.id ?? ''))}</div>
+                <div class="card-sub">受付: ${createdAt || '—'}</div>
+              </div>
+              <div class="card-head-right">
+                <span class="card-pill">${room || '—'}</span>
+              </div>
+            </header>
+
+            <dl class="card-kv">
+              <dt>メール</dt><dd>${email || '—'}</dd>
+              <dt>部屋</dt><dd>${room || '—'}</dd>
+              <dt>元の名前</dt><dd><code>${originalName || '—'}</code></dd>
+              <dt>保存後</dt><dd><code>${storedName || '—'}</code></dd>
+              <dt>備考</dt><dd>${note || '—'}</dd>
+            </dl>
+
+            <div class="actions card-actions">
+              <button type="button" data-action="detail" data-id="${id}">詳細</button>
+              <button type="button" class="secondary" data-action="calendar" data-id="${id}">確定</button>
+              <button type="button" data-action="download" data-id="${id}">DL</button>
+              <button type="button" class="danger" data-action="delete" data-id="${id}">削除</button>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
   }
 
   function renderMeta(data) {
