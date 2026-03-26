@@ -2,6 +2,15 @@
 
 declare(strict_types=1);
 
+foreach ([__DIR__ . '/../../apps/admin_auth.php', __DIR__ . '/../apps/admin_auth.php', __DIR__ . '/apps/admin_auth.php'] as $__adminAuthHelper) {
+    if (is_file($__adminAuthHelper)) {
+        require_once $__adminAuthHelper;
+        break;
+    }
+}
+
+admin_auth_require_login();
+
 foreach ([__DIR__ . '/../../apps/switchbot_api.php', __DIR__ . '/../apps/switchbot_api.php', __DIR__ . '/apps/switchbot_api.php'] as $__switchbotHelper) {
     if (is_file($__switchbotHelper)) {
         require_once $__switchbotHelper;

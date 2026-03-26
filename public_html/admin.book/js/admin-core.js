@@ -6,9 +6,45 @@
   'use strict';
 
   const Admin = (window.Admin = window.Admin || {});
+  Admin.bootstrap = window.AdminBootstrap || {};
 
-  // API（js/ は index.html の1つ下なので ../ で同階層へ）
-  Admin.apiPath = "manage_reservations.php";
+  // API（js/ は index.php と同階層）
+  Admin.apiPath = 'manage_reservations.php';
+
+  Admin.handleUnauthorized = function handleUnauthorized(payload) {
+    const loginUrl = (payload && payload.login_url) || 'login.php';
+    const separator = loginUrl.includes('?') ? '&' : '?';
+    const returnTo = encodeURIComponent(window.location.pathname + window.location.search + window.location.hash);
+    window.location.href = `${loginUrl}${separator}return_to=${returnTo}`;
+  };
+
+  if (!window.__adminFetchWrapped) {
+    const rawFetch = window.fetch.bind(window);
+    window.fetch = async function adminFetch(input, init = {}) {
+      const options = { ...init };
+      options.credentials = options.credentials || 'same-origin';
+
+      const headers = new Headers(options.headers || {});
+      if (!headers.has('X-Requested-With')) {
+        headers.set('X-Requested-With', 'fetch');
+      }
+      options.headers = headers;
+
+      const response = await rawFetch(input, options);
+      if (response.status === 401) {
+        let payload = null;
+        try {
+          payload = await response.clone().json();
+        } catch (_) {
+          payload = null;
+        }
+        Admin.handleUnauthorized(payload);
+        throw new Error((payload && payload.message) || 'ログインが必要です。');
+      }
+      return response;
+    };
+    window.__adminFetchWrapped = true;
+  }
 
   // 一覧（申請）側の状態
   Admin.state = {
@@ -23,9 +59,9 @@
   Admin.calendar = Admin.calendar || {};
   Admin.calendar.state = {
     loaded: false,
-    month: "",
+    month: '',
     reservations: [],
-    selectedDate: "",
+    selectedDate: '',
     editingReservationId: null,
   };
 
@@ -52,15 +88,15 @@
   // 表示用定数
   Admin.constants = {
     roomLabelMap: {
-      tamoku: "多目的室",
-      orange: "オレンジの部屋",
+      tamoku: '多目的室',
+      orange: 'オレンジの部屋',
     },
     applicationStatusMap: {
-      pending: "未確認",
-      reviewing: "確認中",
-      confirmed: "確定",
-      rejected: "却下",
+      pending: '未確認',
+      reviewing: '確認中',
+      confirmed: '確定',
+      rejected: '却下',
     },
-    weekdayLabels: ["日", "月", "火", "水", "木", "金", "土"],
+    weekdayLabels: ['日', '月', '火', '水', '木', '金', '土'],
   };
 })();
