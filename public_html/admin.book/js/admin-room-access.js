@@ -404,7 +404,7 @@
 
           <label class="field">
             <span>パスワード（6〜12桁数字） <strong style="color: var(--danger)">*</strong></span>
-            <input type="password" id="switchbotPassword_${u.escapeHtml(roomCode)}" inputmode="numeric" autocomplete="new-password" pattern="\d{6,12}" maxlength="12" placeholder="例：12345678" ${disabled}>
+            <input type="text" id="switchbotPassword_${u.escapeHtml(roomCode)}" inputmode="numeric" autocomplete="new-password" pattern="\d{6,12}" maxlength="12" placeholder="例：12345678" ${disabled}>
           </label>
 
           <label class="field">
