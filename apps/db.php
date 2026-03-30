@@ -32,7 +32,7 @@ function db_connect(array $cfg): PDO
  * 予約情報と、保存済み添付ファイル情報を reservations テーブルへ記録する。
  * ファイル実体は config.php の upload 設定に従って保存する。
  */
-function save_reservation_with_uploaded_file(PDO $pdo, array $cfg, array $mailData, $uploadedFile): void
+function save_reservation_with_uploaded_file(PDO $pdo, array $cfg, array $mailData, $uploadedFile): string
 {
     $email = trim((string)($mailData['reply_to'] ?? ''));
     $room  = trim((string)($mailData['roomName'] ?? ''));
@@ -74,9 +74,8 @@ function save_reservation_with_uploaded_file(PDO $pdo, array $cfg, array $mailDa
 
     $savedToDisk = false;
 
+    $pdo->beginTransaction();
     try {
-        $pdo->beginTransaction();
-
         if (!move_uploaded_file($tmpPath, $absolutePath)) {
             throw new RuntimeException('アップロードファイルを保存先へ移動できませんでした。');
         }
@@ -108,6 +107,8 @@ function save_reservation_with_uploaded_file(PDO $pdo, array $cfg, array $mailDa
         $stmt->execute($params);
 
         $pdo->commit();
+
+        return $absolutePath;
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
