@@ -731,13 +731,25 @@ function admin_auth_count_active_admin_users(PDO $pdo): int
 function admin_auth_attempt_login(PDO $pdo, string $loginId, string $password): ?array
 {
     admin_auth_install_schema($pdo);
+
+    // ダミーハッシュ：ユーザー不存在時の時間合わせ用
+    // password_hash('dummy', PASSWORD_DEFAULT) で事前生成した固定値
+    static $dummyHash = '$2y$12$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LHtPflJvfCm';
+
     $user = admin_auth_fetch_user_by_login($pdo, trim($loginId));
+
     if ($user === null) {
+        // ユーザーが存在しなくても必ず password_verify を実行して時間を合わせる
+        // 結果は使わない（必ずfalseになる）
+        password_verify($password, $dummyHash);
         return null;
     }
+
     if ((int)($user['is_active'] ?? 0) !== 1) {
+        password_verify($password, $dummyHash); // 非アクティブも同様に
         return null;
     }
+
     if (!password_verify($password, (string)($user['password_hash'] ?? ''))) {
         return null;
     }
