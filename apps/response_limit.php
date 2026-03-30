@@ -46,6 +46,12 @@ function rate_limit_or_throw(string $ip, string $storePath, int $max, int $windo
         $times[] = $now;
         $db[$key] = $times;
 
+        foreach ($db as $k => $v) {
+            if (is_array($v) && count($v) === 0) {
+                unset($db[$k]);
+            }
+        }
+        
         // 保存
         ftruncate($fp, 0);
         rewind($fp);

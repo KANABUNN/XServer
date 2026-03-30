@@ -16,20 +16,28 @@ try {
     }
 
     // 簡易的なレート制限（IPアドレス単位で5分(300秒)に3回まで）
+    // Cloudflare プロキシ（オレンジ雲）を有効にした場合は
+    // $ip = get_client_ip(); に変更すること
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
     rate_limit_or_throw($ip, __DIR__ . '/../../apps/rate_limit.json', 3, 300);
 
-    // フォーム内容からメールデータを構築
+    // フォームデータの検証・構築（ファイルはまだtmp_nameのまま）
     $mailData = build_mail_from_request($cfg);
+
+    // DB保存を先に行う（失敗したらここで例外、メールは送信されない）
+    // move_uploaded_file() によりファイルが storage/ に移動される
+    $pdo = db_connect($cfg);
+    $storedPath = save_reservation_with_uploaded_file($pdo, $cfg, $mailData, $_FILES['file'] ?? null);
+
+    // attachment.path を移動後のパスに差し替える
+    //    tmp_name はもう存在しないので必須
+    $mailData['attachment']['path'] = $storedPath;
+
+    // メール送信（DB保存が成功した場合のみここに到達）
     send_mail_smtp($cfg, $mailData);
 
-    // 返信メールの構築と送信
     $replyData = build_mail_reply($mailData);
     send_mail_smtp($cfg, $replyData);
-
-    // DBへ予約情報と添付ファイル情報を保存
-    $pdo = db_connect($cfg);
-    save_reservation_with_uploaded_file($pdo, $cfg, $mailData, $_FILES['file'] ?? null);
 
     header('Location: /success.html', true, 303);
     exit;
