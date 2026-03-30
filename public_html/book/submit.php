@@ -16,6 +16,8 @@ try {
     }
 
     // 簡易的なレート制限（IPアドレス単位で5分(300秒)に3回まで）
+    // Cloudflare プロキシ（オレンジ雲）を有効にした場合は
+    // $ip = get_client_ip(); に変更すること
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
     rate_limit_or_throw($ip, __DIR__ . '/../../apps/rate_limit.json', 3, 300);
 

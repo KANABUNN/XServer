@@ -56,3 +56,35 @@ function rate_limit_or_throw(string $ip, string $storePath, int $max, int $windo
         fclose($fp);
     }
 }
+ 
+function get_client_ip(): string
+{
+    // 信頼するプロキシのIPリスト（サーバーの設定に合わせて変更）
+    $trusted_proxies = [
+        '127.0.0.1',
+        '::1',
+        // Cloudflare を使っているなら CF の IP レンジを追加
+        // https://www.cloudflare.com/ips/
+    ];
+
+    $remote = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+
+    // REMOTE_ADDR が信頼できるプロキシの場合のみ XFF を参照
+    if (in_array($remote, $trusted_proxies, true)) {
+        $xff = trim((string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
+        if ($xff !== '') {
+            $parts = array_map('trim', explode(',', $xff));
+            $ip = $parts[0] ?? '';
+            if ($ip !== '') {
+                return $ip;
+            }
+        }
+
+        $cf = trim((string)($_SERVER['HTTP_CF_CONNECTING_IP'] ?? ''));
+        if ($cf !== '') {
+            return $cf;
+        }
+    }
+
+    return $remote !== '' ? $remote : 'unknown';
+}
