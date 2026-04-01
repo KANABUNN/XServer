@@ -184,13 +184,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const start = new Date(
       previousMonthLastDate.getFullYear(),
       previousMonthLastDate.getMonth(),
-      Math.max(1, previousMonthLastDay - 2),
+      Math.max(1, previousMonthLastDay - 1),
       0, 0, 0, 0
     );
     const end = new Date(
       previousMonthLastDate.getFullYear(),
       previousMonthLastDate.getMonth(),
-      Math.max(1, previousMonthLastDay - 1),
+      previousMonthLastDay,
       23, 59, 59, 999
     );
 
@@ -258,7 +258,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ? "月次申請期間中のため申請できます。"
         : "臨時申請期間中のため申請できます。";
       detailText = inMonthlyWindow
-        ? "本日が申請可能日であり、前月末の月次申請期間に入っています。空いている部屋のみ申請できます。"
+        ? "本日が申請可能日であり、前月の最終日とその前日の月次申請期間に入っています。空いている部屋のみ申請できます。"
         : "本日が申請可能日であり、利用日の7日前から前日17:00までの臨時申請期間です。空いている部屋のみ申請できます。";
     } else if (canApplyByRule && allRoomsBooked) {
       badgeLabel = "満室";
@@ -271,7 +271,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (isBeforeTemporaryWindow) {
       badgeLabel = "期間前";
       summaryText = "まだ申請開始前です。";
-      detailText = "臨時申請は利用日の7日前から、月次申請は前月末の2日間のみ受け付けます。申請可否は借用日ではなく、申請する日が土日祝かどうかで判定します。";
+      detailText = "臨時申請は利用日の7日前から、月次申請は前月の最終日とその前日の2日間のみ受け付けます。申請可否は借用日ではなく、申請する日が土日祝かどうかで判定します。";
     }
 
     return {
@@ -334,7 +334,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <p>${applicationStatus.detailText}</p>
           <ul class="calendar-rule-list">
             <li>判定基準日：${applicationStatus.applicationDayLabel}</li>
-            <li>月次申請日：${applicationStatus.windowSummary.monthly}</li>
+            <li>月次申請日：${applicationStatus.windowSummary.monthly}（前月の最終日とその前日）</li>
             <li>臨時申請期間：${applicationStatus.windowSummary.temporary}</li>
             <li>借用日が土日でも、申請日が平日かつ期間内なら申請できます。</li>
             <li>本日が土日祝の場合は、借用日が平日でも申請できません。</li>
