@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>貸し部屋予約</title>
   <link rel="icon" href="icon.png">
-  <link rel="stylesheet" href="css/style.css?v=20260306">
-  <link rel="stylesheet" href="css/style_responsive.css?v=20260306">
+  <link rel="stylesheet" href="css/style.css?v=20260401b">
+  <link rel="stylesheet" href="css/style_responsive.css?v=20260401b">
 </head>
 <body>
   <div class="container">
@@ -76,7 +76,7 @@
   <dialog id="calendarDialog" class="calendar-dialog">
     <div class="calendar-header">
       <div>
-        <p class="calendar-caption">貸し部屋予約状況</p>
+        <p class="calendar-caption">貸し部屋予約状況 / 現在の申請可否</p>
         <h2 id="calendarTitle">読み込み中...</h2>
       </div>
       <button type="button" id="closeCalendar" class="calendar-close" aria-label="閉じる">×</button>
@@ -90,12 +90,16 @@
       </div>
 
       <div class="calendar-legend">
+        <span><i class="legend-box apply-open"></i>申請可</span>
+        <span><i class="legend-box apply-closed"></i>申請不可</span>
         <span><i class="legend-box available"></i>空き</span>
         <span><i class="legend-box full"></i>使用中</span>
       </div>
     </div>
 
     <div class="calendar-grid" id="calendarGrid"></div>
+
+    <p class="calendar-note">※ 明るい日付は「本日が申請可能日であり、その日付が申請期間内にある」ことの目安です。借用日が土日でも申請日が平日なら申請できる場合があります。テスト期間は未反映で、最終判断は利用規約と申請書記載内容に従ってください。</p>
 
     <div class="calendar-detail" id="calendarDetail">
       <p class="calendar-detail-placeholder">日付を選択すると部屋ごとの状況が表示されます。</p>
@@ -116,7 +120,7 @@
     ></iframe>
   </dialog>
 
-  <script src="js/dialog.js" defer></script>
-  <script src="js/calendar.js" defer></script>
+  <script src="js/dialog.js?v=20260401b" defer></script>
+  <script src="js/calendar.js?v=20260401b" defer></script>
 </body>
 </html>

@@ -761,3 +761,137 @@ select {
   -ms-user-select: text;
   user-select: text;
 }
+.legend-box.apply-open {
+  background: #fff1a8;
+  border: 1px solid #d7b84c;
+}
+
+.legend-box.apply-closed {
+  background: #d9deee;
+  border: 1px solid #9aa5c7;
+}
+
+.calendar-note {
+  margin: 14px 0 0;
+  color: #67708f;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.calendar-day.can-apply {
+  background: linear-gradient(180deg, #fffdf1 0%, #fff7c8 100%);
+  border-color: #e9d77a;
+}
+
+.calendar-day.can-apply:hover {
+  box-shadow: 0 10px 22px rgba(186, 152, 44, 0.18);
+  border-color: #dcbc54;
+}
+
+.calendar-day.cannot-apply {
+  background: #edf0f7;
+  border-color: #d3d9e8;
+}
+
+.calendar-day.is-rule-blocked {
+  background: #e4e7f0;
+}
+
+.calendar-day.is-fully-booked {
+  box-shadow: inset 0 0 0 1px rgba(184, 58, 71, 0.16);
+}
+
+.calendar-apply-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.calendar-apply-chip.open {
+  background: #fff1a8;
+  color: #6c5712;
+}
+
+.calendar-apply-chip.closed {
+  background: #d9deee;
+  color: #4f5874;
+}
+
+.calendar-apply-summary {
+  margin: 0 0 14px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid #e3e7f6;
+}
+
+.calendar-apply-summary.open {
+  background: #fff9d9;
+  border-color: #ecd36b;
+}
+
+.calendar-apply-summary.closed {
+  background: #f2f4fa;
+  border-color: #d7dced;
+}
+
+.calendar-apply-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.calendar-apply-summary strong {
+  color: #30364b;
+}
+
+.calendar-apply-summary p {
+  margin: 0;
+  color: #5f6783;
+  font-size: 13px;
+}
+
+.calendar-rule-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: #5f6783;
+  font-size: 13px;
+}
+
+.calendar-detail-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.status-apply-open {
+  background: #fff1a8;
+  color: #6c5712;
+}
+
+.status-apply-closed {
+  background: #dde2ef;
+  color: #4f5874;
+}
+
+@media (max-width: 600px) {
+  .calendar-apply-chip {
+    min-width: 52px;
+    padding: 4px 6px;
+    font-size: 9px;
+  }
+
+  .calendar-note,
+  .calendar-apply-summary p,
+  .calendar-rule-list {
+    font-size: 12px;
+  }
+}
