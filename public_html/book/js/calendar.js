@@ -198,18 +198,34 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function getTemporaryWindow(date) {
-    const start = new Date(date.getFullYear(), date.getMonth(), date.getDate() - 7, 0, 0, 0, 0);
+    const rawStart = new Date(date.getFullYear(), date.getMonth(), date.getDate() - 7, 0, 0, 0, 0);
+    const monthStart = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
     const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1, 17, 0, 0, 0);
-    return { start, end };
+    const crossesMonth = rawStart.getMonth() !== date.getMonth() || rawStart.getFullYear() !== date.getFullYear();
+    const start = crossesMonth && rawStart.getTime() < monthStart.getTime() ? monthStart : rawStart;
+    const isValid = start.getTime() <= end.getTime();
+
+    return {
+      start,
+      end,
+      rawStart,
+      monthStart,
+      crossesMonth,
+      isValid,
+    };
   }
 
   function buildWindowSummary(date) {
     const monthlyWindow = getMonthlyWindow(date);
     const temporaryWindow = getTemporaryWindow(date);
+    const temporaryBase = `${formatDateTimeLabel(temporaryWindow.start)}〜${formatDateTimeLabel(temporaryWindow.end)}`;
 
     return {
       monthly: `${padMonthDay(monthlyWindow.start)}〜${padMonthDay(monthlyWindow.end)}`,
-      temporary: `${formatDateTimeLabel(temporaryWindow.start)}〜${formatDateTimeLabel(temporaryWindow.end)}`,
+      temporary: temporaryWindow.isValid ? temporaryBase : "該当なし（当月内では臨時申請不可）",
+      temporaryNote: temporaryWindow.crossesMonth
+        ? "月跨ぎ不可のため、臨時申請の開始日は当月1日00:00以降で判定します。"
+        : "",
     };
   }
 
@@ -227,7 +243,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const monthlyWindow = getMonthlyWindow(date);
     const temporaryWindow = getTemporaryWindow(date);
     const inMonthlyWindow = isWithinRange(now, monthlyWindow.start, monthlyWindow.end);
-    const inTemporaryWindow = isWithinRange(now, temporaryWindow.start, temporaryWindow.end);
+    const inTemporaryWindow = temporaryWindow.isValid && isWithinRange(now, temporaryWindow.start, temporaryWindow.end);
     const canApplyByRule = !applicationDayStatus.blocked && (inMonthlyWindow || inTemporaryWindow);
 
     const roomApplications = {
@@ -237,8 +253,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const anyApplicableRoom = roomApplications.tamoku || roomApplications.orange;
     const allRoomsBooked = Boolean(dayData.tamoku && dayData.orange);
-    const isPastDeadline = now.getTime() > temporaryWindow.end.getTime();
-    const isBeforeTemporaryWindow = now.getTime() < temporaryWindow.start.getTime();
+    const isTemporaryUnavailableByMonthBoundary = temporaryWindow.crossesMonth && !temporaryWindow.isValid;
+    const isPastDeadline = temporaryWindow.isValid && now.getTime() > temporaryWindow.end.getTime();
+    const isBeforeTemporaryWindow = temporaryWindow.isValid && now.getTime() < temporaryWindow.start.getTime();
 
     let summaryText = "申請期間外です。";
     let detailText = "現在は申請できません。";
@@ -259,7 +276,9 @@ document.addEventListener("DOMContentLoaded", () => {
         : "臨時申請期間中のため申請できます。";
       detailText = inMonthlyWindow
         ? "本日が申請可能日であり、前月の最終日とその前日の月次申請期間に入っています。空いている部屋のみ申請できます。"
-        : "本日が申請可能日であり、利用日の7日前から前日17:00までの臨時申請期間です。空いている部屋のみ申請できます。";
+        : temporaryWindow.crossesMonth
+          ? "本日が申請可能日であり、臨時申請期間中です。なお、月をまたぐ申請はできないため、開始日は当月1日00:00に切り上げて判定しています。空いている部屋のみ申請できます。"
+          : "本日が申請可能日であり、利用日の7日前00:00から前日17:00までの臨時申請期間です。空いている部屋のみ申請できます。";
     } else if (canApplyByRule && allRoomsBooked) {
       badgeLabel = "満室";
       summaryText = "申請期間内ですが、両部屋とも使用中です。";
@@ -268,10 +287,16 @@ document.addEventListener("DOMContentLoaded", () => {
       badgeLabel = "締切後";
       summaryText = "この日の申請期限は終了しています。";
       detailText = "臨時申請は前日17:00までです。借用日が土日でも、期限内かつ申請日が平日なら申請できます。";
+    } else if (isTemporaryUnavailableByMonthBoundary) {
+      badgeLabel = "月次申請対象";
+      summaryText = "この日は臨時申請では受け付けできません。";
+      detailText = "臨時申請は月をまたげないため、この日の利用申請は月次申請期間内に行ってください。特に月初1日の利用申請は月次申請対象です。";
     } else if (isBeforeTemporaryWindow) {
       badgeLabel = "期間前";
       summaryText = "まだ申請開始前です。";
-      detailText = "臨時申請は利用日の7日前から、月次申請は前月の最終日とその前日の2日間のみ受け付けます。申請可否は借用日ではなく、申請する日が土日祝かどうかで判定します。";
+      detailText = temporaryWindow.crossesMonth
+        ? "臨時申請は利用日の7日前00:00から前日17:00までですが、月をまたぐ申請はできません。そのため、この日の臨時申請開始日は当月1日00:00として判定します。月初1日の利用申請は月次申請内で行ってください。"
+        : "臨時申請は利用日の7日前00:00から、月次申請は前月の最終日とその前日の2日間のみ受け付けます。申請可否は借用日ではなく、申請する日が土日祝かどうかで判定します。";
     }
 
     return {
@@ -336,8 +361,10 @@ document.addEventListener("DOMContentLoaded", () => {
             <li>判定基準日：${applicationStatus.applicationDayLabel}</li>
             <li>月次申請日：${applicationStatus.windowSummary.monthly}（前月の最終日とその前日）</li>
             <li>臨時申請期間：${applicationStatus.windowSummary.temporary}</li>
+            ${applicationStatus.windowSummary.temporaryNote ? `<li>${applicationStatus.windowSummary.temporaryNote}</li>` : ""}
             <li>借用日が土日でも、申請日が平日かつ期間内なら申請できます。</li>
             <li>本日が土日祝の場合は、借用日が平日でも申請できません。</li>
+            <li>月初1日の利用申請は月次申請内で行ってください。</li>
             <li>テスト期間はカレンダーに未反映です。</li>
           </ul>
         </div>

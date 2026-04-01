@@ -23,7 +23,7 @@ const termsFrame = document.getElementById("termsFrame");
 
 if (termsDlg && openTermsBtn) {
   openTermsBtn.addEventListener("click", () => {
-    if (termsFrame) termsFrame.src = "terms.html?v=20260401c";
+    if (termsFrame) termsFrame.src = "terms.html?v=20260401d";
     termsDlg.showModal();
   });
 
