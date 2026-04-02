@@ -703,6 +703,7 @@ function handle_list(PDO $pdo): void
     $dir = strtolower((string)($_GET['dir'] ?? 'desc'));
     $dir = $dir === 'asc' ? 'ASC' : 'DESC';
 
+    $params = [];
     $whereSql = build_where_sql($q, $room, $status, $dateFrom, $dateTo, $statusColumn, $params);
     $statusSelect = reservation_status_select_expr($statusColumn);
 
