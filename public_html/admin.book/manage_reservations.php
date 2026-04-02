@@ -9,6 +9,7 @@ foreach ([__DIR__ . '/../../apps/admin_auth.php', __DIR__ . '/../apps/admin_auth
     }
 }
 
+admin_auth_require_db_helpers();
 $__adminUser = admin_auth_require_login();
 
 foreach ([__DIR__ . '/../../apps/switchbot_api.php', __DIR__ . '/../apps/switchbot_api.php', __DIR__ . '/apps/switchbot_api.php'] as $__switchbotHelper) {
@@ -670,32 +671,6 @@ function load_config(): array
     }
 
     throw new RuntimeException('config.php が見つかりません。配置先に合わせて load_config() の候補パスを調整してください。');
-}
-
-function db_connect(array $cfg): PDO
-{
-    if (!isset($cfg['db']) || !is_array($cfg['db'])) {
-        throw new RuntimeException('config.php に db 設定がありません。');
-    }
-
-    $dsn = trim((string)($cfg['db']['dsn'] ?? ''));
-    $user = (string)($cfg['db']['user'] ?? '');
-    $password = (string)($cfg['db']['password'] ?? '');
-
-    if ($dsn === '') {
-        throw new RuntimeException('config.php の db.dsn が未設定です。');
-    }
-
-    return new PDO(
-        $dsn,
-        $user,
-        $password,
-        [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-        ]
-    );
 }
 
 function handle_list(PDO $pdo): void
