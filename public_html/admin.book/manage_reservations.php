@@ -1543,111 +1543,209 @@ function handle_reservation_mail_send(PDO $pdo, array $cfg): void
 {
     $input = get_request_payload();
     $to = trim((string)($input['to'] ?? ''));
-    $reservationToken = trim((string)($input['reservation_token'] ?? ''));
-    $passcodeToken = trim((string)($input['passcode_token'] ?? ''));
+    $reservationTokens = normalize_mail_selection_tokens($input['reservation_tokens'] ?? ($input['reservation_token'] ?? []));
+    $passcodeTokens = normalize_mail_selection_tokens($input['passcode_tokens'] ?? ($input['passcode_token'] ?? []));
 
     if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
         json_response(['ok' => false, 'message' => '宛先メールアドレスが不正です。'], 400);
     }
-    if ($reservationToken === '') {
-        json_response(['ok' => false, 'message' => '確定済み予約を選択してください。'], 400);
+    if ($reservationTokens === []) {
+        json_response(['ok' => false, 'message' => '確定済み予約を 1 件以上選択してください。'], 400);
     }
-    if ($passcodeToken === '') {
-        json_response(['ok' => false, 'message' => '発行済みパスコードを選択してください。'], 400);
-    }
-
-    $reservationSelector = decode_mail_selection_token($reservationToken, 'reservation');
-    $passcodeSelector = decode_mail_selection_token($passcodeToken, 'passcode');
-
-    $reservation = find_calendar_reservation_for_mail($pdo, $reservationSelector);
-    if (!is_array($reservation)) {
-        json_response(['ok' => false, 'message' => '選択された確定済み予約が見つかりませんでした。'], 404);
+    if ($passcodeTokens === []) {
+        json_response(['ok' => false, 'message' => '発行済みパスコードを 1 件以上選択してください。'], 400);
     }
 
-    $passcode = find_passcode_for_mail($cfg, $passcodeSelector);
-    if (!is_array($passcode)) {
-        json_response(['ok' => false, 'message' => '選択された発行済みパスコードが見つかりませんでした。'], 404);
+    $reservations = [];
+    foreach ($reservationTokens as $token) {
+        $selector = decode_mail_selection_token($token, 'reservation');
+        $row = find_calendar_reservation_for_mail($pdo, $selector);
+        if (!is_array($row)) {
+            json_response(['ok' => false, 'message' => '選択された確定済み予約の一部が見つかりませんでした。'], 404);
+        }
+        $rowId = (int)($row['id'] ?? 0);
+        if ($rowId > 0) {
+            $reservations[$rowId] = $row;
+        } else {
+            $reservations[] = $row;
+        }
+    }
+    $reservations = array_values($reservations);
+
+    $passcodes = [];
+    foreach ($passcodeTokens as $token) {
+        $selector = decode_mail_selection_token($token, 'passcode');
+        $row = find_passcode_for_mail($cfg, $selector);
+        if (!is_array($row)) {
+            json_response(['ok' => false, 'message' => '選択された発行済みパスコードの一部が見つかりませんでした。'], 404);
+        }
+        $status = trim((string)($row['status'] ?? ''));
+        if (in_array($status, ['error', 'api_error'], true)) {
+            json_response(['ok' => false, 'message' => '失敗状態のパスコードは送信できません。'], 400);
+        }
+        $passcodeValue = trim((string)($row['passcode'] ?? ''));
+        if ($passcodeValue === '') {
+            json_response(['ok' => false, 'message' => '選択したパスコードの一部に通知用の値が保存されていません。'], 400);
+        }
+        $rowId = (int)($row['id'] ?? 0);
+        if ($rowId > 0) {
+            $passcodes[$rowId] = $row;
+        } else {
+            $passcodes[] = $row;
+        }
+    }
+    $passcodes = array_values($passcodes);
+
+    $organizationNames = array_values(array_unique(array_filter(array_map(
+        static fn(array $row): string => trim((string)($row['organization_name'] ?? '')),
+        $reservations
+    ), static fn(string $v): bool => $v !== '')));
+    if (count($organizationNames) > 1) {
+        json_response(['ok' => false, 'message' => '複数団体の予約が混在しています。同一団体の予約のみ選択してください。'], 400);
     }
 
-    $reservationRoomCode = trim((string)($reservation['room_code'] ?? ''));
-    $passcodeRoomCode = trim((string)($passcode['room_code'] ?? ''));
-    if ($reservationRoomCode !== '' && $passcodeRoomCode !== '' && $reservationRoomCode !== $passcodeRoomCode) {
-        json_response(['ok' => false, 'message' => '選択した予約とパスコードの部屋が一致していません。'], 400);
+    $matchedItems = [];
+    $missingLabels = [];
+    foreach ($reservations as $reservation) {
+        $matchedPasscode = find_best_passcode_for_reservation($passcodes, $reservation);
+        if (!is_array($matchedPasscode)) {
+            $missingLabels[] = sprintf(
+                '%s / %s',
+                trim((string)($reservation['use_date'] ?? '日付未設定')),
+                room_code_to_label_for_mail(trim((string)($reservation['room_code'] ?? '')))
+            );
+            continue;
+        }
+
+        $reservationRoomCode = trim((string)($reservation['room_code'] ?? ''));
+        $passcodeRoomCode = trim((string)($matchedPasscode['room_code'] ?? ''));
+        $roomCode = $reservationRoomCode !== '' ? $reservationRoomCode : $passcodeRoomCode;
+        $matchedItems[] = [
+            'reservation' => $reservation,
+            'passcode' => $matchedPasscode,
+            'room_code' => $roomCode,
+            'room_name' => room_code_to_label_for_mail($roomCode),
+            'organization_name' => trim((string)($reservation['organization_name'] ?? '')),
+            'use_date' => trim((string)($reservation['use_date'] ?? '')),
+            'usage_time' => trim((string)($reservation['usage_time'] ?? '')),
+            'people_count' => trim((string)($reservation['people_count'] ?? '')),
+            'passcode_name' => trim((string)($matchedPasscode['passcode_name'] ?? '')),
+            'passcode' => trim((string)($matchedPasscode['passcode'] ?? '')),
+            'passcode_start_at' => trim((string)($matchedPasscode['start_at'] ?? '')),
+            'passcode_end_at' => trim((string)($matchedPasscode['end_at'] ?? '')),
+            'passcode_period' => build_passcode_period_label(
+                trim((string)($matchedPasscode['start_at'] ?? '')),
+                trim((string)($matchedPasscode['end_at'] ?? ''))
+            ),
+        ];
     }
 
-    $status = trim((string)($passcode['status'] ?? ''));
-    if (in_array($status, ['error', 'api_error'], true)) {
-        json_response(['ok' => false, 'message' => '失敗状態のパスコードは送信できません。'], 400);
+    if ($missingLabels !== []) {
+        json_response([
+            'ok' => false,
+            'message' => '対応するパスコードが見つからない予約があります: ' . implode(' / ', array_values(array_unique($missingLabels))),
+        ], 400);
     }
+    if ($matchedItems === []) {
+        json_response(['ok' => false, 'message' => '送信対象の予約がありません。'], 400);
+    }
+
+    usort($matchedItems, static function (array $a, array $b): int {
+        $dateCmp = strcmp((string)($a['use_date'] ?? ''), (string)($b['use_date'] ?? ''));
+        if ($dateCmp !== 0) {
+            return $dateCmp;
+        }
+        $roomCmp = strcmp((string)($a['room_code'] ?? ''), (string)($b['room_code'] ?? ''));
+        if ($roomCmp !== 0) {
+            return $roomCmp;
+        }
+        return strcmp((string)($a['usage_time'] ?? ''), (string)($b['usage_time'] ?? ''));
+    });
 
     ensure_mailer_dependencies();
 
-    $roomName = room_code_to_label_for_mail($reservationRoomCode ?: $passcodeRoomCode);
-    $organizationName = trim((string)($reservation['organization_name'] ?? ''));
-    $useDate = trim((string)($reservation['use_date'] ?? ''));
-    $usageTime = trim((string)($reservation['usage_time'] ?? ''));
-    $peopleCount = trim((string)($reservation['people_count'] ?? ''));
-    $passcodeValue = trim((string)($passcode['passcode'] ?? ''));
-    $passcodeStartAt = trim((string)($passcode['start_at'] ?? ''));
-    $passcodeEndAt = trim((string)($passcode['end_at'] ?? ''));
-    $passcodePeriod = build_passcode_period_label($passcodeStartAt, $passcodeEndAt);
-    $sentAt = (new DateTimeImmutable('now', new DateTimeZone((string)($cfg['switchbot']['timezone'] ?? 'Asia/Tokyo'))))->format('Y-m-d H:i:s');
+    $timezone = new DateTimeZone((string)($cfg['switchbot']['timezone'] ?? 'Asia/Tokyo'));
+    $sentAt = (new DateTimeImmutable('now', $timezone))->format('Y-m-d H:i:s');
 
-    if ($passcodeValue === '') {
-        json_response(['ok' => false, 'message' => '選択したパスコードに通知用の値が保存されていません。'], 400);
-    }
+    $organizationName = $organizationNames[0] ?? trim((string)($matchedItems[0]['organization_name'] ?? ''));
+    $roomCodes = array_values(array_unique(array_filter(array_map(static fn(array $item): string => trim((string)($item['room_code'] ?? '')), $matchedItems), static fn(string $v): bool => $v !== '')));
+    $roomNames = array_values(array_unique(array_map(static fn(array $item): string => trim((string)($item['room_name'] ?? '')), $matchedItems)));
+    $singleRoomName = count($roomNames) === 1 ? $roomNames[0] : '';
 
-    $htmlBody = build_reservation_completion_html([
-        'room_name' => $roomName,
+    $htmlBody = build_reservation_completion_bulk_html([
         'organization_name' => $organizationName,
-        'use_date' => $useDate,
-        'usage_time' => $usageTime,
-        'people_count' => $peopleCount,
-        'passcode' => $passcodeValue,
-        'passcode_period' => $passcodePeriod,
+        'room_name' => $singleRoomName,
+        'items' => array_map(static function (array $item): array {
+            return [
+                'room_name' => (string)($item['room_name'] ?? ''),
+                'use_date' => (string)($item['use_date'] ?? ''),
+                'usage_time' => (string)($item['usage_time'] ?? ''),
+                'people_count' => (string)($item['people_count'] ?? ''),
+                'passcode_name' => (string)($item['passcode_name'] ?? ''),
+                'passcode' => (string)($item['passcode'] ?? ''),
+                'passcode_period' => (string)($item['passcode_period'] ?? ''),
+            ];
+        }, $matchedItems),
         'sent_at' => $sentAt,
     ]);
 
-    $subject = ($roomName !== '' ? $roomName . ' の予約確定のお知らせ' : '予約確定のお知らせ');
-    $plainLines = [
-        $roomName . ' の予約が確定しました。',
-        '',
-        '【予約内容】',
-        '予約部屋: ' . ($roomName !== '' ? $roomName : '—'),
-        '使用日: ' . ($useDate !== '' ? $useDate : '—'),
-        '利用時間: ' . ($usageTime !== '' ? $usageTime : '未登録'),
-        '団体名: ' . ($organizationName !== '' ? $organizationName : '—'),
-        '人数: ' . ($peopleCount !== '' ? $peopleCount . '人' : '未登録'),
-        '',
-        '【入室用パスワード】',
-        'パスワード: ' . $passcodeValue,
-        '有効期間: ' . ($passcodePeriod !== '' ? $passcodePeriod : '—'),
-        '',
-        '送信日時: ' . $sentAt,
-        '',
-        '※ このメールは自動送信です。',
-        '※ 入室用パスワードは第三者へ共有しないでください。',
-    ];
+    if (count($matchedItems) === 1 && $singleRoomName !== '') {
+        $subject = $singleRoomName . ' の予約確定のお知らせ';
+    } elseif ($singleRoomName !== '') {
+        $subject = $singleRoomName . ' の予約確定のお知らせ（複数日程）';
+    } else {
+        $subject = '予約確定のお知らせ（複数日程）';
+    }
+
+    $plainLines = [];
+    $plainLines[] = ($organizationName !== '' ? $organizationName . ' 様の' : '') . '予約が確定しました。';
+    $plainLines[] = '';
+    $plainLines[] = '【予約内容】';
+    foreach ($matchedItems as $index => $item) {
+        $plainLines[] = sprintf('%d件目', $index + 1);
+        $plainLines[] = '予約部屋: ' . ((string)($item['room_name'] ?? '') !== '' ? (string)$item['room_name'] : '—');
+        $plainLines[] = '使用日: ' . ((string)($item['use_date'] ?? '') !== '' ? (string)$item['use_date'] : '—');
+        $plainLines[] = '利用時間: ' . ((string)($item['usage_time'] ?? '') !== '' ? (string)$item['usage_time'] : '未登録');
+        $plainLines[] = '人数: ' . ((string)($item['people_count'] ?? '') !== '' ? (string)$item['people_count'] . '人' : '未登録');
+        $plainLines[] = 'パスワード名: ' . ((string)($item['passcode_name'] ?? '') !== '' ? (string)$item['passcode_name'] : '—');
+        $plainLines[] = 'パスワード: ' . (string)($item['passcode'] ?? '');
+        $plainLines[] = '有効期間: ' . ((string)($item['passcode_period'] ?? '') !== '' ? (string)$item['passcode_period'] : '—');
+        $plainLines[] = '';
+    }
+    $plainLines[] = '送信日時: ' . $sentAt;
+    $plainLines[] = '';
+    $plainLines[] = '※ このメールは自動送信です。';
+    $plainLines[] = '※ 入室用パスワードは第三者へ共有しないでください。';
+
+    $historyRoomCode = count($roomCodes) === 1 ? $roomCodes[0] : 'multiple';
+    $historyRoomLabel = count($roomNames) === 1 ? $roomNames[0] : '複数部屋';
+    $historyUseDate = count($matchedItems) === 1 ? trim((string)($matchedItems[0]['use_date'] ?? '')) : '複数';
+    $historyUsageTimeValues = array_values(array_unique(array_filter(array_map(static fn(array $item): string => trim((string)($item['usage_time'] ?? '')), $matchedItems), static fn(string $v): bool => $v !== '')));
+    $historyPeopleValues = array_values(array_unique(array_filter(array_map(static fn(array $item): string => trim((string)($item['people_count'] ?? '')), $matchedItems), static fn(string $v): bool => $v !== '')));
+    $selectedPasscodeIds = array_values(array_unique(array_filter(array_map(static fn(array $item): int => (int)(($item['passcode']['id'] ?? 0)), $matchedItems))));
+    $selectedPasscodeNames = array_values(array_unique(array_filter(array_map(static fn(array $item): string => trim((string)($item['passcode_name'] ?? '')), $matchedItems), static fn(string $v): bool => $v !== '')));
+    $selectedPasscodeValues = array_values(array_unique(array_filter(array_map(static fn(array $item): string => trim((string)($item['passcode'] ?? '')), $matchedItems), static fn(string $v): bool => $v !== '')));
+    $selectedLocalRequestIds = array_values(array_unique(array_filter(array_map(static fn(array $item): string => trim((string)($item['passcode']['local_request_id'] ?? '')), $matchedItems), static fn(string $v): bool => $v !== '')));
 
     $historyPayload = [
         'to_email' => $to,
         'mail_subject' => $subject,
         'send_status' => 'sent',
         'error_message' => null,
-        'reservation_calendar_id' => max(0, (int)($reservation['id'] ?? 0)),
-        'reservation_source_id' => max(0, (int)($reservation['reservation_id'] ?? 0)),
-        'room_code' => $reservationRoomCode !== '' ? $reservationRoomCode : $passcodeRoomCode,
-        'room_label' => $roomName,
-        'use_date' => $useDate,
-        'organization_name' => $organizationName,
-        'people_count' => $peopleCount !== '' ? (int)$peopleCount : null,
-        'usage_time' => $usageTime !== '' ? $usageTime : null,
-        'passcode_request_id' => max(0, (int)($passcode['id'] ?? 0)),
-        'passcode_local_request_id' => trim((string)($passcode['local_request_id'] ?? '')),
-        'passcode_name' => trim((string)($passcode['passcode_name'] ?? '')),
-        'passcode' => $passcodeValue,
-        'passcode_start_at' => $passcodeStartAt !== '' ? $passcodeStartAt : null,
-        'passcode_end_at' => $passcodeEndAt !== '' ? $passcodeEndAt : null,
+        'reservation_calendar_id' => count($matchedItems) === 1 ? max(0, (int)($matchedItems[0]['reservation']['id'] ?? 0)) : null,
+        'reservation_source_id' => count($matchedItems) === 1 ? max(0, (int)($matchedItems[0]['reservation']['reservation_id'] ?? 0)) : null,
+        'room_code' => $historyRoomCode,
+        'room_label' => $historyRoomLabel,
+        'use_date' => $historyUseDate,
+        'organization_name' => $organizationName !== '' ? $organizationName : (count($organizationNames) > 1 ? '複数団体' : ''),
+        'people_count' => count($historyPeopleValues) === 1 ? (int)$historyPeopleValues[0] : null,
+        'usage_time' => count($historyUsageTimeValues) === 1 ? $historyUsageTimeValues[0] : (count($matchedItems) > 1 ? '複数' : null),
+        'passcode_request_id' => count($selectedPasscodeIds) === 1 ? $selectedPasscodeIds[0] : null,
+        'passcode_local_request_id' => count($selectedLocalRequestIds) === 1 ? $selectedLocalRequestIds[0] : (count($selectedLocalRequestIds) > 1 ? 'multiple' : null),
+        'passcode_name' => count($selectedPasscodeNames) === 1 ? $selectedPasscodeNames[0] : (count($selectedPasscodeNames) > 1 ? '複数' : null),
+        'passcode' => count($selectedPasscodeValues) === 1 ? $selectedPasscodeValues[0] : (count($selectedPasscodeValues) > 1 ? '複数' : null),
+        'passcode_start_at' => count($matchedItems) === 1 ? ((string)($matchedItems[0]['passcode_start_at'] ?? '') !== '' ? (string)$matchedItems[0]['passcode_start_at'] : null) : null,
+        'passcode_end_at' => count($matchedItems) === 1 ? ((string)($matchedItems[0]['passcode_end_at'] ?? '') !== '' ? (string)$matchedItems[0]['passcode_end_at'] : null) : null,
         'sent_at' => $sentAt,
     ];
 
@@ -1655,7 +1753,8 @@ function handle_reservation_mail_send(PDO $pdo, array $cfg): void
         send_mail_smtp($cfg, [
             'to' => $to,
             'subject' => $subject,
-            'body' => implode("\r\n", $plainLines),
+            'body' => implode("
+", $plainLines),
             'html_body' => $htmlBody,
         ]);
 
@@ -1663,18 +1762,19 @@ function handle_reservation_mail_send(PDO $pdo, array $cfg): void
 
         manage_write_audit($pdo, 'mail.send', 'reservation_mail', null, [
             'to_email' => $to,
-            'reservation_id' => (int)($reservation['id'] ?? 0),
-            'room_code' => $reservationRoomCode !== '' ? $reservationRoomCode : $passcodeRoomCode,
-            'use_date' => $useDate,
+            'reservation_count' => count($matchedItems),
+            'room_codes' => $roomCodes,
+            'use_dates' => array_map(static fn(array $item): string => (string)($item['use_date'] ?? ''), $matchedItems),
             'history_saved' => $historySaved,
         ]);
 
         json_response([
             'ok' => true,
             'message' => $historySaved
-                ? '予約通知メールを送信し、送信履歴も保存しました。'
-                : '予約通知メールを送信しました。送信履歴テーブルが未作成のため、履歴保存は行われていません。',
+                ? '予約通知メールを一括送信し、送信履歴も保存しました。'
+                : '予約通知メールを一括送信しました。送信履歴テーブルが未作成のため、履歴保存は行われていません。',
             'history_saved' => $historySaved,
+            'matched_count' => count($matchedItems),
         ]);
     } catch (Throwable $e) {
         $historyPayload['send_status'] = 'failed';
@@ -1683,9 +1783,9 @@ function handle_reservation_mail_send(PDO $pdo, array $cfg): void
 
         manage_write_audit($pdo, 'mail.send.failed', 'reservation_mail', null, [
             'to_email' => $to,
-            'reservation_id' => (int)($reservation['id'] ?? 0),
-            'room_code' => $reservationRoomCode !== '' ? $reservationRoomCode : $passcodeRoomCode,
-            'use_date' => $useDate,
+            'reservation_count' => count($matchedItems),
+            'room_codes' => $roomCodes,
+            'use_dates' => array_map(static fn(array $item): string => (string)($item['use_date'] ?? ''), $matchedItems),
             'error_message' => $historyPayload['error_message'],
             'history_saved' => $historySaved,
         ]);
@@ -1695,6 +1795,110 @@ function handle_reservation_mail_send(PDO $pdo, array $cfg): void
             'message' => $historyPayload['error_message'],
             'history_saved' => $historySaved,
         ], 500);
+    }
+}
+
+function normalize_mail_selection_tokens(mixed $value): array
+{
+    if (is_string($value)) {
+        $value = $value === '' ? [] : [$value];
+    }
+    if (!is_array($value)) {
+        return [];
+    }
+
+    $tokens = [];
+    foreach ($value as $item) {
+        $token = trim((string)$item);
+        if ($token !== '') {
+            $tokens[] = $token;
+        }
+    }
+
+    return array_values(array_unique($tokens));
+}
+
+function find_best_passcode_for_reservation(array $passcodes, array $reservation): ?array
+{
+    $candidates = [];
+    foreach ($passcodes as $passcode) {
+        if (passcode_matches_reservation($passcode, $reservation)) {
+            $candidates[] = $passcode;
+        }
+    }
+    if ($candidates === []) {
+        return null;
+    }
+
+    usort($candidates, static function (array $a, array $b): int {
+        $rangeA = passcode_date_span_days((string)($a['start_at'] ?? ''), (string)($a['end_at'] ?? ''));
+        $rangeB = passcode_date_span_days((string)($b['start_at'] ?? ''), (string)($b['end_at'] ?? ''));
+        if ($rangeA !== $rangeB) {
+            return $rangeA <=> $rangeB;
+        }
+        $updatedCmp = strcmp((string)($b['updated_at'] ?? ''), (string)($a['updated_at'] ?? ''));
+        if ($updatedCmp !== 0) {
+            return $updatedCmp;
+        }
+        return ((int)($b['id'] ?? 0)) <=> ((int)($a['id'] ?? 0));
+    });
+
+    return $candidates[0];
+}
+
+function passcode_matches_reservation(array $passcode, array $reservation): bool
+{
+    $reservationRoomCode = trim((string)($reservation['room_code'] ?? ''));
+    $passcodeRoomCode = trim((string)($passcode['room_code'] ?? ''));
+    if ($reservationRoomCode !== '' && $passcodeRoomCode !== '' && $reservationRoomCode !== $passcodeRoomCode) {
+        return false;
+    }
+
+    $useDate = normalize_mail_date((string)($reservation['use_date'] ?? ''));
+    if ($useDate === null) {
+        return false;
+    }
+
+    $startDate = normalize_mail_date((string)($passcode['start_at'] ?? ''));
+    $endDate = normalize_mail_date((string)($passcode['end_at'] ?? ''));
+    if ($startDate === null || $endDate === null) {
+        return false;
+    }
+
+    return $startDate <= $useDate && $useDate <= $endDate;
+}
+
+function normalize_mail_date(string $value): ?string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return null;
+    }
+    if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $value, $matches) === 1) {
+        return $matches[1];
+    }
+
+    try {
+        return (new DateTimeImmutable($value))->format('Y-m-d');
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+function passcode_date_span_days(string $startAt, string $endAt): int
+{
+    $start = normalize_mail_date($startAt);
+    $end = normalize_mail_date($endAt);
+    if ($start === null || $end === null) {
+        return PHP_INT_MAX;
+    }
+
+    try {
+        $startDt = new DateTimeImmutable($start . ' 00:00:00');
+        $endDt = new DateTimeImmutable($end . ' 00:00:00');
+        return (int)$startDt->diff($endDt)->format('%a');
+    } catch (Throwable $e) {
+        return PHP_INT_MAX;
     }
 }
 

@@ -1,5 +1,5 @@
 /* admin-mail.js
- * - 予約通知メール（確定予約 + 発行済みパスコードの送信）
+ * - 予約通知メール（複数の確定予約 + 発行済みパスコードの一括送信）
  * - 送信履歴表示 / CSV 出力
  */
 (function () {
@@ -69,6 +69,7 @@
     el.reservationMailReservationSelect?.addEventListener('change', () => {
       renderReservationSummary();
       renderPasscodeOptions();
+      autoSelectMatchingPasscodes();
       renderPasscodeSummary();
     });
     el.reservationMailPasscodeSelect?.addEventListener('change', () => {
@@ -130,6 +131,7 @@
       renderReservationOptions();
       renderReservationSummary();
       renderPasscodeOptions();
+      autoSelectMatchingPasscodes();
       renderPasscodeSummary();
 
       const extra = [];
@@ -191,16 +193,27 @@
     window.location.href = url.toString();
   }
 
-  function getSelectedReservation() {
-    const token = String(Admin.el.reservationMailReservationSelect?.value || '');
-    if (!token) return null;
-    return Admin.mail.state.reservations.find((item) => String(item.selection_token || '') === token) || null;
+  function getSelectedValues(selectEl) {
+    if (!selectEl) return [];
+    return Array.from(selectEl.selectedOptions || []).map((opt) => String(opt.value || '')).filter(Boolean);
   }
 
-  function getSelectedPasscode() {
-    const token = String(Admin.el.reservationMailPasscodeSelect?.value || '');
-    if (!token) return null;
-    return Admin.mail.state.passcodes.find((item) => String(item.selection_token || '') === token) || null;
+  function setSelectedValues(selectEl, values) {
+    if (!selectEl) return;
+    const wanted = new Set((values || []).map((v) => String(v || '')).filter(Boolean));
+    Array.from(selectEl.options || []).forEach((opt) => {
+      opt.selected = wanted.has(String(opt.value || ''));
+    });
+  }
+
+  function getSelectedReservations() {
+    const selected = new Set(getSelectedValues(Admin.el.reservationMailReservationSelect));
+    return Admin.mail.state.reservations.filter((item) => selected.has(String(item.selection_token || '')));
+  }
+
+  function getSelectedPasscodes() {
+    const selected = new Set(getSelectedValues(Admin.el.reservationMailPasscodeSelect));
+    return Admin.mail.state.passcodes.filter((item) => selected.has(String(item.selection_token || '')));
   }
 
   function buildReservationLabel(item) {
@@ -231,44 +244,100 @@
 
   function renderReservationOptions() {
     const el = Admin.el;
-    const current = String(el.reservationMailReservationSelect?.value || '');
-    const options = ['<option value="">選択してください</option>']
-      .concat(Admin.mail.state.reservations.map((item) => (
-        `<option value="${u.escapeHtml(String(item.selection_token || ''))}">${u.escapeHtml(buildReservationLabel(item))}</option>`
-      )));
+    const current = getSelectedValues(el.reservationMailReservationSelect);
+    const options = Admin.mail.state.reservations.map((item) => (
+      `<option value="${u.escapeHtml(String(item.selection_token || ''))}">${u.escapeHtml(buildReservationLabel(item))}</option>`
+    ));
     if (el.reservationMailReservationSelect) {
       el.reservationMailReservationSelect.innerHTML = options.join('');
-      if ([...el.reservationMailReservationSelect.options].some((opt) => opt.value === current)) {
-        el.reservationMailReservationSelect.value = current;
-      }
+      setSelectedValues(el.reservationMailReservationSelect, current);
     }
   }
 
-  function getVisiblePasscodes() {
-    const reservation = getSelectedReservation();
-    const all = Admin.mail.state.passcodes.slice();
-    if (!reservation) return all;
+  function parseDateOnly(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    return `${m[1]}-${m[2]}-${m[3]}`;
+  }
 
+  function dateRangeDays(start, end) {
+    const startKey = parseDateOnly(start);
+    const endKey = parseDateOnly(end);
+    if (!startKey || !endKey) return Number.MAX_SAFE_INTEGER;
+    const startMs = Date.parse(`${startKey}T00:00:00Z`);
+    const endMs = Date.parse(`${endKey}T00:00:00Z`);
+    if (Number.isNaN(startMs) || Number.isNaN(endMs)) return Number.MAX_SAFE_INTEGER;
+    return Math.max(0, Math.round((endMs - startMs) / 86400000));
+  }
+
+  function isPasscodeMatchingReservation(passcode, reservation) {
     const roomCode = String(reservation.room_code || '').trim();
-    const sameRoom = all.filter((item) => String(item.room_code || '').trim() === roomCode);
-    return sameRoom.length ? sameRoom : all;
+    if (roomCode && String(passcode.room_code || '').trim() !== roomCode) return false;
+
+    const useDate = parseDateOnly(reservation.use_date);
+    if (!useDate) return false;
+
+    const startDate = parseDateOnly(passcode.start_at);
+    const endDate = parseDateOnly(passcode.end_at);
+    if (!startDate || !endDate) return false;
+
+    return startDate <= useDate && useDate <= endDate;
+  }
+
+  function pickBestPasscode(passcodes, reservation) {
+    const candidates = (passcodes || []).filter((item) => isPasscodeMatchingReservation(item, reservation));
+    if (!candidates.length) return null;
+    return candidates.sort((a, b) => {
+      const rangeDiff = dateRangeDays(a.start_at, a.end_at) - dateRangeDays(b.start_at, b.end_at);
+      if (rangeDiff !== 0) return rangeDiff;
+      const updatedDiff = String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
+      if (updatedDiff !== 0) return updatedDiff;
+      return Number(b.id || 0) - Number(a.id || 0);
+    })[0];
+  }
+
+  function getVisiblePasscodes() {
+    const reservations = getSelectedReservations();
+    const all = Admin.mail.state.passcodes.slice();
+    if (!reservations.length) return all;
+
+    const roomCodes = new Set(reservations.map((item) => String(item.room_code || '').trim()).filter(Boolean));
+    const sameRooms = all.filter((item) => roomCodes.has(String(item.room_code || '').trim()));
+    return sameRooms.length ? sameRooms : all;
   }
 
   function renderPasscodeOptions() {
     const el = Admin.el;
-    const current = String(el.reservationMailPasscodeSelect?.value || '');
+    const current = getSelectedValues(el.reservationMailPasscodeSelect);
     const visible = getVisiblePasscodes();
-    const options = ['<option value="">選択してください</option>']
-      .concat(visible.map((item) => (
-        `<option value="${u.escapeHtml(String(item.selection_token || ''))}">${u.escapeHtml(buildPasscodeLabel(item))}</option>`
-      )));
+    const options = visible.map((item) => (
+      `<option value="${u.escapeHtml(String(item.selection_token || ''))}">${u.escapeHtml(buildPasscodeLabel(item))}</option>`
+    ));
 
     if (el.reservationMailPasscodeSelect) {
       el.reservationMailPasscodeSelect.innerHTML = options.join('');
-      if ([...el.reservationMailPasscodeSelect.options].some((opt) => opt.value === current)) {
-        el.reservationMailPasscodeSelect.value = current;
-      }
+      setSelectedValues(el.reservationMailPasscodeSelect, current);
     }
+  }
+
+  function autoSelectMatchingPasscodes() {
+    const el = Admin.el;
+    const reservations = getSelectedReservations();
+    if (!el.reservationMailPasscodeSelect) return;
+    if (!reservations.length) {
+      setSelectedValues(el.reservationMailPasscodeSelect, []);
+      return;
+    }
+
+    const visiblePasscodes = getVisiblePasscodes();
+    const tokens = [];
+    reservations.forEach((reservation) => {
+      const match = pickBestPasscode(visiblePasscodes, reservation);
+      if (match?.selection_token) tokens.push(String(match.selection_token));
+    });
+    setSelectedValues(el.reservationMailPasscodeSelect, Array.from(new Set(tokens)));
   }
 
   function summaryItem(label, value, allowHtml = false) {
@@ -282,44 +351,59 @@
 
   function renderReservationSummary() {
     const el = Admin.el;
-    const reservation = getSelectedReservation();
+    const reservations = getSelectedReservations();
     if (!el.reservationMailReservationSummary) return;
 
-    if (!reservation) {
+    if (!reservations.length) {
       el.reservationMailReservationSummary.innerHTML = '<div class="detail-empty">予約を選択してください。</div>';
       return;
     }
 
-    el.reservationMailReservationSummary.innerHTML = [
-      summaryItem('使用日', reservation.use_date || '—'),
-      summaryItem('部屋', u.roomLabel(reservation.room_code || '')),
-      summaryItem('団体名', reservation.organization_name || '—'),
-      summaryItem('利用時間', reservation.usage_time || '未登録'),
-      summaryItem('人数', reservation.people_count ? `${reservation.people_count}人` : '未登録'),
-    ].join('');
+    const body = reservations.map((reservation) => `
+      <div class="mail-summary-group">
+        <div class="mail-summary-badge">${u.escapeHtml(String(reservation.use_date || '日付未設定'))}</div>
+        ${summaryItem('部屋', u.roomLabel(reservation.room_code || ''))}
+        ${summaryItem('団体名', reservation.organization_name || '—')}
+        ${summaryItem('利用時間', reservation.usage_time || '未登録')}
+        ${summaryItem('人数', reservation.people_count ? `${reservation.people_count}人` : '未登録')}
+      </div>
+    `).join('');
+
+    el.reservationMailReservationSummary.innerHTML = `
+      <div class="mail-summary-badge">${u.escapeHtml(String(reservations.length))} 件選択中</div>
+      ${body}
+    `;
   }
 
   function renderPasscodeSummary() {
     const el = Admin.el;
-    const passcode = getSelectedPasscode();
+    const passcodes = getSelectedPasscodes();
     if (!el.reservationMailPasscodeSummary) return;
 
-    if (!passcode) {
+    if (!passcodes.length) {
       el.reservationMailPasscodeSummary.innerHTML = '<div class="detail-empty">パスコードを選択してください。</div>';
       return;
     }
 
-    const period = passcode.start_at && passcode.end_at
-      ? `${passcode.start_at} 〜 ${passcode.end_at}`
-      : '未登録';
+    const body = passcodes.map((passcode) => {
+      const period = passcode.start_at && passcode.end_at
+        ? `${passcode.start_at} 〜 ${passcode.end_at}`
+        : '未登録';
+      return `
+        <div class="mail-summary-group">
+          <div class="mail-summary-badge">${u.escapeHtml(u.roomLabel(passcode.room_code || ''))}</div>
+          ${summaryItem('パスワード名', passcode.passcode_name || '—')}
+          ${summaryItem('パスワード', `<code>${u.escapeHtml(String(passcode.passcode || ''))}</code>`, true)}
+          ${summaryItem('有効期間', period)}
+          ${summaryItem('状態', passcode.status_label || passcode.status || '—')}
+        </div>
+      `;
+    }).join('');
 
-    el.reservationMailPasscodeSummary.innerHTML = [
-      summaryItem('部屋', u.roomLabel(passcode.room_code || '')),
-      summaryItem('パスワード名', passcode.passcode_name || '—'),
-      summaryItem('パスワード', `<code>${u.escapeHtml(String(passcode.passcode || ''))}</code>`, true),
-      summaryItem('有効期間', period),
-      summaryItem('状態', passcode.status_label || passcode.status || '—'),
-    ].join('');
+    el.reservationMailPasscodeSummary.innerHTML = `
+      <div class="mail-summary-badge">${u.escapeHtml(String(passcodes.length))} 件選択中</div>
+      ${body}
+    `;
   }
 
   function renderHistory() {
@@ -362,10 +446,10 @@
       return;
     }
     const to = String(el.reservationMailTo?.value || '').trim();
-    const reservationToken = String(el.reservationMailReservationSelect?.value || '');
-    const passcodeToken = String(el.reservationMailPasscodeSelect?.value || '');
+    const reservationTokens = getSelectedValues(el.reservationMailReservationSelect);
+    const passcodeTokens = getSelectedValues(el.reservationMailPasscodeSelect);
 
-    if (!to || !reservationToken || !passcodeToken) {
+    if (!to || !reservationTokens.length || !passcodeTokens.length) {
       u.setElementStatus(el.reservationMailStatusText, '宛先・確定済み予約・発行済みパスコードをすべて選択してください。', 'error');
       return;
     }
@@ -379,8 +463,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to,
-          reservation_token: reservationToken,
-          passcode_token: passcodeToken,
+          reservation_tokens: reservationTokens,
+          passcode_tokens: passcodeTokens,
         }),
       });
       const data = await res.json();

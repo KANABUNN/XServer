@@ -276,7 +276,7 @@ $csrfToken = admin_auth_get_csrf_token();
     <header class="page-head">
       <div>
         <h1>予約通知メール</h1>
-        <p class="lead">確定済み予約と発行済みパスコードを選択し、予約確定と入室用パスワードをメール送信します。</p>
+        <p class="lead">確定済み予約と発行済みパスコードを複数選択し、一括予約した団体向けに予約確定と入室用パスワードをまとめてメール送信します。</p>
       </div>
       <div class="head-actions">
         <button id="reservationMailCsvExportBtn" type="button" class="secondary">送信履歴CSV</button>
@@ -293,7 +293,7 @@ $csrfToken = admin_auth_get_csrf_token();
       <div id="mailComposeArea">
       <div class="mail-note">
         <strong>送信内容</strong>
-        <p>既存の SMTP 設定を利用して HTML メールを送信します。予約内容・利用日時のリマインド・部屋のパスワードを 1 通にまとめて案内します。</p>
+        <p>既存の SMTP 設定を利用して HTML メールを送信します。複数の確定済み予約と対応する部屋ごとのパスワードを 1 通にまとめて案内します。</p>
       </div>
 
       <div class="mail-form-grid">
@@ -306,17 +306,17 @@ $csrfToken = admin_auth_get_csrf_token();
         </label>
 
         <label class="field">
-          <span>確定済み予約 <strong style="color: var(--danger)">*</strong></span>
-          <select id="reservationMailReservationSelect" required>
-            <option value="">読み込み前です</option>
+          <span>確定済み予約（複数選択可） <strong style="color: var(--danger)">*</strong></span>
+          <select id="reservationMailReservationSelect" class="mail-multi-select" multiple size="8" required>
           </select>
+          <small class="field-help">Ctrl / ⌘ を押しながら複数選択できます。選択した予約に対応するパスコードは自動で選択されます。</small>
         </label>
 
         <label class="field">
-          <span>発行済みパスコード <strong style="color: var(--danger)">*</strong></span>
-          <select id="reservationMailPasscodeSelect" required>
-            <option value="">読み込み前です</option>
+          <span>発行済みパスコード（複数選択可） <strong style="color: var(--danger)">*</strong></span>
+          <select id="reservationMailPasscodeSelect" class="mail-multi-select" multiple size="8" required>
           </select>
+          <small class="field-help">必要に応じて手動でも調整できます。送信時には使用日・部屋に対応するパスコードを照合します。</small>
         </label>
       </div>
 
@@ -329,7 +329,7 @@ $csrfToken = admin_auth_get_csrf_token();
         <section class="mail-summary-card">
           <div class="mail-summary-head">
             <h2>予約内容</h2>
-            <p class="dialog-sub">選択した確定済み予約の内容です。</p>
+            <p class="dialog-sub">選択した確定済み予約の一覧です。</p>
           </div>
           <div id="reservationMailReservationSummary" class="mail-summary-list">
             <div class="detail-empty">予約を選択してください。</div>
@@ -339,7 +339,7 @@ $csrfToken = admin_auth_get_csrf_token();
         <section class="mail-summary-card">
           <div class="mail-summary-head">
             <h2>パスコード内容</h2>
-            <p class="dialog-sub">選択した発行済みパスコードの内容です。</p>
+            <p class="dialog-sub">送信対象として選択されている発行済みパスコードの一覧です。</p>
           </div>
           <div id="reservationMailPasscodeSummary" class="mail-summary-list">
             <div class="detail-empty">パスコードを選択してください。</div>

@@ -185,6 +185,132 @@ HTML;
 }
 
 
+function build_reservation_completion_bulk_html(array $data): string
+{
+    $organizationName = (string)($data['organization_name'] ?? '');
+    $roomName = (string)($data['room_name'] ?? '');
+    $items = is_array($data['items'] ?? null) ? $data['items'] : [];
+    $sentAt = (string)($data['sent_at'] ?? '');
+
+    $organizationNameHtml = reservation_mail_html_escape($organizationName !== '' ? $organizationName : '—');
+    $roomNameHtml = reservation_mail_html_escape($roomName !== '' ? $roomName : '複数部屋');
+    $sentAtHtml = reservation_mail_html_escape($sentAt);
+    $countHtml = reservation_mail_html_escape((string)count($items));
+
+    $rowsHtml = '';
+    foreach ($items as $item) {
+        $itemRoomNameHtml = reservation_mail_html_escape((string)($item['room_name'] ?? '') !== '' ? (string)$item['room_name'] : '—');
+        $useDateHtml = reservation_mail_html_escape((string)($item['use_date'] ?? '') !== '' ? (string)$item['use_date'] : '—');
+        $usageTimeHtml = reservation_mail_html_escape((string)($item['usage_time'] ?? '') !== '' ? (string)$item['usage_time'] : '未登録');
+        $peopleCountHtml = reservation_mail_html_escape((string)($item['people_count'] ?? '') !== '' ? (string)$item['people_count'] . '人' : '未登録');
+        $passcodeNameHtml = reservation_mail_html_escape((string)($item['passcode_name'] ?? '') !== '' ? (string)$item['passcode_name'] : '—');
+        $passcodeHtml = reservation_mail_html_escape((string)($item['passcode'] ?? ''));
+        $passcodePeriodHtml = reservation_mail_html_escape((string)($item['passcode_period'] ?? '') !== '' ? (string)$item['passcode_period'] : '—');
+
+        $rowsHtml .= <<<HTML
+          <tr>
+            <td style="padding:14px 12px; border-bottom:1px solid #e5e7eb; font-size:14px; line-height:1.7; color:#374151;">{$useDateHtml}</td>
+            <td style="padding:14px 12px; border-bottom:1px solid #e5e7eb; font-size:14px; line-height:1.7; color:#374151;">{$itemRoomNameHtml}</td>
+            <td style="padding:14px 12px; border-bottom:1px solid #e5e7eb; font-size:14px; line-height:1.7; color:#374151;">{$usageTimeHtml}</td>
+            <td style="padding:14px 12px; border-bottom:1px solid #e5e7eb; font-size:14px; line-height:1.7; color:#374151;">{$peopleCountHtml}</td>
+            <td style="padding:14px 12px; border-bottom:1px solid #e5e7eb; font-size:14px; line-height:1.7; color:#374151;">
+              <div style="font-weight:bold; color:#111827; margin-bottom:6px;">{$passcodeNameHtml}</div>
+              <div style="display:inline-block; padding:8px 12px; border-radius:10px; background-color:#ffffff; border:1px solid #bfdbfe; font-size:18px; letter-spacing:0.12em; font-weight:bold; color:#0f172a;">{$passcodeHtml}</div>
+              <div style="margin-top:8px; font-size:12px; line-height:1.6; color:#475569;">{$passcodePeriodHtml}</div>
+            </td>
+          </tr>
+HTML;
+    }
+
+    if ($rowsHtml === '') {
+        $rowsHtml = '<tr><td colspan="5" style="padding:20px 16px; font-size:14px; color:#6b7280;">送信対象の予約はありません。</td></tr>';
+    }
+
+    return <<<HTML
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>予約確定のお知らせ</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f6f8; font-family:'Yu Gothic', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; color:#333333;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f4f6f8; margin:0; padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:760px; background-color:#ffffff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;">
+          <tr>
+            <td style="background-color:#2563eb; padding:20px 24px;">
+              <div style="font-size:24px; line-height:1.4; font-weight:bold; color:#ffffff;">
+                予約確定のお知らせ
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:28px 24px 18px 24px;">
+              <p style="margin:0 0 16px 0; font-size:16px; line-height:1.9; color:#374151;">
+                ご予約が確定しました。ご利用日時のご案内と、入室用パスワードをお送りします。
+              </p>
+
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse; border:1px solid #e5e7eb; border-radius:8px; overflow:hidden; margin-bottom:20px;">
+                <tr>
+                  <td style="width:180px; padding:14px 16px; background-color:#f9fafb; border-bottom:1px solid #e5e7eb; font-size:14px; font-weight:bold; color:#111827;">団体名</td>
+                  <td style="padding:14px 16px; border-bottom:1px solid #e5e7eb; font-size:14px; line-height:1.7; color:#374151;">{$organizationNameHtml}</td>
+                </tr>
+                <tr>
+                  <td style="width:180px; padding:14px 16px; background-color:#f9fafb; border-bottom:1px solid #e5e7eb; font-size:14px; font-weight:bold; color:#111827;">対象部屋</td>
+                  <td style="padding:14px 16px; border-bottom:1px solid #e5e7eb; font-size:14px; line-height:1.7; color:#374151;">{$roomNameHtml}</td>
+                </tr>
+                <tr>
+                  <td style="width:180px; padding:14px 16px; background-color:#f9fafb; border-bottom:1px solid #e5e7eb; font-size:14px; font-weight:bold; color:#111827;">対象件数</td>
+                  <td style="padding:14px 16px; border-bottom:1px solid #e5e7eb; font-size:14px; line-height:1.7; color:#374151;">{$countHtml} 件</td>
+                </tr>
+                <tr>
+                  <td style="width:180px; padding:14px 16px; background-color:#f9fafb; font-size:14px; font-weight:bold; color:#111827;">送信日時</td>
+                  <td style="padding:14px 16px; font-size:14px; line-height:1.7; color:#374151;">{$sentAtHtml}</td>
+                </tr>
+              </table>
+
+              <div style="border:1px solid #dbeafe; background-color:#eff6ff; border-radius:12px; padding:18px 18px 16px 18px;">
+                <div style="margin:0 0 12px 0; font-size:18px; font-weight:bold; color:#1d4ed8;">予約一覧と入室用パスワード</div>
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse; background-color:#ffffff; border-radius:10px; overflow:hidden;">
+                  <thead>
+                    <tr>
+                      <th align="left" style="padding:12px; border-bottom:1px solid #e5e7eb; background-color:#eff6ff; font-size:12px; letter-spacing:0.04em; color:#1e3a8a;">使用日</th>
+                      <th align="left" style="padding:12px; border-bottom:1px solid #e5e7eb; background-color:#eff6ff; font-size:12px; letter-spacing:0.04em; color:#1e3a8a;">部屋</th>
+                      <th align="left" style="padding:12px; border-bottom:1px solid #e5e7eb; background-color:#eff6ff; font-size:12px; letter-spacing:0.04em; color:#1e3a8a;">利用時間</th>
+                      <th align="left" style="padding:12px; border-bottom:1px solid #e5e7eb; background-color:#eff6ff; font-size:12px; letter-spacing:0.04em; color:#1e3a8a;">人数</th>
+                      <th align="left" style="padding:12px; border-bottom:1px solid #e5e7eb; background-color:#eff6ff; font-size:12px; letter-spacing:0.04em; color:#1e3a8a;">パスワード</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+{$rowsHtml}
+                  </tbody>
+                </table>
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 24px 30px 24px;">
+              <div style="font-size:12px; line-height:1.9; color:#6b7280;">
+                ※ このメールは自動送信です。<br>
+                ※ 入室用パスワードは第三者へ共有しないでください。<br>
+                ※ ご不明点がある場合は、案内元へお問い合わせください。
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+HTML;
+}
+
+
 function build_reservation_completion_html(array $data): string
 {
     $roomName = (string)($data['room_name'] ?? '');
