@@ -175,58 +175,50 @@ document.addEventListener("DOMContentLoaded", () => {
     return Boolean(dayData.tamoku || dayData.orange);
   }
 
-  function getMonthlyWindow(date) {
-    const start = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
-    const end = new Date(date.getFullYear(), date.getMonth(), 2, 23, 59, 59, 999);
+
+  function isSameMonth(a, b) {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+  }
+
+  function monthSerial(date) {
+    return date.getFullYear() * 12 + date.getMonth();
+  }
+
+  function isNextMonth(target, base) {
+    return monthSerial(target) === monthSerial(base) + 1;
+  }
+
+  function formatMonthLabel(date) {
+    return `${date.getFullYear()}年${date.getMonth() + 1}月`;
+  }
+
+  function getTargetBulkWindow(date) {
+    const start = new Date(date.getFullYear(), date.getMonth() - 1, 1, 0, 0, 0, 0);
+    const end = new Date(date.getFullYear(), date.getMonth() - 1, 2, 23, 59, 59, 999);
     return { start, end };
   }
 
-  function getTemporaryWindow(date) {
-    const rawStart = new Date(date.getFullYear(), date.getMonth(), date.getDate() - 7, 0, 0, 0, 0);
-    const monthStart = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
-    const start = rawStart.getTime() < monthStart.getTime() ? monthStart : rawStart;
-    const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1, 17, 0, 0, 0);
+  function buildWindowSummary(date, now = new Date()) {
+    const applicationDay = startOfDay(now);
+    const targetBulkWindow = getTargetBulkWindow(date);
 
     return {
-      start,
-      end,
-      valid: start.getTime() <= end.getTime(),
-      clippedToMonth: rawStart.getTime() < monthStart.getTime(),
-    };
-  }
-
-  function buildWindowSummary(date) {
-    const monthlyWindow = getMonthlyWindow(date);
-    const temporaryWindow = getTemporaryWindow(date);
-
-    return {
-      monthly: `${padMonthDay(monthlyWindow.start)}〜${padMonthDay(monthlyWindow.end)}`,
-      temporary: temporaryWindow.valid
-        ? `${formatDateTimeLabel(temporaryWindow.start)}〜${formatDateTimeLabel(temporaryWindow.end)}${temporaryWindow.clippedToMonth ? "（月跨ぎ不可のため当月初日に調整）" : ""}`
-        : "なし（月跨ぎ不可のため臨時申請期間がありません）",
-    };
-  }
-
-  function isApplicationDayBlocked(now) {
-    const holidayName = getJapaneseHolidayName(now);
-    return {
-      blocked: isWeekend(now) || Boolean(holidayName),
-      holidayName,
+      currentMonth: `${formatMonthLabel(applicationDay)} 分は当月中に申請可`,
+      nextMonthBulk: `${formatMonthLabel(date)} 分の一括申請日：${formatDateLabel(targetBulkWindow.start)}〜${formatDateLabel(targetBulkWindow.end)}`,
+      sameDay: "同日利用分は使用開始したい時刻まで提出可（時刻は申請書で確認）",
     };
   }
 
   function getApplicationStatus(date, dayData, now = new Date()) {
     const applicationDay = startOfDay(now);
     const targetDay = startOfDay(date);
-    const applicationDayStatus = isApplicationDayBlocked(applicationDay);
-    const monthlyWindow = getMonthlyWindow(date);
-    const temporaryWindow = getTemporaryWindow(date);
-    const inMonthlyWindow = isWithinRange(now, monthlyWindow.start, monthlyWindow.end);
-    const inTemporaryWindow = temporaryWindow.valid && isWithinRange(now, temporaryWindow.start, temporaryWindow.end);
-    const isSameDayApplication = isSameDate(targetDay, applicationDay);
     const isPastDate = targetDay.getTime() < applicationDay.getTime();
-    const isFirstDayOfMonth = date.getDate() === 1;
-    const canApplyByRule = !applicationDayStatus.blocked && !isSameDayApplication && !isPastDate && !isFirstDayOfMonth && (inMonthlyWindow || inTemporaryWindow);
+    const isTodayTarget = isSameDate(targetDay, applicationDay);
+    const isBulkWindow = applicationDay.getDate() === 1 || applicationDay.getDate() === 2;
+    const targetIsCurrentMonth = isSameMonth(targetDay, applicationDay);
+    const targetIsNextMonth = isNextMonth(targetDay, applicationDay);
+    const targetBulkWindow = getTargetBulkWindow(targetDay);
+    const canApplyByRule = !isPastDate && (targetIsCurrentMonth || (targetIsNextMonth && isBulkWindow));
 
     const roomApplications = {
       tamoku: canApplyByRule && !dayData.tamoku,
@@ -235,65 +227,49 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const anyApplicableRoom = roomApplications.tamoku || roomApplications.orange;
     const allRoomsBooked = Boolean(dayData.tamoku && dayData.orange);
-    const isPastDeadline = temporaryWindow.valid && now.getTime() > temporaryWindow.end.getTime() && !inMonthlyWindow;
-    const isBeforeTemporaryWindow = temporaryWindow.valid && now.getTime() < temporaryWindow.start.getTime() && !inMonthlyWindow;
+    const isRuleBlocked = !canApplyByRule;
 
-    let summaryText = "申請期間外です。";
-    let detailText = "現在は申請できません。";
+    let summaryText = "現在は申請対象外です。";
+    let detailText = "この日付は現在の受付対象外です。";
     let badgeClass = "closed";
     let badgeLabel = "申請不可";
 
-    if (isFirstDayOfMonth) {
-      badgeLabel = "月初不可";
-      summaryText = "現行規約上、この月の1日利用分は申請できません。";
-      detailText = "月次申請日は各月1日・2日ですが、当日の予約はできず、臨時申請も月をまたげないため、各月1日の利用申請は受け付けできません。";
-    } else if (applicationDayStatus.blocked) {
-      badgeLabel = applicationDayStatus.holidayName ? "本日祝日" : "本日土日";
-      summaryText = applicationDayStatus.holidayName
-        ? `本日が ${applicationDayStatus.holidayName} のため申請できません。`
-        : "本日が土日のため申請できません。";
-      detailText = "借用日が土日でも、申請日が平日かつ申請期間内であれば申請できます。逆に、本日が土日祝の場合は申請操作ができません。";
-    } else if (isSameDayApplication) {
-      badgeLabel = "当日不可";
-      summaryText = "当日の利用申請はできません。";
-      detailText = "申請は利用日前日までに行ってください。月次申請日であっても当日分は申請できません。";
-    } else if (isPastDate) {
+    if (isPastDate) {
       badgeLabel = "終了日";
       summaryText = "この日はすでに経過しています。";
       detailText = "過去の日付については申請できません。";
     } else if (anyApplicableRoom) {
       badgeClass = "open";
-      badgeLabel = "申請可";
-      summaryText = inMonthlyWindow
-        ? "月次申請期間中のため申請できます。"
-        : "臨時申請期間中のため申請できます。";
-      detailText = inMonthlyWindow
-        ? "本日が月次申請日（各月1日・2日）に入っているため、空いている部屋のみ申請できます。"
-        : "本日が申請可能日であり、利用日の7日前から前日17:00までの臨時申請期間です。空いている部屋のみ申請できます。";
+      badgeLabel = isTodayTarget ? "本日可" : "申請可";
+
+      if (targetIsNextMonth) {
+        summaryText = "翌月分の一括申請期間中のため申請できます。";
+        detailText = "本日が前月1日または2日のため、翌月分の空いている部屋を申請できます。";
+      } else if (isTodayTarget) {
+        summaryText = "本日分も申請できます。";
+        detailText = "規約上、借用申請書類は使用開始したい時刻まで提出できます。システムは日付単位で表示しているため、最終可否は申請書に記載した利用開始時刻で確認してください。";
+      } else {
+        summaryText = "当月分のため申請できます。";
+        detailText = "規約上、当月分は当月中に申請できます。空いている部屋のみ申請できます。";
+      }
     } else if (!anyApplicableRoom && canApplyByRule && allRoomsBooked) {
       badgeLabel = "満室";
-      summaryText = "申請期間内ですが、両部屋とも使用中です。";
-      detailText = "本日は申請可能日ですが、表示上は空き部屋がありません。";
-    } else if (isPastDeadline) {
-      badgeLabel = "締切後";
-      summaryText = "この日の申請期限は終了しています。";
-      detailText = "臨時申請は前日17:00までです。借用日が土日でも、期限内かつ申請日が平日なら申請できます。";
-    } else if (isBeforeTemporaryWindow) {
-      badgeLabel = "期間前";
-      summaryText = "まだ申請開始前です。";
-      detailText = "臨時申請は利用日の7日前から前日17:00まで、月次申請は各月1日・2日のみ受け付けます。なお月をまたぐ臨時申請はできません。";
-    } else if (!temporaryWindow.valid && !inMonthlyWindow) {
-      badgeLabel = "月跨不可";
-      summaryText = "月をまたぐ臨時申請はできません。";
-      detailText = "この日の臨時申請期間は前月にかかるため、臨時申請では受け付けできません。必要に応じて月次申請日に申請してください。";
+      summaryText = "申請可能期間ですが、両部屋とも使用中です。";
+      detailText = "現在の表示上は空き部屋がありません。";
+    } else if (targetIsNextMonth) {
+      badgeLabel = "翌月待ち";
+      summaryText = "翌月分は前月1日・2日のみ申請できます。";
+      detailText = `この日付の申請受付は ${formatDateLabel(targetBulkWindow.start)}〜${formatDateLabel(targetBulkWindow.end)} です。`;
+    } else {
+      badgeLabel = "受付前";
+      summaryText = "まだこの月の申請受付前です。";
+      detailText = "この日付の申請は、原則として前月1日・2日の一括申請期間から受け付けます。";
     }
 
     return {
       applicationDayLabel: formatDateLabel(applicationDay),
-      applicationDayBlocked: applicationDayStatus.blocked,
-      applicationDayHolidayName: applicationDayStatus.holidayName,
-      inMonthlyWindow,
-      inTemporaryWindow,
+      applicationDayBlocked: false,
+      applicationDayHolidayName: "",
       canApplyByRule,
       roomApplications,
       anyApplicableRoom,
@@ -302,14 +278,16 @@ document.addEventListener("DOMContentLoaded", () => {
       badgeLabel,
       summaryText,
       detailText,
-      windowSummary: buildWindowSummary(date),
-      isFirstDayOfMonth,
-      isSameDayApplication,
+      windowSummary: buildWindowSummary(date, now),
+      isBulkWindow,
+      isTodayTarget,
       isPastDate,
-      temporaryWindowValid: temporaryWindow.valid,
-      temporaryWindowClipped: temporaryWindow.clippedToMonth,
+      targetIsCurrentMonth,
+      targetIsNextMonth,
+      isRuleBlocked,
     };
   }
+
 
   async function loadReservationData() {
     const year = currentDate.getFullYear();
@@ -337,6 +315,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return isBooked ? "使用中" : "空き";
   }
 
+
   function showDetail(date) {
     const dayData = getDayData(date);
     const applicationStatus = getApplicationStatus(date, dayData);
@@ -353,13 +332,10 @@ document.addEventListener("DOMContentLoaded", () => {
           <p>${applicationStatus.detailText}</p>
           <ul class="calendar-rule-list">
             <li>判定基準日：${applicationStatus.applicationDayLabel}</li>
-            <li>月次申請日：${applicationStatus.windowSummary.monthly}（各月1日・2日）</li>
-            <li>臨時申請期間：${applicationStatus.windowSummary.temporary}</li>
-            <li>借用日が土日でも、申請日が平日かつ期間内なら申請できます。</li>
-            <li>本日が土日祝の場合は、借用日が平日でも申請できません。</li>
-            <li>月をまたぐ臨時申請はできません。</li>
-            <li>現行規約上、各月1日の利用申請はできません。</li>
-            <li>テスト期間はカレンダーに未反映です。</li>
+            <li>当月分の扱い：${applicationStatus.windowSummary.currentMonth}</li>
+            <li>翌月分の扱い：${applicationStatus.windowSummary.nextMonthBulk}</li>
+            <li>同日利用分：${applicationStatus.windowSummary.sameDay}</li>
+            <li>本日が一括申請日か：${applicationStatus.isBulkWindow ? "はい（1日または2日）" : "いいえ"}</li>
           </ul>
         </div>
 
@@ -396,6 +372,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function createWeekdayHeaders() {
+
     weekdayLabels.forEach((label) => {
       const el = document.createElement("div");
       el.className = "calendar-weekday";
@@ -461,7 +438,7 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         cell.classList.add("cannot-apply");
       }
-      if (applicationStatus.applicationDayBlocked || applicationStatus.isFirstDayOfMonth || applicationStatus.isSameDayApplication) {
+      if (applicationStatus.isRuleBlocked) {
         cell.classList.add("is-rule-blocked");
       }
       if (applicationStatus.allRoomsBooked) {
