@@ -1,107 +1,80 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>利用規約</title>
   <style>
-    body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; margin: 18px; line-height: 1.8; color: #333; }
-    h1 { font-size: 22px; margin: 0 0 10px; }
-    h2 { font-size: 16px; margin: 18px 0 8px; }
-    h3 { font-size: 14px; margin: 14px 0 6px; }
-    ul { padding-left: 1.2em; }
-    .muted { color:#666; font-size: 13px; }
-    .note { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #f5f7ff; color: #4355b9; }
-    .box { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #fafbff; border: 1px solid #e1e6f5; }
-    .download-links a { display: inline-block; margin-right: 12px; }
-    html,
-    body,
-    body * { -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      line-height: 1.9;
+      color: #1f2937;
+      background: #ffffff;
+    }
+    h1, h2 { color: #111827; }
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    section {
+      margin-bottom: 24px;
+      padding: 20px;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      background: #f8fafc;
+    }
+    ul { margin: 0; padding-left: 1.4em; }
   </style>
 </head>
 <body>
-  <h1>貸し部屋予約申請 利用規約</h1>
-  <p class="muted">最終更新：2026-04-03</p>
+  <div class="wrap">
+    <h1>貸し部屋予約 利用規約</h1>
 
-  <h2>1. この画面で扱う規約</h2>
-  <p>本システムは、「多目的室借用規約」と「オレンジの部屋借用規約」の内容をもとに申請案内を表示します。詳細は下部の原文ファイルも参照してください。</p>
+    <section>
+      <h2>1. 予約方法</h2>
+      <ul>
+        <li>予約は本ページの入力フォームから行います。</li>
+        <li>入力項目は、メールアドレス、団体名、部屋、利用日、規約への同意です。</li>
+        <li>予約対象日は、本日から2日後〜2か月先までです。</li>
+      </ul>
+    </section>
 
-  <h2>2. 使用目的</h2>
-  <div class="box">
-    <h3>多目的室</h3>
-    <ul>
-      <li>福岡工業大学学生自治会に所属する公認団体の活動</li>
-      <li>福岡工業大学学生自治会会員で構成された団体の活動</li>
-      <li>福岡工業大学に所属する者で構成された団体の活動</li>
-      <li>その他、多目的室の貸出業務を行う組織が認めた場合</li>
-    </ul>
-  </div>
-  <div class="box">
-    <h3>オレンジの部屋</h3>
-    <ul>
-      <li>福岡工業大学学生自治会に所属する公認団体の活動</li>
-      <li>福岡工業大学学生自治会会員で構成された団体の活動</li>
-      <li>福岡工業大学に所属する者で構成された団体による学術文化的な目的での使用</li>
-      <li>その他、オレンジの部屋の貸出業務を行う組織が認めた場合</li>
-    </ul>
-  </div>
+    <section>
+      <h2>2. 予約の成立</h2>
+      <ul>
+        <li>同じ日・同じ部屋に既存予約がある場合、その予約は成立しません。</li>
+        <li>予約結果は、入力されたメールアドレスに自動送信されます。</li>
+        <li>予約が成立した場合は、入室用パスコードがあわせて通知されます。</li>
+      </ul>
+    </section>
 
-  <h2>3. 申請方法と申請時期</h2>
-  <ul>
-    <li>予約したい日付・内容は、所定の docx 申請書ファイル内に記載してください。</li>
-    <li>借用申請書類は、使用開始したい時刻までに提出する必要があります。</li>
-    <li>使用を希望する月の<strong>前月1日・2日</strong>は、その<strong>翌月分</strong>の一括申請を受け付けます。</li>
-    <li>それ以外の日は、<strong>当月分</strong>の申請を受け付けます。</li>
-    <li>使用希望日程が重複した場合は、申請日時が早い団体を優先します。</li>
-  </ul>
-  <p class="note">例：4月1日・2日は 5月分の申請が可能です。4月3日以降は、4月分の申請を受け付けます。</p>
-  <p class="note">本システムのカレンダーは日付単位で表示します。同日申請の可否は、最終的には申請書に記載された利用開始時刻で確認してください。</p>
+    <section>
+      <h2>3. 入室用パスコード</h2>
+      <ul>
+        <li>入室用パスコードは予約ごとに自動生成されます。</li>
+        <li>通知されたパスコードは、予約対象日の利用を前提に発行されます。</li>
+        <li>第三者への不用意な共有は行わないでください。</li>
+      </ul>
+    </section>
 
-  <h2>4. 使用可能時間</h2>
-  <ul>
-    <li>原則として 9:00 から 20:00 まで使用可能です。</li>
-    <li>貸出業務を行う組織が許可し、活動時間延長に関する手続きが行われている場合はこの限りではありません。</li>
-  </ul>
+    <section>
+      <h2>4. 禁止事項</h2>
+      <ul>
+        <li>虚偽の団体名、メールアドレス、利用日での申請。</li>
+        <li>成立していない予約を成立済みであるかのように扱う行為。</li>
+        <li>他団体の利用を妨げる目的での予約。</li>
+      </ul>
+    </section>
 
-  <h2>5. 許可されない場合・取消される場合</h2>
-  <ul>
-    <li>使用目的に即していない場合</li>
-    <li>以前の利用時に、破損・汚損・紛失・清掃不十分・無許可延長などの不適切行為があった場合</li>
-    <li>改修等により一般的な使用ができない場合</li>
-    <li>クラブハウス内の立入りが制限されている者が使用しようとしている場合</li>
-    <li>使用停止等の処分が発布されている場合</li>
-    <li>その他、貸出業務を行う組織が不適切と判断した場合</li>
-  </ul>
-
-  <h2>6. 使用者の遵守事項</h2>
-  <ul>
-    <li>申請した目的を許可なく変更しないこと</li>
-    <li>備付け物品は使用後に現状へ戻すこと</li>
-    <li>廃棄物等は持ち帰ること</li>
-    <li>破損・汚損・紛失時は損害を賠償すること</li>
-    <li>使用中の事故・盗難等について責任を負うこと</li>
-    <li>その他定められた使用規則を遵守すること</li>
-  </ul>
-
-  <h2>7. その他の条件</h2>
-  <ul>
-    <li>借用予約の取消や申請内容の変更は、使用開始したい時刻までに届け出てください。</li>
-    <li>使用権の譲渡・転貸は禁止です。</li>
-    <li>1か月の使用可能回数には、前月の使用歴や過去6か月以内の処分歴等に関する条件があります。最終判断は各規約本文に従います。</li>
-  </ul>
-
-  <h2>8. カレンダー表示について</h2>
-  <ul>
-    <li>明るく表示されている日付は、その時点で申請可能な日の目安です。</li>
-    <li>暗く表示されている日付は、その時点では申請対象外の日です。</li>
-    <li>各部屋の「空き / 使用中」表示は、現在の予約状況を示します。</li>
-    <li>同日利用分については「使用開始時刻まで」という規約を、システムが時刻単位では判定していない点に注意してください。</li>
-  </ul>
-
-  <h2>9. 規約原文</h2>
-  <div class="download-links">
-    <a href="regulations/tamoku_rules_20260401.docx" target="_blank" rel="noopener">多目的室借用規約（docx）</a>
-    <a href="regulations/orange_rules_20260401.docx" target="_blank" rel="noopener">オレンジの部屋借用規約（docx）</a>
+    <section>
+      <h2>5. 注意事項</h2>
+      <ul>
+        <li>本ページは予約処理用システムです。詳細な運用上のルールが別途ある場合は、総合管理事務局の案内を優先します。</li>
+        <li>システム障害や外部連携障害が発生した場合、管理側から別途連絡することがあります。</li>
+      </ul>
+    </section>
   </div>
 </body>
 </html>

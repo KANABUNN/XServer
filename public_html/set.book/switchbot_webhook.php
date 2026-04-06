@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 
 foreach ([__DIR__ . '/../../apps/switchbot_api.php', __DIR__ . '/../apps/switchbot_api.php', __DIR__ . '/apps/switchbot_api.php'] as $__switchbotHelper) {
@@ -8,14 +7,27 @@ foreach ([__DIR__ . '/../../apps/switchbot_api.php', __DIR__ . '/../apps/switchb
         break;
     }
 }
+foreach ([__DIR__ . '/../../apps/db.php', __DIR__ . '/../apps/db.php', __DIR__ . '/apps/db.php'] as $__dbHelper) {
+    if (is_file($__dbHelper)) {
+        require_once $__dbHelper;
+        break;
+    }
+}
+foreach ([__DIR__ . '/../../apps/reservation_service.php', __DIR__ . '/../apps/reservation_service.php', __DIR__ . '/apps/reservation_service.php'] as $__reservationHelper) {
+    if (is_file($__reservationHelper)) {
+        require_once $__reservationHelper;
+        break;
+    }
+}
 
 try {
     $cfg = load_switchbot_webhook_config();
-    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         respond_json(['ok' => false, 'message' => 'POST only'], 405);
     }
 
-    $providedToken = isset($_GET['token']) ? (string)$_GET['token'] : null;
+    $providedToken = trim((string)($_GET['token'] ?? ''));
     if (!switchbot_validate_webhook_secret($cfg, $providedToken)) {
         respond_json(['ok' => false, 'message' => 'invalid token'], 403);
     }
@@ -29,17 +41,27 @@ try {
     $receivedAt = switchbot_now_string($cfg);
     switchbot_append_webhook_event($cfg, [
         'received_at' => $receivedAt,
-        'remote_addr' => (string)($_SERVER['REMOTE_ADDR'] ?? ''),
-        'user_agent' => (string)($_SERVER['HTTP_USER_AGENT'] ?? ''),
         'payload' => $payload,
     ]);
 
     $updated = switchbot_apply_webhook_event_to_store($cfg, $payload);
 
+    if (is_array($updated) && function_exists('db_connect') && function_exists('reservation_sync_from_switchbot_request')) {
+        try {
+            /** @var mixed $appCfg */
+            $appCfg = require __DIR__ . '/../../apps/config.php';
+            if (is_array($appCfg)) {
+                $pdo = db_connect($appCfg);
+                reservation_sync_from_switchbot_request($pdo, $updated);
+            }
+        } catch (Throwable $syncError) {
+            error_log('[switchbot_webhook][reservation_sync] ' . $syncError->getMessage());
+        }
+    }
+
     respond_json([
         'ok' => true,
-        'updated' => $updated !== null,
-        'received_at' => $receivedAt,
+        'updated' => $updated,
     ]);
 } catch (Throwable $e) {
     error_log('[switchbot_webhook] ' . $e->getMessage());
@@ -56,15 +78,12 @@ function load_switchbot_webhook_config(): array
     ];
 
     foreach ($candidates as $path) {
-        if (!is_file($path)) {
-            continue;
+        if (is_file($path)) {
+            $cfg = require $path;
+            if (is_array($cfg)) {
+                return $cfg;
+            }
         }
-
-        $cfg = require $path;
-        if (!is_array($cfg)) {
-            throw new RuntimeException('config.php が配列を返していません。');
-        }
-        return $cfg;
     }
 
     throw new RuntimeException('config.php が見つかりません。');

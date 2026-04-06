@@ -1,57 +1,57 @@
 <?php
-
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../apps/admin_auth.php';
 
 $user = admin_auth_require_login();
 $csrfToken = admin_auth_get_csrf_token();
+
+function admin_index_h(?string $value): string
+{
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+}
 ?>
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>予約データ管理</title>
-  <meta name="admin-user-display-name" content="<?php echo admin_auth_h((string)($user['display_name'] ?? '')); ?>">
-  <meta name="admin-user-role" content="<?php echo admin_auth_h((string)($user['role_key'] ?? 'viewer')); ?>">
-  <meta name="admin-user-role-label" content="<?php echo admin_auth_h((string)($user['role_label'] ?? '閲覧者')); ?>">
-  <meta name="admin-csrf-token" content="<?php echo admin_auth_h($csrfToken); ?>">
-  <script>window.AdminBootstrap = <?php echo json_encode([
-    'currentUser' => [
-      'id' => (int)($user['id'] ?? 0),
-      'login_id' => (string)($user['login_id'] ?? ''),
-      'display_name' => (string)($user['display_name'] ?? ''),
-      'role_key' => (string)($user['role_key'] ?? 'viewer'),
-      'role_label' => (string)($user['role_label'] ?? '閲覧者'),
-      'role_keys' => array_values(array_map('strval', (array)($user['role_keys'] ?? []))),
-      'permissions' => array_values(array_map('strval', admin_auth_user_permissions($user))),
-    ],
-    'csrfToken' => $csrfToken,
-  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;</script>
-  <link rel="stylesheet" href="./css/reservation-admin.css">
-  <link rel="stylesheet" href="./css/reservation-admin-responsive.css">
+  <title>貸し部屋予約 管理画面</title>
+  <script>
+    window.AdminBootstrap = <?php echo json_encode([
+      'currentUser' => [
+        'id' => (int)($user['id'] ?? 0),
+        'login_id' => (string)($user['login_id'] ?? ''),
+        'display_name' => (string)($user['display_name'] ?? ''),
+        'role_key' => (string)($user['role_key'] ?? 'viewer'),
+        'role_label' => (string)($user['role_label'] ?? '閲覧者'),
+        'permissions' => array_values(array_map('strval', admin_auth_user_permissions($user))),
+      ],
+      'csrfToken' => $csrfToken,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+  </script>
+  <link rel="stylesheet" href="./css/reservation-admin.css?v=20260406a">
+  <link rel="stylesheet" href="./css/reservation-admin-responsive.css?v=20260406a">
 </head>
 <body>
   <div class="admin-shell">
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <h1>予約管理</h1>
-        <p>申請確認 / 確定予約管理</p>
+        <h1>貸し部屋予約</h1>
+        <p>自動予約システム 管理画面</p>
       </div>
 
       <nav class="sidebar-nav">
-        <button type="button" class="sidebar-link is-active" data-view-target="applicationView">予約申請状況</button>
-        <button type="button" class="sidebar-link" data-view-target="calendarView">予約状況管理</button>
-        <button type="button" class="sidebar-link" data-view-target="switchbotView">借用部屋管理</button>
-        <button type="button" class="sidebar-link" data-view-target="mailView">予約通知メール</button>
+        <button type="button" class="sidebar-link is-active" data-view-target="dashboardView">予約一覧</button>
+        <button type="button" class="sidebar-link" data-view-target="calendarView">月間カレンダー</button>
+        <button type="button" class="sidebar-link" data-view-target="passcodeView">パスコード状況</button>
         <button type="button" class="sidebar-link" data-view-target="adminView">管理設定</button>
       </nav>
 
       <div class="sidebar-user">
         <div class="sidebar-user-card">
-          <strong><?php echo admin_auth_h((string)($user['display_name'] ?? '')); ?></strong>
-          <span><?php echo admin_auth_h((string)($user['role_label'] ?? '閲覧者')); ?> / <?php echo admin_auth_h((string)($user['login_id'] ?? '')); ?></span>
+          <strong><?php echo admin_index_h((string)($user['display_name'] ?? '')); ?></strong>
+          <span><?php echo admin_index_h((string)($user['role_label'] ?? '閲覧者')); ?> / <?php echo admin_index_h((string)($user['login_id'] ?? '')); ?></span>
         </div>
         <form method="post" action="logout.php" class="sidebar-logout-form">
           <?php echo admin_auth_csrf_field(); ?>
@@ -61,753 +61,321 @@ $csrfToken = admin_auth_get_csrf_token();
     </aside>
 
     <main class="content-shell">
-      <section id="applicationView" class="content-view is-active">
-<div class="wrap">
-    <header class="page-head">
-      <div>
-        <h1>予約申請状況</h1>
-        <p class="lead">予約申請の検索・詳細確認・ダウンロード・削除・確定登録を行えます。</p>
-      </div>
-      <div class="head-actions">
-        <button id="applicationCsvExportBtn" type="button" class="secondary">CSV出力</button>
-        <button id="reloadBtn" type="button" class="secondary">再読込</button>
-      </div>
-    </header>
+      <section id="dashboardView" class="content-view is-active">
+        <div class="wrap">
+          <header class="page-head">
+            <div>
+              <h1>予約一覧</h1>
+              <p class="lead">利用者側から自動処理された予約の一覧です。確定 / 却下 / 要確認 / メール送信状況を確認できます。</p>
+            </div>
+            <div class="head-actions">
+              <button id="dashboardReloadBtn" type="button" class="secondary">再読込</button>
+            </div>
+          </header>
 
-    <section class="panel">
-      <div class="filters-grid">
-        <label class="field field-wide">
-          <span>キーワード検索</span>
-          <input id="searchInput" type="search" placeholder="メールアドレス・部屋名・備考・ファイル名で検索">
-        </label>
+          <section class="panel">
+            <div class="summary-grid">
+              <article class="summary-card">
+                <span class="summary-label">今後の確定予約</span>
+                <strong id="summaryConfirmedCount">-</strong>
+              </article>
+              <article class="summary-card">
+                <span class="summary-label">SwitchBot 要確認</span>
+                <strong id="summarySwitchbotIssueCount">-</strong>
+              </article>
+              <article class="summary-card">
+                <span class="summary-label">本日の新規受付</span>
+                <strong id="summaryTodayCount">-</strong>
+              </article>
+              <article class="summary-card">
+                <span class="summary-label">未送信メール</span>
+                <strong id="summaryMailIssueCount">-</strong>
+              </article>
+            </div>
 
-        <label class="field">
-          <span>部屋</span>
-          <select id="roomFilter">
-            <option value="">すべて</option>
-          </select>
-        </label>
+            <div class="filters-grid">
+              <label class="field">
+                <span>利用月</span>
+                <input type="month" id="dashboardMonth">
+              </label>
 
-        <label class="field">
-          <span>申請ステータス</span>
-          <select id="statusFilter">
-            <option value="">すべて</option>
-            <option value="pending">未確認</option>
-            <option value="reviewing">確認中</option>
-            <option value="confirmed">確定</option>
-            <option value="rejected">却下</option>
-          </select>
-        </label>
+              <label class="field">
+                <span>部屋</span>
+                <select id="dashboardRoom">
+                  <option value="">すべて</option>
+                  <option value="tamoku">多目的室</option>
+                  <option value="orange">オレンジの部屋</option>
+                </select>
+              </label>
 
-        <label class="field">
-          <span>受付日（開始）</span>
-          <input id="dateFromInput" type="date">
-        </label>
+              <label class="field">
+                <span>予約状態</span>
+                <select id="dashboardStatus">
+                  <option value="">すべて</option>
+                  <option value="confirmed">確定</option>
+                  <option value="rejected">却下</option>
+                  <option value="error">要確認</option>
+                  <option value="pending">保留</option>
+                </select>
+              </label>
 
-        <label class="field">
-          <span>受付日（終了）</span>
-          <input id="dateToInput" type="date">
-        </label>
+              <label class="field field-wide">
+                <span>キーワード</span>
+                <input type="search" id="dashboardKeyword" placeholder="メールアドレス・団体名で検索">
+              </label>
+            </div>
 
-        <label class="field">
-          <span>並び替え項目</span>
-          <select id="sortFieldSelect">
-            <option value="created_at">受付日時</option>
-            <option value="id">ID</option>
-            <option value="email">メールアドレス</option>
-            <option value="room">予約部屋</option>
-            <option value="original_name">元の名前</option>
-            <option value="stored_name">保存後の名前</option>
-            <option value="application_status">申請ステータス</option>
-          </select>
-        </label>
+            <div class="toolbar">
+              <button id="dashboardSearchBtn" type="button">検索</button>
+              <button id="dashboardClearBtn" type="button" class="secondary">条件クリア</button>
+            </div>
 
-        <label class="field">
-          <span>並び順</span>
-          <select id="sortDirSelect">
-            <option value="desc">降順</option>
-            <option value="asc">昇順</option>
-          </select>
-        </label>
+            <div class="meta-row">
+              <div class="meta" id="dashboardMetaText">読み込み前です。</div>
+              <div class="status" id="dashboardStatusText" aria-live="polite"></div>
+            </div>
 
-        <label class="field">
-          <span>表示件数</span>
-          <select id="perPageSelect">
-            <option value="20">20件</option>
-            <option value="50" selected>50件</option>
-            <option value="100">100件</option>
-            <option value="200">200件</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="toolbar">
-        <button id="searchBtn" type="button">検索</button>
-        <button id="clearBtn" type="button" class="secondary">条件クリア</button>
-      </div>
-
-      <div class="meta-row">
-        <div class="meta" id="metaText">読み込み前です。</div>
-        <div class="view-mode-toggle" aria-label="表示形式">
-          <button type="button" class="ghost mode-btn" data-view-mode-btn data-view-mode="table" aria-pressed="false">表</button>
-          <button type="button" class="ghost mode-btn" data-view-mode-btn data-view-mode="card" aria-pressed="false">カード</button>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>受付日時</th>
+                    <th>利用日</th>
+                    <th>部屋</th>
+                    <th>団体名</th>
+                    <th>メール</th>
+                    <th>予約状態</th>
+                    <th>パスコード</th>
+                    <th>SwitchBot</th>
+                    <th>メール</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboardTableBody">
+                  <tr><td colspan="10" class="empty">読み込み前です。</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
-        <div class="status" id="statusText" aria-live="polite"></div>
-      </div>
-
-      <div class="chips" id="activeFilters"></div>
-
-      <div class="table-wrap js-mode-table" id="applicationTableWrap">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>受付日時</th>
-              <th>メールアドレス</th>
-              <th>予約部屋</th>
-              <th>申請ステータス</th>
-              <th>元の名前</th>
-              <th>保存後の名前</th>
-              <th>備考</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="tableBody">
-            <tr><td colspan="9" class="empty">データを読み込んでいます…</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="card-list js-mode-card" id="applicationCardList" aria-live="polite"></div>
-
-      <div class="pagination">
-        <button id="prevPageBtn" type="button" class="secondary">前へ</button>
-        <span id="pageInfo">-</span>
-        <button id="nextPageBtn" type="button" class="secondary">次へ</button>
-      </div>
-    </section>
-  </div>
       </section>
 
       <section id="calendarView" class="content-view">
-  <div class="wrap">
-    <header class="page-head">
-      <div>
-        <h1>予約状況管理</h1>
-        <p class="lead">確定予約（カレンダー）の月間表示と一覧確認を行えます。</p>
-      </div>
-      <div class="head-actions">
-        <button id="calendarCsvExportBtn" type="button" class="secondary">CSV出力</button>
-        <button id="calendarReloadBtn" type="button" class="secondary">再読込</button>
-      </div>
-    </header>
-
-    <section class="panel">
-      <div class="filters-grid">
-        <label class="field">
-          <span>表示月</span>
-          <input id="calendarMonthInput" type="month">
-        </label>
-
-        <label class="field">
-          <span>部屋</span>
-          <select id="calendarRoomFilter">
-            <option value="">すべて</option>
-            <option value="tamoku">多目的室</option>
-            <option value="orange">オレンジの部屋</option>
-          </select>
-        </label>
-
-        <div class="field field-wide">
-          <span>操作</span>
-          <div class="toolbar" style="justify-content:flex-start; gap:8px;">
-            <button id="calendarPrevMonthBtn" type="button" class="secondary">前月</button>
-            <button id="calendarTodayBtn" type="button" class="secondary">今月</button>
-            <button id="calendarNextMonthBtn" type="button" class="secondary">次月</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="meta-row">
-        <div class="meta" id="calendarMetaText">確定予約を読み込みます。</div>
-        <div class="view-mode-toggle" aria-label="表示形式">
-          <button type="button" class="ghost mode-btn" data-view-mode-btn data-view-mode="table" aria-pressed="false">表</button>
-          <button type="button" class="ghost mode-btn" data-view-mode-btn data-view-mode="card" aria-pressed="false">カード</button>
-        </div>
-        <div class="status" id="calendarStatusText" aria-live="polite"></div>
-      </div>
-
-      <div class="calendar-legend">
-        <span class="legend-item"><i class="legend-dot is-room"></i> 予約あり</span>
-        <span class="legend-item"><i class="legend-dot"></i> 予約なし</span>
-      </div>
-
-      <div id="calendarGrid" class="calendar-grid">
-        <div class="empty" style="grid-column: 1 / -1;">「予約申請状況」画面の「確定」から確定予約を登録できます。</div>
-      </div>
-
-      <div class="table-wrap calendar-list-wrap js-mode-table" id="calendarTableWrap">
-        <table>
-          <thead>
-            <tr>
-              <th>使用日</th>
-              <th>部屋</th>
-              <th>団体名</th>
-              <th>人数</th>
-              <th>利用時間</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="calendarListBody">
-            <tr><td colspan="6" class="empty">読み込み前です。</td></tr>
-          </tbody>
-        </table>
-      
-
-      <div class="card-list js-mode-card" id="calendarCardList" aria-live="polite"></div>
-</div>
-    </section>
-  </div>
-</section>
-
-
-      <section id="mailView" class="content-view">
-  <div class="wrap">
-    <header class="page-head">
-      <div>
-        <h1>予約通知メール</h1>
-        <p class="lead">確定済み予約と発行済みパスコードを複数選択し、一括予約した団体向けに予約確定と入室用パスワードをまとめてメール送信します。</p>
-      </div>
-      <div class="head-actions">
-        <button id="reservationMailCsvExportBtn" type="button" class="secondary">送信履歴CSV</button>
-        <button id="reservationMailReloadBtn" type="button" class="secondary">候補・履歴を再読込</button>
-      </div>
-    </header>
-
-    <section class="panel">
-      <div id="mailViewerNotice" class="mail-note" hidden>
-        <strong>閲覧専用</strong>
-        <p>このロールでは送信候補やパスコードは表示されません。送信履歴と CSV 出力のみ利用できます。</p>
-      </div>
-
-      <div id="mailComposeArea">
-      <div class="mail-note">
-        <strong>送信内容</strong>
-        <p>既存の SMTP 設定を利用して HTML メールを送信します。複数の確定済み予約と対応する部屋ごとのパスワードを 1 通にまとめて案内します。</p>
-      </div>
-
-      <div class="mail-form-grid">
-        <label class="field field-wide">
-          <span>宛先メールアドレス <strong style="color: var(--danger)">*</strong></span>
-          <div class="mail-address-row">
-            <input id="reservationMailTo" type="email" inputmode="email" placeholder="例：user@example.jp" autocomplete="email" required>
-            <button id="reservationMailAppendBeneBtn" type="button" class="secondary mail-domain-btn">@bene.fit.ac.jp を追加</button>
-          </div>
-        </label>
-
-        <label class="field">
-          <span>確定済み予約（複数選択可） <strong style="color: var(--danger)">*</strong></span>
-          <select id="reservationMailReservationSelect" class="mail-multi-select" multiple size="8" required>
-          </select>
-          <small class="field-help">Ctrl / ⌘ を押しながら複数選択できます。選択した予約に対応するパスコードは自動で選択されます。</small>
-        </label>
-
-        <label class="field">
-          <span>発行済みパスコード（複数選択可） <strong style="color: var(--danger)">*</strong></span>
-          <select id="reservationMailPasscodeSelect" class="mail-multi-select" multiple size="8" required>
-          </select>
-          <small class="field-help">必要に応じて手動でも調整できます。送信時には使用日・部屋に対応するパスコードを照合します。</small>
-        </label>
-      </div>
-
-      <div class="meta-row">
-        <div class="meta" id="reservationMailMetaText">候補を読み込みます。</div>
-        <div class="status" id="reservationMailStatusText" aria-live="polite"></div>
-      </div>
-
-      <div class="mail-summary-grid">
-        <section class="mail-summary-card">
-          <div class="mail-summary-head">
-            <h2>予約内容</h2>
-            <p class="dialog-sub">選択した確定済み予約の一覧です。</p>
-          </div>
-          <div id="reservationMailReservationSummary" class="mail-summary-list">
-            <div class="detail-empty">予約を選択してください。</div>
-          </div>
-        </section>
-
-        <section class="mail-summary-card">
-          <div class="mail-summary-head">
-            <h2>パスコード内容</h2>
-            <p class="dialog-sub">送信対象として選択されている発行済みパスコードの一覧です。</p>
-          </div>
-          <div id="reservationMailPasscodeSummary" class="mail-summary-list">
-            <div class="detail-empty">パスコードを選択してください。</div>
-          </div>
-        </section>
-      </div>
-
-      <div class="dialog-actions mail-send-actions">
-        <button id="reservationMailSendBtn" type="button">メール送信</button>
-      </div>
-      </div>
-
-      <section class="mail-history-section">
-        <div class="switchbot-room-header">
-          <div>
-            <h2>送信履歴</h2>
-            <p class="dialog-sub" id="reservationMailHistoryMetaText">読み込み前です。</p>
-          </div>
-        </div>
-
-        <div class="meta-row switchbot-meta-row-tight">
-          <div class="status" id="reservationMailHistoryStatusText" aria-live="polite"></div>
-        </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>送信日時</th>
-                <th>状態</th>
-                <th>宛先</th>
-                <th>件名</th>
-                <th>部屋</th>
-                <th>使用日</th>
-                <th>団体名</th>
-                <th>パスワード</th>
-                <th>エラー</th>
-              </tr>
-            </thead>
-            <tbody id="reservationMailHistoryBody">
-              <tr><td colspan="10" class="empty">読み込み前です。</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </section>
-  </div>
-</section>
-
-      <section id="switchbotView" class="content-view">
-  <div class="wrap">
-    <header class="page-head">
-      <div>
-        <h1>借用部屋管理</h1>
-        <p class="lead">SwitchBot API を使って、多目的室・オレンジの部屋のキーパッドへ「期間内に有効」のパスワードを追加し、Webhook で最終結果を追跡します。</p>
-      </div>
-      <div class="head-actions">
-        <button id="switchbotReloadBtn" type="button" class="secondary">再読込</button>
-      </div>
-    </header>
-
-    <section class="panel">
-      <div class="meta-row">
-        <div class="meta" id="switchbotMetaText">SwitchBot 設定を確認します。</div>
-        <div class="status" id="switchbotStatusText" aria-live="polite"></div>
-      </div>
-
-      <div class="switchbot-note">
-        <strong>注意</strong>
-        <p>SwitchBot の Keypad / Keypad Touch 系のパスワード作成は非同期処理です。下の Webhook 設定を有効にすると、createKey の成功 / 失敗をこの画面で追跡できます。</p>
-      </div>
-
-      <div id="switchbotRoomGrid" class="switchbot-room-grid">
-        <article class="switchbot-room-card">
-          <div class="switchbot-room-header">
+        <div class="wrap">
+          <header class="page-head">
             <div>
-              <h2>多目的室</h2>
-              <p class="dialog-sub">読込中です…</p>
+              <h1>月間カレンダー</h1>
+              <p class="lead">確定している予約のみを月単位で確認できます。</p>
             </div>
-          </div>
-        </article>
-      </div>
+            <div class="head-actions">
+              <button id="calendarReloadBtn" type="button" class="secondary">再読込</button>
+            </div>
+          </header>
 
-      <section class="switchbot-command-panel">
-        <div class="switchbot-room-header">
-          <div>
-            <h2>直近のパスワード発行履歴</h2>
-            <p class="dialog-sub">createKey 要求と webhook の戻りをまとめて表示します。</p>
-          </div>
+          <section class="panel">
+            <div class="filters-grid">
+              <label class="field">
+                <span>表示月</span>
+                <input type="month" id="calendarMonth">
+              </label>
+            </div>
+
+            <div class="meta-row">
+              <div class="meta" id="calendarMetaText">読み込み前です。</div>
+              <div class="status" id="calendarStatusText" aria-live="polite"></div>
+            </div>
+
+            <div class="calendar-admin-grid" id="calendarAdminGrid"></div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>利用日</th>
+                    <th>部屋</th>
+                    <th>団体名</th>
+                    <th>メール</th>
+                    <th>パスコード</th>
+                    <th>SwitchBot</th>
+                  </tr>
+                </thead>
+                <tbody id="calendarListBody">
+                  <tr><td colspan="6" class="empty">読み込み前です。</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
+      </section>
 
-        <div id="switchbotCommandList" class="switchbot-command-list">
-          <div class="empty">まだ履歴がありません。</div>
+      <section id="passcodeView" class="content-view">
+        <div class="wrap">
+          <header class="page-head">
+            <div>
+              <h1>パスコード状況</h1>
+              <p class="lead">発行済みパスコードと SwitchBot 反映状況の最新一覧です。</p>
+            </div>
+            <div class="head-actions">
+              <button id="passcodeReloadBtn" type="button" class="secondary">再読込</button>
+            </div>
+          </header>
+
+          <section class="panel">
+            <div class="meta-row">
+              <div class="meta" id="passcodeMetaText">読み込み前です。</div>
+              <div class="status" id="passcodeStatusText" aria-live="polite"></div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>利用日</th>
+                    <th>部屋</th>
+                    <th>団体名</th>
+                    <th>メール</th>
+                    <th>パスコード</th>
+                    <th>有効期間</th>
+                    <th>SwitchBot</th>
+                    <th>request_id</th>
+                  </tr>
+                </thead>
+                <tbody id="passcodeTableBody">
+                  <tr><td colspan="8" class="empty">読み込み前です。</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
       </section>
 
-      <section class="switchbot-webhook-panel">
-        <div class="switchbot-room-header">
-          <div>
-            <h2>Webhook 設定</h2>
-            <p class="dialog-sub" id="switchbotWebhookSummary">現在の登録状態を確認します。</p>
-          </div>
-          <div class="switchbot-webhook-actions">
-            <button id="switchbotWebhookSyncBtn" type="button">このURLで登録/更新</button>
-            <button id="switchbotWebhookToggleBtn" type="button" class="secondary">有効化</button>
-          </div>
-        </div>
+      <section id="adminView" class="content-view">
+        <div class="wrap">
+          <header class="page-head">
+            <div>
+              <h1>管理設定</h1>
+              <p class="lead">管理者アカウントと監査ログを確認できます。</p>
+            </div>
+            <div class="head-actions">
+              <button id="adminReloadBtn" type="button" class="secondary">再読込</button>
+            </div>
+          </header>
 
-        <div class="switchbot-webhook-urlbox">
-          <div>
-            <div class="switchbot-urlbox-label">提案 URL</div>
-            <code id="switchbotSuggestedUrl">読込中…</code>
-          </div>
-          <p class="switchbot-room-note">config.php の <code>switchbot.webhook_secret</code> を設定すると、URL にトークンを付与して簡易的な検証を行います。</p>
-        </div>
+          <section class="panel admin-users-section">
+            <div class="page-head page-head-compact">
+              <div>
+                <h2>管理者アカウント</h2>
+                <p class="lead">viewer / user / admin の管理を行えます。</p>
+              </div>
+            </div>
 
-        <div class="meta-row switchbot-meta-row-tight">
-          <div class="meta" id="switchbotWebhookStatusText">SwitchBot Cloud 上の webhook 設定を確認します。</div>
-        </div>
+            <div class="calendar-form-grid">
+              <input type="hidden" id="adminUserId">
 
-        <div id="switchbotWebhookList" class="switchbot-webhook-list">
-          <div class="empty">読み込み前です。</div>
+              <label class="field">
+                <span>ログインID</span>
+                <input type="text" id="adminLoginId" maxlength="100" placeholder="例：admin.taro">
+              </label>
+
+              <label class="field">
+                <span>表示名</span>
+                <input type="text" id="adminDisplayName" maxlength="100" placeholder="例：総務 太郎">
+              </label>
+
+              <label class="field field-wide">
+                <span>メールアドレス</span>
+                <input type="email" id="adminEmail" maxlength="255" placeholder="例：admin@example.jp">
+              </label>
+
+              <label class="field">
+                <span>ロール</span>
+                <select id="adminRoleKey">
+                  <option value="viewer">閲覧者 (viewer)</option>
+                  <option value="user">編集者 (user)</option>
+                  <option value="admin">管理者 (admin)</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>状態</span>
+                <select id="adminIsActive">
+                  <option value="1">有効</option>
+                  <option value="0">無効</option>
+                </select>
+              </label>
+
+              <label class="field field-wide">
+                <span>パスワード <small>※更新時は空欄で変更なし</small></span>
+                <input type="password" id="adminPassword" minlength="10" placeholder="10文字以上">
+              </label>
+            </div>
+
+            <div class="toolbar admin-toolbar">
+              <button id="adminUserCreateBtn" type="button">新規作成</button>
+              <button id="adminUserUpdateBtn" type="button">更新保存</button>
+              <button id="adminUserResetBtn" type="button" class="secondary">入力をクリア</button>
+            </div>
+
+            <div class="meta-row">
+              <div class="meta" id="adminUsersMetaText">読み込み前です。</div>
+              <div class="status" id="adminUsersStatusText" aria-live="polite"></div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>ログインID</th>
+                    <th>表示名</th>
+                    <th>メールアドレス</th>
+                    <th>ロール</th>
+                    <th>状態</th>
+                    <th>最終ログイン</th>
+                  </tr>
+                </thead>
+                <tbody id="adminUsersTableBody">
+                  <tr><td colspan="7" class="empty">読み込み前です。</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel admin-audit-section">
+            <div class="page-head page-head-compact">
+              <div>
+                <h2>監査ログ</h2>
+                <p class="lead">ログイン、管理者操作などの直近ログです。</p>
+              </div>
+            </div>
+
+            <div class="meta-row">
+              <div class="meta" id="auditMetaText">読み込み前です。</div>
+              <div class="status" id="auditStatusText" aria-live="polite"></div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>日時</th>
+                    <th>操作</th>
+                    <th>操作者</th>
+                    <th>対象</th>
+                    <th>概要</th>
+                  </tr>
+                </thead>
+                <tbody id="auditTableBody">
+                  <tr><td colspan="5" class="empty">読み込み前です。</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
       </section>
-    </section>
-  </div>
-</section>
-
-        <section id="adminView" class="content-view">
-  <div class="wrap">
-    <header class="page-head">
-      <div>
-        <h1>管理設定</h1>
-        <p class="lead">管理者アカウントの管理と監査ログの確認を行います。</p>
-      </div>
-      <div class="head-actions">
-        <button id="adminReloadBtn" type="button" class="secondary">再読込</button>
-      </div>
-    </header>
-
-    <section class="panel admin-users-section">
-      <div class="page-head page-head-compact">
-        <div>
-          <h2>管理者アカウント</h2>
-          <p class="lead">viewer / user / admin の割り当てと有効・無効の管理を行えます。</p>
-        </div>
-      </div>
-
-      <div class="calendar-form-grid">
-        <input type="hidden" id="adminUserId">
-
-        <label class="field">
-          <span>ログインID</span>
-          <input type="text" id="adminLoginId" maxlength="100" placeholder="例：admin.taro">
-        </label>
-
-        <label class="field">
-          <span>表示名</span>
-          <input type="text" id="adminDisplayName" maxlength="100" placeholder="例：総務 太郎">
-        </label>
-
-        <label class="field field-wide">
-          <span>メールアドレス</span>
-          <input type="email" id="adminEmail" maxlength="255" placeholder="例：admin@example.jp">
-        </label>
-
-        <label class="field">
-          <span>ロール</span>
-          <select id="adminRoleKey">
-            <option value="viewer">閲覧者 (viewer)</option>
-            <option value="user">編集者 (user)</option>
-            <option value="admin">管理者 (admin)</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>状態</span>
-          <select id="adminIsActive">
-            <option value="1">有効</option>
-            <option value="0">無効</option>
-          </select>
-        </label>
-
-        <label class="field field-wide">
-          <span>パスワード <small>※更新時は空欄で変更なし</small></span>
-          <input type="password" id="adminPassword" minlength="10" placeholder="10文字以上">
-        </label>
-      </div>
-
-      <div class="toolbar admin-toolbar">
-        <button id="adminUserCreateBtn" type="button">新規作成</button>
-        <button id="adminUserUpdateBtn" type="button">更新保存</button>
-        <button id="adminUserResetBtn" type="button" class="secondary">入力をクリア</button>
-      </div>
-
-      <div class="meta-row">
-        <div class="meta" id="adminUsersMetaText">管理者アカウントを読み込みます。</div>
-        <div class="status" id="adminUsersStatusText" aria-live="polite"></div>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>ログインID</th>
-              <th>表示名</th>
-              <th>メールアドレス</th>
-              <th>ロール</th>
-              <th>状態</th>
-              <th>最終ログイン</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="adminUsersBody">
-            <tr><td colspan="8" class="empty">読み込み前です。</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="panel admin-audit-section">
-      <div class="page-head page-head-compact">
-        <div>
-          <h2>監査ログ</h2>
-          <p class="lead">重要操作の履歴を新しい順で表示します。</p>
-        </div>
-      </div>
-
-      <div class="meta-row">
-        <div class="meta" id="adminAuditMetaText">監査ログを読み込みます。</div>
-        <div class="status" id="adminAuditStatusText" aria-live="polite"></div>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>日時</th>
-              <th>操作者</th>
-              <th>操作</th>
-              <th>対象</th>
-              <th>概要</th>
-            </tr>
-          </thead>
-          <tbody id="adminAuditBody">
-            <tr><td colspan="6" class="empty">読み込み前です。</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-  </div>
-      </section>
-
     </main>
   </div>
 
-
-  <dialog id="switchbotCommandDialog" class="detail-dialog">
-    <div class="dialog-shell">
-      <div class="dialog-head">
-        <div>
-          <h2>発行済みパスワード詳細</h2>
-          <p id="switchbotCommandSubText" class="dialog-sub">local_request_id -</p>
-        </div>
-        <button type="button" class="ghost" id="switchbotCommandCloseBtn">閉じる</button>
-      </div>
-
-      <div id="switchbotCommandDetailStatus" class="status"></div>
-
-      <div id="switchbotCommandDetailGrid" class="detail-grid">
-        <div class="detail-empty">詳細を読み込んでいます…</div>
-      </div>
-
-      <section class="switchbot-detail-section">
-        <div class="switchbot-room-header switchbot-detail-head">
-          <div>
-            <h3>保存済み詳細JSON</h3>
-            <p class="dialog-sub">JSON に保持している詳細設定と API 応答 / webhook 情報です。</p>
-          </div>
-        </div>
-        <pre id="switchbotCommandDetailJson" class="switchbot-json-view">読み込み前です。</pre>
-      </section>
-    </div>
-  </dialog>
-
-
-<dialog id="detailDialog" class="detail-dialog">
-    <form method="dialog" class="dialog-shell">
-      <div class="dialog-head">
-        <div>
-          <h2>予約詳細</h2>
-          <p id="detailSubText" class="dialog-sub">ID -</p>
-        </div>
-        <button type="submit" class="ghost">閉じる</button>
-      </div>
-
-      <div id="detailStatus" class="status"></div>
-
-      <div class="detail-grid" id="detailGrid">
-        <div class="detail-empty">詳細を読み込んでいます…</div>
-      </div>
-
-      <div class="detail-status-editor">
-        <label class="field">
-          <span>申請ステータス</span>
-          <select id="detailApplicationStatusSelect">
-            <option value="pending">未確認</option>
-            <option value="reviewing">確認中</option>
-            <option value="confirmed">確定</option>
-            <option value="rejected">却下</option>
-          </select>
-        </label>
-        <button id="detailApplicationStatusSaveBtn" type="button" class="secondary">ステータス更新</button>
-      </div>
-
-      <div class="dialog-actions">
-        <button id="detailDownloadBtn" type="button">ダウンロード</button>
-        <button id="detailDeleteBtn" type="button" class="danger">削除</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="calendarAddDialog" class="detail-dialog">
-    <div class="dialog-shell">
-      <div class="dialog-head">
-        <div>
-         <h2>確定予約に登録</h2>
-         <p class="dialog-sub" id="calendarAddSubText">申請ID -</p>
-       </div>
-       <button type="button" class="ghost" id="calendarAddCloseBtn">閉じる</button>
-      </div>
-
-     <div class="calendar-form-grid">
-       <label class="field">
-          <span>使用日 <strong style="color: var(--danger)">*</strong></span>
-          <input type="date" id="calendarUseDate" required>
-       </label>
-
-        <label class="field">
-          <span>部屋 <strong style="color: var(--danger)">*</strong></span>
-          <select id="calendarRoomCode" required>
-            <option value="">選択してください</option>
-            <option value="tamoku">多目的室</option>
-            <option value="orange">オレンジの部屋</option>
-          </select>
-        </label>
-
-        <label class="field field-wide">
-          <span>団体名 <strong style="color: var(--danger)">*</strong></span>
-          <input type="text" id="calendarOrgName" maxlength="255" placeholder="例：〇〇サークル" required>
-        </label>
-
-        <label class="field">
-          <span>人数</span>
-          <input type="number" id="calendarPeopleCount" min="1" max="9999" inputmode="numeric" placeholder="例：12">
-        </label>
-
-        <label class="field field-wide">
-          <span>利用時間</span>
-          <div class="toolbar" style="justify-content:flex-start; gap:8px; margin:0;">
-            <select id="calendarUsageStart">
-              <option value="">開始</option>
-            </select>
-            <span>〜</span>
-            <select id="calendarUsageEnd">
-              <option value="">終了</option>
-            </select>
-          </div>
-        </label>
-      </div>
-
-      <p class="status" id="calendarAddStatus"></p>
-
-      <div class="dialog-actions" style="justify-content:flex-end;margin-top:12px;">
-        <button type="button" class="ghost" id="calendarFillTodayBtn">今日</button>
-        <button type="button" id="calendarAddSubmitBtn">登録</button>
-      </div>
-    </div>
-  </dialog>
-
-  <dialog id="calendarManageDialog" class="detail-dialog">
-    <div class="dialog-shell calendar-manage-shell">
-      <div class="dialog-head">
-        <div>
-          <h2>その日の予約管理</h2>
-          <p class="dialog-sub" id="calendarManageSubText">日付 -</p>
-        </div>
-        <button type="button" class="ghost" id="calendarManageCloseBtn">閉じる</button>
-      </div>
-
-      <div class="calendar-manage-section">
-        <div class="calendar-manage-header">
-          <strong>登録済み予約</strong>
-          <span class="dialog-sub">削除すると即時反映されます。</span>
-        </div>
-        <div id="calendarManageList" class="calendar-manage-list">
-          <div class="detail-empty">読み込み中です…</div>
-        </div>
-      </div>
-
-      <div class="calendar-manage-section">
-        <div class="calendar-manage-header">
-          <strong>この日に追加</strong>
-          <span class="dialog-sub">部屋と団体名を入力して登録します。</span>
-        </div>
-
-        <div class="calendar-form-grid">
-          <label class="field">
-            <span>使用日</span>
-            <input type="date" id="calendarManageUseDate">
-          </label>
-
-          <label class="field">
-            <span>部屋 <strong style="color: var(--danger)">*</strong></span>
-            <select id="calendarManageRoomCode" required>
-              <option value="">選択してください</option>
-              <option value="tamoku">多目的室</option>
-              <option value="orange">オレンジの部屋</option>
-            </select>
-          </label>
-
-          <label class="field field-wide">
-            <span>団体名 <strong style="color: var(--danger)">*</strong></span>
-            <input type="text" id="calendarManageOrgName" maxlength="255" placeholder="例：〇〇サークル" required>
-          </label>
-
-          <label class="field">
-            <span>人数</span>
-            <input type="number" id="calendarManagePeopleCount" min="1" max="9999" inputmode="numeric" placeholder="例：12">
-          </label>
-
-          <label class="field field-wide">
-            <span>利用時間</span>
-            <div class="toolbar" style="justify-content:flex-start; gap:8px; margin:0;">
-              <select id="calendarManageUsageStart">
-                <option value="">開始</option>
-              </select>
-              <span>〜</span>
-              <select id="calendarManageUsageEnd">
-                <option value="">終了</option>
-              </select>
-            </div>
-          </label>
-        </div>
-
-        <p class="status" id="calendarManageStatus"></p>
-
-        <div class="dialog-actions" style="justify-content:flex-end;margin-top:12px;">
-          <button type="button" id="calendarManageCancelEditBtn" class="ghost" hidden>編集をやめる</button>
-          <button type="button" id="calendarManageAddBtn">追加</button>
-        </div>
-      </div>
-    </div>
-  </dialog>
-
-
-  <script src="./js/admin-core.js" defer></script>
-  <script src="./js/admin-dom.js" defer></script>
-  <script src="./js/admin-utils.js" defer></script>
-  <script src="./js/admin-sidebar.js" defer></script>
-  <script src="./js/admin-application.js" defer></script>
-  <script src="./js/admin-calendar.js" defer></script>
-  <script src="./js/admin-mail.js" defer></script>
-  <script src="./js/admin-room-access.js" defer></script>
-  <script src="./js/admin-admin.js" defer></script>
-  <script src="./js/admin-init.js" defer></script>
+  <script src="./js/admin-app.js?v=20260406a" defer></script>
 </body>
 </html>

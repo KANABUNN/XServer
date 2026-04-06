@@ -21,167 +21,192 @@ function db_connect(array $cfg): PDO
         $user,
         $password,
         [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
+            PDO::ATTR_EMULATE_PREPARES => false,
         ]
     );
 }
 
-/**
- * 予約情報と、保存済み添付ファイル情報を reservations テーブルへ記録する。
- * ファイル実体は config.php の upload 設定に従って保存する。
- */
-function save_reservation_with_uploaded_file(PDO $pdo, array $cfg, array $mailData, $uploadedFile): string
+function reservation_room_label(string $roomCode): string
 {
-    $email = trim((string)($mailData['reply_to'] ?? ''));
-    $room  = trim((string)($mailData['roomName'] ?? ''));
-    $note  = trim((string)($mailData['note'] ?? ''));
+    return match ($roomCode) {
+        'tamoku' => '多目的室',
+        'orange' => 'オレンジの部屋',
+        default => $roomCode,
+    };
+}
 
-    if ($email === '' || $room === '') {
-        throw new RuntimeException('DB保存に必要な予約情報が不足しています。');
+function reservation_schema_sql(): string
+{
+    return <<<SQL
+CREATE TABLE IF NOT EXISTS reservations (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    request_token CHAR(32) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    organization_name VARCHAR(150) NOT NULL,
+    room_code VARCHAR(32) NOT NULL,
+    room_label VARCHAR(64) NOT NULL,
+    use_date DATE NOT NULL,
+    access_code CHAR(12) DEFAULT NULL,
+    reservation_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    status_reason VARCHAR(255) DEFAULT NULL,
+    switchbot_status VARCHAR(32) NOT NULL DEFAULT 'not_requested',
+    switchbot_request_id VARCHAR(120) DEFAULT NULL,
+    switchbot_command_id VARCHAR(120) DEFAULT NULL,
+    switchbot_message VARCHAR(255) DEFAULT NULL,
+    user_mail_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    admin_mail_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_reservations_request_token (request_token),
+    KEY idx_reservations_room_date (room_code, use_date),
+    KEY idx_reservations_status (reservation_status),
+    KEY idx_reservations_email (email),
+    KEY idx_reservations_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS room_calendar_reservations (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    reservation_id BIGINT UNSIGNED NOT NULL,
+    use_date DATE NOT NULL,
+    room_code VARCHAR(32) NOT NULL,
+    room_label VARCHAR(64) NOT NULL,
+    organization_name VARCHAR(150) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    access_code CHAR(12) NOT NULL,
+    access_code_start_at DATETIME NOT NULL,
+    access_code_end_at DATETIME NOT NULL,
+    switchbot_status VARCHAR(32) NOT NULL DEFAULT 'queued',
+    switchbot_request_id VARCHAR(120) DEFAULT NULL,
+    switchbot_command_id VARCHAR(120) DEFAULT NULL,
+    switchbot_message VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_room_calendar_reservations_room_date (room_code, use_date),
+    KEY idx_room_calendar_reservations_use_date (use_date),
+    KEY idx_room_calendar_reservations_switchbot_status (switchbot_status),
+    CONSTRAINT fk_room_calendar_reservations_reservation FOREIGN KEY (reservation_id) REFERENCES reservations (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS reservation_mail_logs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    reservation_id BIGINT UNSIGNED NOT NULL,
+    mail_kind VARCHAR(32) NOT NULL,
+    recipient VARCHAR(255) NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    send_status VARCHAR(32) NOT NULL,
+    error_message VARCHAR(500) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_reservation_mail_logs_reservation_id (reservation_id),
+    KEY idx_reservation_mail_logs_mail_kind (mail_kind),
+    KEY idx_reservation_mail_logs_created_at (created_at),
+    CONSTRAINT fk_reservation_mail_logs_reservation FOREIGN KEY (reservation_id) REFERENCES reservations (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS switchbot_passcode_requests (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    local_request_id VARCHAR(120) NOT NULL,
+    command_id VARCHAR(120) DEFAULT NULL,
+    room_code VARCHAR(32) NOT NULL,
+    room_label VARCHAR(64) NOT NULL,
+    device_id VARCHAR(128) NOT NULL,
+    device_name VARCHAR(191) DEFAULT NULL,
+    passcode_name VARCHAR(100) NOT NULL,
+    passcode VARCHAR(20) DEFAULT NULL,
+    start_at DATETIME DEFAULT NULL,
+    end_at DATETIME DEFAULT NULL,
+    status VARCHAR(40) NOT NULL DEFAULT 'queued',
+    result VARCHAR(255) DEFAULT NULL,
+    requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    webhook_received_at DATETIME DEFAULT NULL,
+    detail_json_path VARCHAR(255) DEFAULT NULL,
+    event_name VARCHAR(100) DEFAULT NULL,
+    event_device_type VARCHAR(100) DEFAULT NULL,
+    event_device_mac VARCHAR(100) DEFAULT NULL,
+    time_of_sample BIGINT DEFAULT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_switchbot_passcode_requests_local_request_id (local_request_id),
+    UNIQUE KEY uq_switchbot_passcode_requests_command_id (command_id),
+    KEY idx_switchbot_passcode_requests_room_code (room_code),
+    KEY idx_switchbot_passcode_requests_status (status),
+    KEY idx_switchbot_passcode_requests_requested_at (requested_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SQL;
+}
+
+function reservation_install_schema(PDO $pdo): void
+{
+    static $installed = false;
+    if ($installed) {
+        return;
     }
+    $installed = true;
 
-    if (!is_array($uploadedFile)) {
-        throw new RuntimeException('アップロードファイル情報を取得できませんでした。');
-    }
-
-    $uploadError  = (int)($uploadedFile['error'] ?? UPLOAD_ERR_NO_FILE);
-    $originalName = trim((string)($uploadedFile['name'] ?? ''));
-    $tmpPath      = (string)($uploadedFile['tmp_name'] ?? '');
-    $fileSize     = (int)($uploadedFile['size'] ?? 0);
-
-    if ($uploadError !== UPLOAD_ERR_OK) {
-        throw new RuntimeException('保存対象ファイルの状態が不正です（error=' . $uploadError . '）。');
-    }
-    if ($originalName === '' || $tmpPath === '') {
-        throw new RuntimeException('保存対象ファイルの情報が不足しています。');
-    }
-    if (!is_uploaded_file($tmpPath)) {
-        throw new RuntimeException('アップロードされた一時ファイルを確認できませんでした。');
-    }
-
-    [$uploadDir, $pathPrefix] = reservation_upload_settings($cfg);
-
-    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
-        throw new RuntimeException('ファイル保存先フォルダを作成できませんでした。');
-    }
-
-    $storedName = reservation_stored_filename($originalName);
-    $absolutePath = rtrim($uploadDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $storedName;
-    $relativePath = trim($pathPrefix, '/');
-    $dbPath = ($relativePath === '') ? $storedName : ($relativePath . '/' . $storedName);
-
-    $savedToDisk = false;
-
-    $pdo->beginTransaction();
-    try {
-        if (!move_uploaded_file($tmpPath, $absolutePath)) {
-            throw new RuntimeException('アップロードファイルを保存先へ移動できませんでした。');
+    $statements = preg_split('/;\s*(?:\R|$)/u', reservation_schema_sql()) ?: [];
+    foreach ($statements as $statement) {
+        $statement = trim($statement);
+        if ($statement !== '') {
+            $pdo->exec($statement);
         }
-        $savedToDisk = true;
+    }
+}
 
-        $statusColumn = reservation_status_column($pdo);
-        $insertColumns = ['email', 'room', 'note', 'original_name', 'stored_name', 'file_path'];
-        $placeholders = [':email', ':room', ':note', ':original_name', ':stored_name', ':file_path'];
-        $params = [
-            ':email'         => $email,
-            ':room'          => $room,
-            ':note'          => $note !== '' ? $note : null,
-            ':original_name' => reservation_trim_for_db($originalName, 255),
-            ':stored_name'   => $storedName,
-            ':file_path'     => reservation_trim_for_db($dbPath, 500),
+function reservation_fetch_by_token(PDO $pdo, string $token): ?array
+{
+    reservation_install_schema($pdo);
+
+    $stmt = $pdo->prepare(
+        'SELECT r.*, c.access_code_start_at, c.access_code_end_at '
+        . 'FROM reservations r '
+        . 'LEFT JOIN room_calendar_reservations c ON c.reservation_id = r.id '
+        . 'WHERE r.request_token = :token '
+        . 'LIMIT 1'
+    );
+    $stmt->execute([':token' => $token]);
+    $row = $stmt->fetch();
+
+    return is_array($row) ? $row : null;
+}
+
+function reservation_fetch_month_status(PDO $pdo, int $year, int $month): array
+{
+    reservation_install_schema($pdo);
+
+    $monthStart = sprintf('%04d-%02d-01', $year, $month);
+    $monthEnd = (new DateTimeImmutable($monthStart))->modify('+1 month')->format('Y-m-d');
+
+    $stmt = $pdo->prepare(
+        'SELECT use_date, room_code FROM room_calendar_reservations '
+        . 'WHERE use_date >= :month_start AND use_date < :month_end '
+        . 'ORDER BY use_date ASC, room_code ASC'
+    );
+    $stmt->execute([
+        ':month_start' => $monthStart,
+        ':month_end' => $monthEnd,
+    ]);
+
+    $daysInMonth = (int)(new DateTimeImmutable($monthStart))->format('t');
+    $result = [];
+    for ($day = 1; $day <= $daysInMonth; $day++) {
+        $dateKey = sprintf('%04d-%02d-%02d', $year, $month, $day);
+        $result[$dateKey] = [
+            'tamoku' => false,
+            'orange' => false,
         ];
-
-        if ($statusColumn !== null) {
-            $insertColumns[] = $statusColumn;
-            $placeholders[] = ':application_status';
-            $params[':application_status'] = 'pending';
-        }
-
-        $stmt = $pdo->prepare(
-            'INSERT INTO reservations (' . implode(', ', $insertColumns) . ') '
-            . 'VALUES (' . implode(', ', $placeholders) . ')'
-        );
-
-        $stmt->execute($params);
-
-        $pdo->commit();
-
-        return $absolutePath;
-    } catch (Throwable $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        if ($savedToDisk && is_file($absolutePath)) {
-            @unlink($absolutePath);
-        }
-        throw $e;
-    }
-}
-
-function reservation_upload_settings(array $cfg): array
-{
-    $uploadCfg = $cfg['upload'] ?? [];
-    if (!is_array($uploadCfg)) {
-        $uploadCfg = [];
     }
 
-    $defaultDir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'reservations';
-    $dir = trim((string)($uploadCfg['reservation_dir'] ?? $defaultDir));
-    if ($dir === '') {
-        throw new RuntimeException('upload.reservation_dir が未設定です。');
-    }
-
-    $pathPrefix = (string)($uploadCfg['reservation_path_prefix'] ?? 'storage/reservations');
-    $pathPrefix = str_replace('\\', '/', $pathPrefix);
-
-    return [$dir, $pathPrefix];
-}
-
-function reservation_stored_filename(string $originalName): string
-{
-    $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-    $suffix = $ext !== '' ? '.' . $ext : '';
-
-    return date('Ymd_His') . '_' . bin2hex(random_bytes(8)) . $suffix;
-}
-
-function reservation_trim_for_db(string $value, int $maxLength): string
-{
-    if (function_exists('mb_substr')) {
-        return mb_substr($value, 0, $maxLength);
-    }
-
-    return substr($value, 0, $maxLength);
-}
-
-
-function reservation_status_column(PDO $pdo): ?string
-{
-    static $cacheInitialized = false;
-    static $cache = null;
-    if ($cacheInitialized) {
-        return $cache;
-    }
-
-    $cacheInitialized = true;
-    $stmt = $pdo->query('SHOW COLUMNS FROM `reservations`');
-    $columns = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $names = [];
-    foreach ($columns as $column) {
-        $field = (string)($column['Field'] ?? '');
-        if ($field !== '') {
-            $names[] = $field;
+    foreach ($stmt->fetchAll() as $row) {
+        $dateKey = (string)($row['use_date'] ?? '');
+        $roomCode = (string)($row['room_code'] ?? '');
+        if (isset($result[$dateKey][$roomCode])) {
+            $result[$dateKey][$roomCode] = true;
         }
     }
 
-    foreach (['application_status', 'status'] as $candidate) {
-        if (in_array($candidate, $names, true)) {
-            $cache = $candidate;
-            return $cache;
-        }
-    }
-
-    return null;
+    return $result;
 }

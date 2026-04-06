@@ -1,438 +1,52 @@
-/* =========================================================
-   reservation-admin-responsive.css
-   admin.book 用：スマホ／タブレット（狭域）上書きCSS
-
-   使い方：reservation-admin.css の“後”に読み込む
-   <link rel="stylesheet" href="./css/reservation-admin.css">
-   <link rel="stylesheet" href="./css/reservation-admin-responsive.css">
-   ========================================================= */
-
-:root {
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
-}
-
-/* iOS/Android の URLバー変動を踏まえた高さ */
-@supports (height: 100dvh) {
-  body {
-    min-height: 100dvh;
-  }
-}
-
-/* ---------------------------------------------------------
-   1) タブレット以下：余白と見出しを詰める
-   --------------------------------------------------------- */
-@media (max-width: 1024px) {
-  .wrap {
-    padding: 18px 18px;
-  }
-
-  h1 {
-    font-size: 26px;
-  }
-
-  .panel {
-    padding: 16px;
-    border-radius: 16px;
-  }
-
-  .table-wrap {
-    -webkit-overflow-scrolling: touch;
-  }
-}
-
-/* ---------------------------------------------------------
-   2) 860px以下：既存CSSで sidebar が上に回る
-      ここでは “上部ナビ” として扱いやすく調整
-   --------------------------------------------------------- */
-@media (max-width: 860px) {
-  /* sidebar を上部バーっぽく */
-  .sidebar {
-    background: #0f172a;
-    padding: 12px 12px;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-  }
-
-  .sidebar-brand {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .sidebar-brand h1 {
-    font-size: 16px;
-    white-space: nowrap;
-  }
-
-  .sidebar-brand p {
-    font-size: 12px;
-    margin: 0;
-    opacity: 0.85;
-    white-space: nowrap;
-  }
-
-  /* ナビは横スクロール（ボタンを押しやすく） */
-  .sidebar-nav {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
-    overflow-x: auto;
-    padding-bottom: 6px;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .sidebar-link {
-    flex: 0 0 auto;
-    white-space: nowrap;
-    border-radius: 999px;
-    padding: 10px 12px;
-  }
-}
-
-/* ---------------------------------------------------------
-   3) 600px以下：さらに詰める（スマホ縦持ち）
-   --------------------------------------------------------- */
-@media (max-width: 600px) {
-  body {
-    padding: calc(10px + var(--safe-top)) calc(10px + var(--safe-right))
-             calc(10px + var(--safe-bottom)) calc(10px + var(--safe-left));
-  }
-
-  .wrap {
-    padding: 12px 12px;
-  }
-
-  .page-head {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-
-  .head-actions {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .head-actions > button {
-    flex: 1 1 auto;
-    min-width: 140px;
-  }
-
-  h1 {
-    font-size: 22px;
-  }
-
-  .lead {
-    font-size: 13px;
-    line-height: 1.6;
-  }
-
-  .panel {
-    padding: 14px;
-  }
-
-  /* フィルタ：2列→1列（入力を押しやすく） */
-  .filters-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
+@media (max-width: 1200px) {
+  .summary-grid,
+  .filters-grid,
+  .calendar-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .field-wide {
-    grid-column: 1 / -1;
+    grid-column: span 2;
   }
+}
 
-  input[type="search"],
-  input[type="date"],
-  input[type="month"],
-  input[type="email"],
-  input[type="text"],
-  input[type="number"],
-  select {
-    padding: 12px 12px;
-    font-size: 16px; /* iOSのフォームズーム回避 */
-    border-radius: 12px;
-  }
-
-  button {
-    padding: 12px 14px;
-    border-radius: 12px;
-  }
-
-  /* ツールバー（検索/クリア等）は折り返し */
-  .toolbar {
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .toolbar > button {
-    flex: 1 1 auto;
-    min-width: 140px;
-  }
-
-  /* テーブル：横スクロールは維持しつつ、過度な幅を抑える */
-  table {
-    min-width: 980px; /* 1500px固定だとスマホで横移動が大きすぎる */
-  }
-
-  /* アプリ申請一覧は「備考」「ファイル名」だけ改行許可して見やすく */
-  #applicationView table td:nth-child(5), /* 元の名前 */
-  #applicationView table td:nth-child(6), /* 保存後の名前 */
-  #applicationView table td:nth-child(7)  /* 備考 */
-  {
-    white-space: normal;
-    word-break: break-word;
-  }
-
-  /* カレンダー：2列は維持しつつカード密度を下げる */
-  .calendar-grid {
-    gap: 8px;
-  }
-  .calendar-day {
-    padding: 10px;
-    border-radius: 14px;
-  }
-  .calendar-entry {
-    padding: 8px 10px;
-    border-radius: 12px;
-  }
-
-  /* メール画面：ドメイン追加ボタンは全幅化して誤タップを減らす */
-  .mail-domain-btn {
-    width: 100%;
-  }
-
-  /* SwitchBot：長いcodeは折り返し優先 */
-  .switchbot-webhook-urlbox code,
-  .switchbot-command-side code,
-  .switchbot-webhook-item code {
-    white-space: normal;
-  }
-
-  /* dialog：ほぼ全画面で、内部だけスクロール */
-  .detail-dialog {
-    width: min(96vw, 920px);
-    max-height: calc(92dvh - var(--safe-top) - var(--safe-bottom));
-    overflow: hidden;
-    border-radius: 16px;
-  }
-
-  .dialog-shell {
-    padding: 14px;
-    max-height: calc(92dvh - var(--safe-top) - var(--safe-bottom));
-    overflow: auto;
-  }
-
-  .dialog-head {
-    align-items: center;
-  }
-
-  .dialog-actions {
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .dialog-actions > button {
-    flex: 1 1 auto;
-    min-width: 140px;
-  }
-
-  /* detail-grid：2列→1列 */
-  .detail-grid {
+@media (max-width: 920px) {
+  .admin-shell {
     grid-template-columns: 1fr;
   }
 
-  /* calendar-form-grid：2列→1列 */
+  .sidebar {
+    gap: 16px;
+  }
+
+  .content-shell {
+    padding: 16px;
+  }
+
+  .page-head,
+  .meta-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .summary-grid,
+  .filters-grid,
   .calendar-form-grid {
     grid-template-columns: 1fr;
   }
-}
 
-/* ---------------------------------------------------------
-   4) 420px以下：最小端末向け
-   --------------------------------------------------------- */
-@media (max-width: 420px) {
-  .sidebar-brand p {
-    display: none; /* 最小画面は説明文を隠してスペース確保 */
+  .field-wide {
+    grid-column: span 1;
   }
 
-  /* カレンダー月表示：1列にしてタップ誤操作を減らす */
-  .calendar-grid {
-    grid-template-columns: 1fr;
+  .calendar-admin-grid {
+    gap: 6px;
   }
 
-  table {
-    min-width: 900px;
-  }
-}
-
-/* ---------------------------------------------------------
-   5) OSの設定（アニメ苦手）に追従
-   --------------------------------------------------------- */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-
-/* ---------------------------------------------------------
-   6) 表示切替（表 / カード）
-   - JS が body[data-view-mode] を切り替える
-   - .js-mode-table / .js-mode-card を出し分け
-   --------------------------------------------------------- */
-.view-mode-toggle {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: flex-end;
-  flex: 0 0 auto;
-}
-
-.mode-btn {
-  padding: 8px 12px;
-  border-radius: 999px;
-  line-height: 1.1;
-}
-
-.mode-btn.is-active {
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  color: var(--accent);
-}
-
-/* 初期状態：カードは隠す（JSで body[data-view-mode] が付いたら切替） */
-.card-list {
-  display: none;
-  margin-top: 12px;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* 表/カードの出し分け */
-body[data-view-mode="card"] .js-mode-table {
-  display: none !important;
-}
-body[data-view-mode="card"] .js-mode-card {
-  display: flex !important;
-}
-body[data-view-mode="table"] .js-mode-card {
-  display: none !important;
-}
-body[data-view-mode="table"] .js-mode-table {
-  display: block !important;
-}
-
-/* カード本体 */
-.data-card {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 14px 14px 12px;
-  box-shadow: var(--shadow);
-}
-
-.card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.card-title {
-  font-weight: 700;
-  font-size: 16px;
-}
-
-.card-sub {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.card-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: #f4f7fb;
-  border: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.card-kv {
-  display: grid;
-  grid-template-columns: 90px 1fr;
-  gap: 8px 10px;
-  margin: 0 0 12px;
-}
-
-.card-kv dt {
-  margin: 0;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.card-kv dd {
-  margin: 0;
-  font-size: 14px;
-  color: var(--text);
-  word-break: break-word;
-}
-
-.card-kv code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
-}
-
-.card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.card-actions button {
-  flex: 1 1 auto;
-  min-width: 120px;
-}
-
-/* カード空表示 */
-.card-empty {
-  border: 1px dashed var(--line);
-  background: #fff;
-  border-radius: 16px;
-  padding: 16px;
-  color: var(--muted);
-  text-align: center;
-}
-
-/* スマホ：トグルは横幅いっぱいにして押しやすく */
-@media (max-width: 600px) {
-  .view-mode-toggle {
-    width: 100%;
-    justify-content: stretch;
-  }
-  .mode-btn {
-    flex: 1 1 auto;
-    text-align: center;
-  }
-  .card-kv {
-    grid-template-columns: 80px 1fr;
-  }
-}
-
-@media (max-width: 420px) {
-  .card-kv {
-    grid-template-columns: 72px 1fr;
-  }
-  .card-actions button {
-    min-width: 110px;
+  .calendar-day {
+    min-height: 96px;
+    padding: 8px;
   }
 }
