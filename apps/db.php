@@ -48,13 +48,18 @@ CREATE TABLE IF NOT EXISTS reservations (
     room_code VARCHAR(32) NOT NULL,
     room_label VARCHAR(64) NOT NULL,
     use_date DATE NOT NULL,
+    use_date_end DATE NOT NULL,
+    selected_dates_count INT UNSIGNED NOT NULL DEFAULT 1,
+    usage_start_time CHAR(5) NOT NULL,
+    usage_end_time CHAR(5) NOT NULL,
+    usage_time VARCHAR(20) NOT NULL,
     access_code CHAR(12) DEFAULT NULL,
     reservation_status VARCHAR(32) NOT NULL DEFAULT 'pending',
-    status_reason VARCHAR(255) DEFAULT NULL,
-    switchbot_status VARCHAR(32) NOT NULL DEFAULT 'not_requested',
-    switchbot_request_id VARCHAR(120) DEFAULT NULL,
-    switchbot_command_id VARCHAR(120) DEFAULT NULL,
-    switchbot_message VARCHAR(255) DEFAULT NULL,
+    status_reason VARCHAR(500) DEFAULT NULL,
+    switchbot_status VARCHAR(32) NOT NULL DEFAULT 'queued',
+    switchbot_message VARCHAR(500) DEFAULT NULL,
+    google_sync_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    google_sync_message VARCHAR(500) DEFAULT NULL,
     user_mail_status VARCHAR(32) NOT NULL DEFAULT 'pending',
     admin_mail_status VARCHAR(32) NOT NULL DEFAULT 'pending',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -62,6 +67,7 @@ CREATE TABLE IF NOT EXISTS reservations (
     PRIMARY KEY (id),
     UNIQUE KEY uq_reservations_request_token (request_token),
     KEY idx_reservations_room_date (room_code, use_date),
+    KEY idx_reservations_use_date_end (use_date_end),
     KEY idx_reservations_status (reservation_status),
     KEY idx_reservations_email (email),
     KEY idx_reservations_created_at (created_at)
@@ -75,19 +81,28 @@ CREATE TABLE IF NOT EXISTS room_calendar_reservations (
     room_label VARCHAR(64) NOT NULL,
     organization_name VARCHAR(150) NOT NULL,
     email VARCHAR(255) NOT NULL,
+    usage_start_time CHAR(5) NOT NULL,
+    usage_end_time CHAR(5) NOT NULL,
+    usage_time VARCHAR(20) NOT NULL,
     access_code CHAR(12) NOT NULL,
     access_code_start_at DATETIME NOT NULL,
     access_code_end_at DATETIME NOT NULL,
     switchbot_status VARCHAR(32) NOT NULL DEFAULT 'queued',
     switchbot_request_id VARCHAR(120) DEFAULT NULL,
     switchbot_command_id VARCHAR(120) DEFAULT NULL,
-    switchbot_message VARCHAR(255) DEFAULT NULL,
+    switchbot_message VARCHAR(500) DEFAULT NULL,
+    google_event_id VARCHAR(255) DEFAULT NULL,
+    google_calendar_id VARCHAR(255) DEFAULT NULL,
+    google_sync_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    google_sync_message VARCHAR(500) DEFAULT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uq_room_calendar_reservations_room_date (room_code, use_date),
+    KEY idx_room_calendar_reservations_reservation_id (reservation_id),
     KEY idx_room_calendar_reservations_use_date (use_date),
     KEY idx_room_calendar_reservations_switchbot_status (switchbot_status),
+    KEY idx_room_calendar_reservations_google_sync_status (google_sync_status),
     CONSTRAINT fk_room_calendar_reservations_reservation FOREIGN KEY (reservation_id) REFERENCES reservations (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -156,21 +171,31 @@ function reservation_install_schema(PDO $pdo): void
     }
 }
 
+function reservation_fetch_detail_rows(PDO $pdo, int $reservationId): array
+{
+    reservation_install_schema($pdo);
+
+    $stmt = $pdo->prepare('SELECT * FROM room_calendar_reservations WHERE reservation_id = :reservation_id ORDER BY use_date ASC, id ASC');
+    $stmt->execute([':reservation_id' => $reservationId]);
+    return $stmt->fetchAll();
+}
+
 function reservation_fetch_by_token(PDO $pdo, string $token): ?array
 {
     reservation_install_schema($pdo);
 
-    $stmt = $pdo->prepare(
-        'SELECT r.*, c.access_code_start_at, c.access_code_end_at '
-        . 'FROM reservations r '
-        . 'LEFT JOIN room_calendar_reservations c ON c.reservation_id = r.id '
-        . 'WHERE r.request_token = :token '
-        . 'LIMIT 1'
-    );
+    $stmt = $pdo->prepare('SELECT * FROM reservations WHERE request_token = :token LIMIT 1');
     $stmt->execute([':token' => $token]);
     $row = $stmt->fetch();
+    if (!is_array($row)) {
+        return null;
+    }
 
-    return is_array($row) ? $row : null;
+    $detailRows = reservation_fetch_detail_rows($pdo, (int)$row['id']);
+    $row['date_rows'] = $detailRows;
+    $row['use_dates'] = array_values(array_map(static fn(array $r): string => (string)($r['use_date'] ?? ''), $detailRows));
+
+    return $row;
 }
 
 function reservation_fetch_month_status(PDO $pdo, int $year, int $month): array

@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>貸し部屋予約</title>
   <link rel="icon" href="icon.png">
-  <link rel="stylesheet" href="css/style.css?v=20260406a">
-  <link rel="stylesheet" href="css/style_responsive.css?v=20260406a">
+  <link rel="stylesheet" href="css/style.css?v=20260407b">
+  <link rel="stylesheet" href="css/style_responsive.css?v=20260407b">
 </head>
 <body>
   <div class="container">
     <header class="hero">
       <h1>貸し部屋予約</h1>
-      <p class="subtitle">メールアドレス・団体名・部屋・利用日を入力して、予約をその場で申請できます。</p>
+      <p class="subtitle">メールアドレス・団体名・部屋・利用日・利用時間を入力して、予約をその場で申請できます。</p>
     </header>
 
     <form action="submit.php" method="post" class="form" id="reservationForm">
@@ -52,9 +52,19 @@
         </div>
 
         <div class="form-group">
-          <label for="use_date_display">選択した利用日 <span class="required">*</span></label>
-          <input type="text" id="use_date_display" placeholder="カレンダーから選択してください" readonly required>
-          <input type="hidden" name="use_date" id="use_date">
+          <label for="use_dates_display">選択した利用日 <span class="required">*</span></label>
+          <input type="text" id="use_dates_display" placeholder="カレンダーから複数選択できます" readonly required>
+          <input type="hidden" name="use_dates" id="use_dates">
+        </div>
+
+        <div class="form-group">
+          <label for="usage_start_time">利用開始時刻 <span class="required">*</span></label>
+          <select name="usage_start_time" id="usage_start_time" required></select>
+        </div>
+
+        <div class="form-group">
+          <label for="usage_end_time">利用終了時刻 <span class="required">*</span></label>
+          <select name="usage_end_time" id="usage_end_time" required></select>
         </div>
       </div>
 
@@ -62,11 +72,11 @@
         <div class="calendar-header">
           <div>
             <h2 id="calendarHeading">利用日の選択</h2>
-            <p class="calendar-caption">予約可能期間は本日から2日後〜2か月先までです。</p>
+            <p class="calendar-caption">予約可能期間は本日から2日後〜2か月先までです。複数日を選択できます。</p>
           </div>
           <div class="calendar-nav">
             <button type="button" id="prevMonth" class="calendar-nav-btn">‹ 前月</button>
-            <button type="button" id="goToday" class="calendar-nav-btn">選択範囲へ戻る</button>
+            <button type="button" id="goAvailableStart" class="calendar-nav-btn">予約開始月へ</button>
             <button type="button" id="nextMonth" class="calendar-nav-btn">翌月 ›</button>
           </div>
         </div>
@@ -91,11 +101,12 @@
       </section>
 
       <div class="form-group terms-consent">
-        <label class="checkbox-line">
+        <button type="button" class="terms-link-btn" id="openTermsDialog">利用規約を開く</button>
+        <label class="consent-tile" for="agreeTerms">
           <input type="checkbox" id="agreeTerms" name="agree_terms" value="1" required>
-          利用規約に同意します <span class="required">*</span>
+          <span class="consent-mark" aria-hidden="true"></span>
+          <span class="consent-text">利用規約に同意します <span class="required">*</span></span>
         </label>
-        <a href="terms.html" class="terms-link-btn" target="_blank" rel="noopener">利用規約を表示</a>
       </div>
 
       <button type="submit" class="submit-btn">予約する</button>
@@ -104,6 +115,54 @@
     <p class="copyright">&copy; 2026 総合管理事務局. All rights reserved.</p>
   </div>
 
-  <script src="js/calendar.js?v=20260406a" defer></script>
+  <dialog id="termsDialog" class="terms-dialog">
+    <form method="dialog" class="terms-dialog-card">
+      <div class="terms-dialog-head">
+        <h2>貸し部屋予約 利用規約</h2>
+        <button type="submit" class="dialog-close-btn" aria-label="閉じる">×</button>
+      </div>
+      <div class="terms-dialog-body">
+        <section>
+          <h3>1. 予約方法</h3>
+          <ul>
+            <li>予約は本ページの入力フォームから行います。</li>
+            <li>入力項目は、メールアドレス、団体名、部屋、利用日、利用時間、規約への同意です。</li>
+            <li>利用日は複数選択できますが、部屋と利用時間は1回の申請内で共通です。</li>
+            <li>予約対象日は、本日から2日後〜2か月先までです。</li>
+          </ul>
+        </section>
+        <section>
+          <h3>2. 予約の成立</h3>
+          <ul>
+            <li>選択した日付のうち1日でも同じ部屋に既存予約がある場合、その申請全体は受け付けできません。</li>
+            <li>予約結果は、入力されたメールアドレスに自動送信されます。</li>
+            <li>予約発生通知は総合管理事務局にも自動送信されます。</li>
+          </ul>
+        </section>
+        <section>
+          <h3>3. 入室用パスコード</h3>
+          <ul>
+            <li>入室用パスコードは申請ごとに6桁で自動生成されます。</li>
+            <li>複数日を一括申請した場合、同じ申請内では同一のパスコードを使用します。</li>
+            <li>SwitchBot 側の有効時間は、指定利用時間の前後10分を含めて設定されます。</li>
+          </ul>
+        </section>
+        <section>
+          <h3>4. 注意事項</h3>
+          <ul>
+            <li>Google カレンダー連携や SwitchBot 連携に障害が発生した場合、管理側で追加確認を行うことがあります。</li>
+            <li>虚偽の団体名、メールアドレス、利用日での申請は禁止します。</li>
+            <li>運用上の詳細ルールが別途ある場合は、総合管理事務局の案内を優先します。</li>
+          </ul>
+        </section>
+      </div>
+      <div class="terms-dialog-actions">
+        <button type="button" class="calendar-nav-btn" id="agreeFromDialog">内容を確認し、同意する</button>
+        <button type="submit" class="terms-link-btn">閉じる</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="js/calendar.js?v=20260407b" defer></script>
 </body>
 </html>

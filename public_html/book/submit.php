@@ -7,6 +7,7 @@ $cfg = require __DIR__ . '/../../apps/config.php';
 require_once __DIR__ . '/../../apps/db.php';
 require_once __DIR__ . '/../../apps/response_limit.php';
 require_once __DIR__ . '/../../apps/switchbot_api.php';
+require_once __DIR__ . '/../../apps/google_calendar_sync.php';
 require_once __DIR__ . '/../../apps/smtp_mailer.php';
 require_once __DIR__ . '/../../apps/mail_html_templates.php';
 require_once __DIR__ . '/../../apps/reservation_service.php';
@@ -32,7 +33,7 @@ try {
 
     reservation_send_emails($cfg, $pdo, $reservation);
 
-    header('Location: /result.php?token=' . rawurlencode((string)$reservation['request_token']), true, 303);
+    header('Location: /book/result.php?token=' . rawurlencode((string)$reservation['request_token']), true, 303);
     exit;
 } catch (Throwable $e) {
     $id = bin2hex(random_bytes(6));
@@ -40,6 +41,6 @@ try {
     error_log('[reservation:' . $id . '] ' . $e->getFile() . ':' . $e->getLine());
     error_log('[reservation:' . $id . '] POST=' . json_encode($_POST, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-    header('Location: /mistake.html', true, 303);
+    header('Location: /book/mistake.html', true, 303);
     exit;
 }

@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=UTF-8');
 
-require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/reservation_service.php';
 

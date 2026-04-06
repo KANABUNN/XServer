@@ -7,13 +7,14 @@ $cfg = require __DIR__ . '/../../apps/config_test.php';
 require_once __DIR__ . '/../../apps/db.php';
 require_once __DIR__ . '/../../apps/response_limit.php';
 require_once __DIR__ . '/../../apps/switchbot_api.php';
+require_once __DIR__ . '/../../apps/google_calendar_sync.php';
 require_once __DIR__ . '/../../apps/smtp_mailer.php';
 require_once __DIR__ . '/../../apps/mail_html_templates.php';
 require_once __DIR__ . '/../../apps/reservation_service.php';
 
 try {
     if (!is_array($cfg)) {
-        throw new RuntimeException('config.php の形式が不正です。');
+        throw new RuntimeException('config_test.php の形式が不正です。');
     }
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         http_response_code(405);
@@ -32,14 +33,14 @@ try {
 
     reservation_send_emails($cfg, $pdo, $reservation);
 
-    header('Location: /result.php?token=' . rawurlencode((string)$reservation['request_token']), true, 303);
+    header('Location: /book/result.php?token=' . rawurlencode((string)$reservation['request_token']), true, 303);
     exit;
 } catch (Throwable $e) {
     $id = bin2hex(random_bytes(6));
-    error_log('[reservation:' . $id . '] ' . $e->getMessage());
-    error_log('[reservation:' . $id . '] ' . $e->getFile() . ':' . $e->getLine());
-    error_log('[reservation:' . $id . '] POST=' . json_encode($_POST, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    error_log('[reservation_test:' . $id . '] ' . $e->getMessage());
+    error_log('[reservation_test:' . $id . '] ' . $e->getFile() . ':' . $e->getLine());
+    error_log('[reservation_test:' . $id . '] POST=' . json_encode($_POST, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-    header('Location: /mistake.html', true, 303);
+    header('Location: /book/mistake.html', true, 303);
     exit;
 }

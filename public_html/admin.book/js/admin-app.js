@@ -1,111 +1,105 @@
 (() => {
   const bootstrap = window.AdminBootstrap || {};
   const csrfToken = bootstrap.csrfToken || '';
-  const currentUser = bootstrap.currentUser || {};
-  const permissions = new Set(currentUser.permissions || []);
+  const permissions = Array.isArray(bootstrap.currentUser?.permissions) ? bootstrap.currentUser.permissions : [];
 
   const q = (selector) => document.querySelector(selector);
-  const qa = (selector) => Array.from(document.querySelectorAll(selector));
-
-  function hasPermission(name) {
-    return permissions.has(name);
-  }
+  const hasPermission = (permission) => permissions.includes(permission);
 
   function escapeHtml(value) {
     return String(value ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;');
-  }
-
-  async function api(action, payload = {}) {
-    const response = await fetch('./manage_reservations.php', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'X-Requested-With': 'fetch',
-        'X-CSRF-Token': csrfToken,
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify({ action, csrf_token: csrfToken, ...payload }),
-    });
-    const json = await response.json();
-    if (!response.ok || !json.ok) {
-      throw new Error(json.message || 'API エラーが発生しました。');
-    }
-    return json;
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function setText(selector, value) {
     const el = q(selector);
-    if (el) {
-      el.textContent = value;
-    }
+    if (el) el.textContent = value;
   }
 
-  function toggleAdminViewAccess() {
-    if (!hasPermission('admin.user.manage')) {
-      const adminNav = qa('.sidebar-link').find((el) => el.dataset.viewTarget === 'adminView');
-      if (adminNav) {
-        adminNav.hidden = true;
+  function statusBadge(status) {
+    return `<span class="status-badge">${escapeHtml(status || '-')}</span>`;
+  }
+
+  function rangeLabel(row) {
+    const first = row.use_date || '';
+    const last = row.use_date_end || row.use_date || '';
+    const count = Number(row.selected_dates_count || 0);
+    if (!first) return '';
+    if (count <= 1 || first === last) return escapeHtml(first);
+    return `${escapeHtml(first)} ～ ${escapeHtml(last)}<br>${escapeHtml(String(count))}日分`;
+  }
+
+  function api(action, payload = {}) {
+    return fetch('./manage_reservations.php', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken,
+      },
+      body: JSON.stringify({ action, ...payload }),
+    }).then(async (response) => {
+      const json = await response.json().catch(() => ({ ok: false, message: 'JSON を解釈できませんでした。' }));
+      if (!response.ok || !json.ok) {
+        throw new Error(json.message || '通信に失敗しました。');
       }
-    }
+      return json;
+    });
   }
 
   function initSidebar() {
-    qa('.sidebar-link').forEach((button) => {
+    document.querySelectorAll('.sidebar-link').forEach((button) => {
       button.addEventListener('click', () => {
-        qa('.sidebar-link').forEach((el) => el.classList.remove('is-active'));
-        qa('.content-view').forEach((el) => el.classList.remove('is-active'));
+        const targetId = button.dataset.viewTarget;
+        if (!targetId) return;
+        document.querySelectorAll('.sidebar-link').forEach((el) => el.classList.remove('is-active'));
+        document.querySelectorAll('.content-view').forEach((el) => el.classList.remove('is-active'));
         button.classList.add('is-active');
-        const target = document.getElementById(button.dataset.viewTarget);
-        if (target) {
-          target.classList.add('is-active');
-        }
+        q(`#${targetId}`)?.classList.add('is-active');
       });
     });
   }
 
-  function statusBadge(value) {
-    const safe = escapeHtml(value);
-    return `<span class="badge badge-${safe.replace(/[^a-z0-9_-]/gi, '-')}">${safe}</span>`;
+  function toggleAdminViewAccess() {
+    if (hasPermission('admin.user.manage') || hasPermission('admin.audit.view')) return;
+    const adminNavBtn = document.querySelector('[data-view-target="adminView"]');
+    if (adminNavBtn) adminNavBtn.style.display = 'none';
   }
 
   async function loadDashboard() {
     setText('#dashboardStatusText', '読み込み中...');
     try {
-      const month = q('#dashboardMonth')?.value || '';
-      const room = q('#dashboardRoom')?.value || '';
-      const status = q('#dashboardStatus')?.value || '';
-      const keyword = q('#dashboardKeyword')?.value || '';
-
-      const json = await api('dashboard_list', { month, room_code: room, reservation_status: status, keyword });
+      const json = await api('dashboard_list', {
+        month: q('#dashboardMonth')?.value || '',
+        room_code: q('#dashboardRoom')?.value || '',
+        reservation_status: q('#dashboardStatus')?.value || '',
+        keyword: q('#dashboardKeyword')?.value || '',
+      });
 
       const tbody = q('#dashboardTableBody');
       if (!tbody) return;
 
-      tbody.innerHTML = '';
-      if (!json.rows.length) {
-        tbody.innerHTML = '<tr><td colspan="10" class="empty">該当する予約はありません。</td></tr>';
-      } else {
-        tbody.innerHTML = json.rows.map((row) => `
+      tbody.innerHTML = json.rows.length
+        ? json.rows.map((row) => `
           <tr>
             <td>${escapeHtml(row.id)}</td>
-            <td>${escapeHtml(row.created_at)}</td>
-            <td>${escapeHtml(row.use_date)}</td>
-            <td>${escapeHtml(row.room_label)}</td>
-            <td>${escapeHtml(row.organization_name)}</td>
-            <td>${escapeHtml(row.email)}</td>
-            <td>${statusBadge(row.reservation_status)}</td>
+            <td>${escapeHtml(row.created_at || '')}</td>
+            <td>${rangeLabel(row)}</td>
+            <td>${escapeHtml(row.usage_time || '')}</td>
+            <td>${escapeHtml(row.room_label || '')}</td>
+            <td>${escapeHtml(row.organization_name || '')}</td>
+            <td>${escapeHtml(row.email || '')}</td>
+            <td>${statusBadge(row.reservation_status || '')}</td>
             <td>${escapeHtml(row.access_code || '')}</td>
-            <td>${statusBadge(row.switchbot_status || '')}</td>
+            <td>SwitchBot:${statusBadge(row.switchbot_status || '')}<br>Google:${statusBadge(row.google_sync_status || '')}</td>
             <td>利用者:${statusBadge(row.user_mail_status || '')}<br>管理:${statusBadge(row.admin_mail_status || '')}</td>
           </tr>
-        `).join('');
-      }
+        `).join('')
+        : '<tr><td colspan="11" class="empty">該当する予約がありません。</td></tr>';
 
       setText('#dashboardMetaText', `${json.rows.length}件を表示しています。`);
       setText('#summaryConfirmedCount', String(json.summary.confirmed_upcoming_count ?? 0));
@@ -144,7 +138,7 @@
         const dateKey = `${json.month}-${String(day).padStart(2, '0')}`;
         const items = map[dateKey] || [];
         const content = items.length
-          ? items.map((item) => `<div class="calendar-entry"><strong>${escapeHtml(item.room_label)}</strong><span>${escapeHtml(item.organization_name)}</span></div>`).join('')
+          ? items.map((item) => `<div class="calendar-entry"><strong>${escapeHtml(item.room_label)}</strong><span>${escapeHtml(item.organization_name)} / ${escapeHtml(item.usage_time || '')}</span></div>`).join('')
           : '<div class="calendar-entry empty">予約なし</div>';
 
         grid.insertAdjacentHTML('beforeend', `
@@ -159,16 +153,18 @@
         ? json.rows.map((row) => `
           <tr>
             <td>${escapeHtml(row.use_date)}</td>
+            <td>${escapeHtml(row.usage_time || '')}</td>
             <td>${escapeHtml(row.room_label)}</td>
             <td>${escapeHtml(row.organization_name)}</td>
             <td>${escapeHtml(row.email)}</td>
             <td>${escapeHtml(row.access_code)}</td>
             <td>${statusBadge(row.switchbot_status || '')}</td>
+            <td>${statusBadge(row.google_sync_status || '')}</td>
           </tr>
         `).join('')
-        : '<tr><td colspan="6" class="empty">該当する確定予約はありません。</td></tr>';
+        : '<tr><td colspan="8" class="empty">該当する予約はありません。</td></tr>';
 
-      setText('#calendarMetaText', `${json.rows.length}件の確定予約があります。`);
+      setText('#calendarMetaText', `${json.rows.length}件の予約日があります。`);
       setText('#calendarStatusText', json.message || '読込完了');
     } catch (error) {
       setText('#calendarStatusText', error instanceof Error ? error.message : '読込に失敗しました。');
@@ -186,6 +182,7 @@
         ? json.rows.map((row) => `
           <tr>
             <td>${escapeHtml(row.use_date)}</td>
+            <td>${escapeHtml(row.usage_time || '')}</td>
             <td>${escapeHtml(row.room_label)}</td>
             <td>${escapeHtml(row.organization_name)}</td>
             <td>${escapeHtml(row.email)}</td>
@@ -195,7 +192,7 @@
             <td>${escapeHtml(row.switchbot_request_id || '')}</td>
           </tr>
         `).join('')
-        : '<tr><td colspan="8" class="empty">表示できるデータがありません。</td></tr>';
+        : '<tr><td colspan="9" class="empty">表示できるデータがありません。</td></tr>';
 
       setText('#passcodeMetaText', `${json.rows.length}件を表示しています。`);
       setText('#passcodeStatusText', json.message || '読込完了');

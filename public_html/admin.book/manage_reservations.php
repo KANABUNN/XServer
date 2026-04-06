@@ -131,7 +131,7 @@ function manage_dashboard_list(PDO $pdo, array $input): void
     $params = [];
 
     if ($month !== '' && preg_match('/^\d{4}-\d{2}$/', $month)) {
-        $where[] = 'DATE_FORMAT(use_date, "%Y-%m") = :month';
+        $where[] = '(DATE_FORMAT(use_date, "%Y-%m") = :month OR DATE_FORMAT(use_date_end, "%Y-%m") = :month)';
         $params[':month'] = $month;
     }
     if ($roomCode !== '') {
@@ -158,8 +158,8 @@ function manage_dashboard_list(PDO $pdo, array $input): void
     $rows = $stmt->fetchAll();
 
     $summary = [
-        'confirmed_upcoming_count' => manage_scalar($pdo, 'SELECT COUNT(*) FROM reservations WHERE reservation_status = "confirmed" AND use_date >= CURDATE()'),
-        'switchbot_issue_count' => manage_scalar($pdo, 'SELECT COUNT(*) FROM reservations WHERE switchbot_status IN ("failed","api_error","error") OR reservation_status = "error"'),
+        'confirmed_upcoming_count' => manage_scalar($pdo, 'SELECT COUNT(*) FROM reservations WHERE reservation_status = "confirmed" AND use_date_end >= CURDATE()'),
+        'switchbot_issue_count' => manage_scalar($pdo, 'SELECT COUNT(*) FROM reservations WHERE reservation_status = "error" OR switchbot_status IN ("partial_error","failed") OR google_sync_status IN ("partial_error","failed")'),
         'today_count' => manage_scalar($pdo, 'SELECT COUNT(*) FROM reservations WHERE DATE(created_at) = CURDATE()'),
         'mail_issue_count' => manage_scalar($pdo, 'SELECT COUNT(*) FROM reservations WHERE user_mail_status <> "sent" OR admin_mail_status <> "sent"'),
     ];
@@ -183,7 +183,7 @@ function manage_calendar_month(PDO $pdo, array $input): void
     $monthEnd = (new DateTimeImmutable($monthStart))->modify('+1 month')->format('Y-m-d');
 
     $stmt = $pdo->prepare(
-        'SELECT use_date, room_code, room_label, organization_name, email, access_code, switchbot_status '
+        'SELECT use_date, room_code, room_label, organization_name, email, usage_time, access_code, switchbot_status, google_sync_status '
         . 'FROM room_calendar_reservations '
         . 'WHERE use_date >= :month_start AND use_date < :month_end '
         . 'ORDER BY use_date ASC, room_code ASC'
@@ -215,7 +215,7 @@ function manage_calendar_month(PDO $pdo, array $input): void
 function manage_passcode_list(PDO $pdo): void
 {
     $stmt = $pdo->query(
-        'SELECT use_date, room_label, organization_name, email, access_code, access_code_start_at, access_code_end_at, switchbot_status, switchbot_request_id '
+        'SELECT use_date, usage_time, room_label, organization_name, email, access_code, access_code_start_at, access_code_end_at, switchbot_status, switchbot_request_id '
         . 'FROM room_calendar_reservations '
         . 'ORDER BY use_date DESC, id DESC LIMIT 200'
     );

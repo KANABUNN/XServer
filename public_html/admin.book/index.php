@@ -66,7 +66,7 @@ function admin_index_h(?string $value): string
           <header class="page-head">
             <div>
               <h1>予約一覧</h1>
-              <p class="lead">利用者側から自動処理された予約の一覧です。確定 / 却下 / 要確認 / メール送信状況を確認できます。</p>
+              <p class="lead">利用者側から自動処理された予約の一覧です。複数日予約、利用時間、確定 / 却下 / 要確認 / 外部連携状況を確認できます。</p>
             </div>
             <div class="head-actions">
               <button id="dashboardReloadBtn" type="button" class="secondary">再読込</button>
@@ -142,17 +142,18 @@ function admin_index_h(?string $value): string
                     <th>ID</th>
                     <th>受付日時</th>
                     <th>利用日</th>
+                    <th>利用時間</th>
                     <th>部屋</th>
                     <th>団体名</th>
                     <th>メール</th>
                     <th>予約状態</th>
                     <th>パスコード</th>
-                    <th>SwitchBot</th>
+                    <th>外部連携</th>
                     <th>メール</th>
                   </tr>
                 </thead>
                 <tbody id="dashboardTableBody">
-                  <tr><td colspan="10" class="empty">読み込み前です。</td></tr>
+                  <tr><td colspan="11" class="empty">読み込み前です。</td></tr>
                 </tbody>
               </table>
             </div>
@@ -165,7 +166,7 @@ function admin_index_h(?string $value): string
           <header class="page-head">
             <div>
               <h1>月間カレンダー</h1>
-              <p class="lead">確定している予約のみを月単位で確認できます。</p>
+              <p class="lead">確定済みまたは確認中の予約日を月単位で確認できます。</p>
             </div>
             <div class="head-actions">
               <button id="calendarReloadBtn" type="button" class="secondary">再読込</button>
@@ -192,15 +193,17 @@ function admin_index_h(?string $value): string
                 <thead>
                   <tr>
                     <th>利用日</th>
+                    <th>利用時間</th>
                     <th>部屋</th>
                     <th>団体名</th>
                     <th>メール</th>
                     <th>パスコード</th>
                     <th>SwitchBot</th>
+                    <th>Google</th>
                   </tr>
                 </thead>
                 <tbody id="calendarListBody">
-                  <tr><td colspan="6" class="empty">読み込み前です。</td></tr>
+                  <tr><td colspan="8" class="empty">読み込み前です。</td></tr>
                 </tbody>
               </table>
             </div>
@@ -231,6 +234,7 @@ function admin_index_h(?string $value): string
                 <thead>
                   <tr>
                     <th>利用日</th>
+                    <th>利用時間</th>
                     <th>部屋</th>
                     <th>団体名</th>
                     <th>メール</th>
@@ -241,7 +245,7 @@ function admin_index_h(?string $value): string
                   </tr>
                 </thead>
                 <tbody id="passcodeTableBody">
-                  <tr><td colspan="8" class="empty">読み込み前です。</td></tr>
+                  <tr><td colspan="9" class="empty">読み込み前です。</td></tr>
                 </tbody>
               </table>
             </div>
