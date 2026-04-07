@@ -19,12 +19,22 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
+}
+
+input,
+select,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .admin-shell {

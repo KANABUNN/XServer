@@ -23,6 +23,15 @@ body {
     radial-gradient(circle at top right, rgba(31, 111, 235, 0.10), transparent 34%),
     linear-gradient(180deg, #f4f8fd 0%, #eaf0f8 100%);
   color: var(--text);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+select,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .auth-shell {

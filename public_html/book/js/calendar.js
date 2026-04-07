@@ -16,6 +16,16 @@
   const agreeTerms = document.getElementById('agreeTerms');
   const openManualDialogBtn = document.getElementById('openManualDialog');
   const manualDialog = document.getElementById('manualDialog');
+  const submitBtn = form ? form.querySelector('.submit-btn') : null;
+  const submitBtnDefaultLabel = submitBtn ? submitBtn.textContent : '';
+
+  function setSubmitButtonState(isSubmitting) {
+    if (!submitBtn) return;
+    submitBtn.disabled = isSubmitting;
+    submitBtn.classList.toggle('is-submitting', isSubmitting);
+    submitBtn.setAttribute('aria-disabled', isSubmitting ? 'true' : 'false');
+    submitBtn.textContent = isSubmitting ? '送信中...' : submitBtnDefaultLabel;
+  }
 
   if (!form || !calendarGrid || !calendarTitle || !calendarStatusText || !calendarDetail || !detailPanel || !dateConfigList || !reservationDetailsInput) {
     return;
@@ -454,7 +464,23 @@
   form.addEventListener('submit', (event) => {
     if (!validateBeforeSubmit()) {
       event.preventDefault();
+      setSubmitButtonState(false);
+      form.dataset.submitting = '0';
+      return;
     }
+
+    if (form.dataset.submitting === '1') {
+      event.preventDefault();
+      return;
+    }
+
+    form.dataset.submitting = '1';
+    setSubmitButtonState(true);
+  });
+
+  window.addEventListener('pageshow', () => {
+    form.dataset.submitting = '0';
+    setSubmitButtonState(false);
   });
 
   prevMonthBtn?.addEventListener('click', () => moveMonth(-1));
