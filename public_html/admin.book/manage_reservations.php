@@ -114,7 +114,7 @@ function json_response(array $data): void
 
 function manage_require_permission(array $user, string $permission): void
 {
-    if (!admin_auth_user_has_permission($user, $permission)) {
+    if (!admin_auth_has_permission($user, $permission)) {
         http_response_code(403);
         json_response(['ok' => false, 'message' => 'この操作を行う権限がありません。']);
     }
@@ -131,27 +131,32 @@ function manage_dashboard_list(PDO $pdo, array $input): void
     $params = [];
 
     if ($month !== '' && preg_match('/^\d{4}-\d{2}$/', $month)) {
-        $where[] = '(DATE_FORMAT(use_date, "%Y-%m") = :month OR DATE_FORMAT(use_date_end, "%Y-%m") = :month)';
+        $where[] = 'EXISTS (SELECT 1 FROM room_calendar_reservations d WHERE d.reservation_id = r.id AND DATE_FORMAT(d.use_date, "%Y-%m") = :month)';
         $params[':month'] = $month;
     }
     if ($roomCode !== '') {
-        $where[] = 'room_code = :room_code';
+        $where[] = 'EXISTS (SELECT 1 FROM room_calendar_reservations d WHERE d.reservation_id = r.id AND d.room_code = :room_code)';
         $params[':room_code'] = $roomCode;
     }
     if ($reservationStatus !== '') {
-        $where[] = 'reservation_status = :reservation_status';
+        $where[] = 'r.reservation_status = :reservation_status';
         $params[':reservation_status'] = $reservationStatus;
     }
     if ($keyword !== '') {
-        $where[] = '(email LIKE :keyword OR organization_name LIKE :keyword)';
-        $params[':keyword'] = '%' . $keyword . '%';
+        $where[] = '(r.email LIKE :keyword_email OR r.organization_name LIKE :keyword_org)';
+        $params[':keyword_email'] = '%' . $keyword . '%';
+        $params[':keyword_org'] = '%' . $keyword . '%';
     }
 
-    $sql = 'SELECT * FROM reservations';
+    $sql = 'SELECT r.*, '
+        . '(SELECT GROUP_CONCAT(DISTINCT d.room_label ORDER BY d.room_label SEPARATOR " / ") FROM room_calendar_reservations d WHERE d.reservation_id = r.id) AS room_labels, '
+        . '(SELECT GROUP_CONCAT(CONCAT(d.use_date, " ", d.room_label, " ", d.usage_time) ORDER BY d.use_date SEPARATOR "\n") FROM room_calendar_reservations d WHERE d.reservation_id = r.id) AS usage_summary, '
+        . '(SELECT GROUP_CONCAT(CONCAT(d.use_date, " ", d.access_code) ORDER BY d.use_date SEPARATOR "\n") FROM room_calendar_reservations d WHERE d.reservation_id = r.id) AS access_code_summary '
+        . 'FROM reservations r';
     if ($where !== []) {
         $sql .= ' WHERE ' . implode(' AND ', $where);
     }
-    $sql .= ' ORDER BY created_at DESC LIMIT 200';
+    $sql .= ' ORDER BY r.created_at DESC LIMIT 200';
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
