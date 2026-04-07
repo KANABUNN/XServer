@@ -154,6 +154,102 @@ CREATE TABLE IF NOT EXISTS switchbot_passcode_requests (
 SQL;
 }
 
+function reservation_table_exists(PDO $pdo, string $tableName): bool
+{
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name');
+    $stmt->execute([':table_name' => $tableName]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
+function reservation_column_exists(PDO $pdo, string $tableName, string $columnName): bool
+{
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name');
+    $stmt->execute([
+        ':table_name' => $tableName,
+        ':column_name' => $columnName,
+    ]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
+function reservation_index_exists(PDO $pdo, string $tableName, string $indexName): bool
+{
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND INDEX_NAME = :index_name');
+    $stmt->execute([
+        ':table_name' => $tableName,
+        ':index_name' => $indexName,
+    ]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
+function reservation_add_column_if_missing(PDO $pdo, string $tableName, string $columnName, string $definition): void
+{
+    if (reservation_column_exists($pdo, $tableName, $columnName)) {
+        return;
+    }
+    $pdo->exec(sprintf('ALTER TABLE `%s` ADD COLUMN `%s` %s', $tableName, $columnName, $definition));
+}
+
+function reservation_add_index_if_missing(PDO $pdo, string $tableName, string $indexName, string $definition): void
+{
+    if (reservation_index_exists($pdo, $tableName, $indexName)) {
+        return;
+    }
+    $pdo->exec(sprintf('ALTER TABLE `%s` ADD %s', $tableName, $definition));
+}
+
+function reservation_migrate_existing_schema(PDO $pdo): void
+{
+    if (reservation_table_exists($pdo, 'reservations')) {
+        reservation_add_column_if_missing($pdo, 'reservations', 'room_code', "VARCHAR(32) NOT NULL DEFAULT '' AFTER `organization_name`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'room_label', "VARCHAR(64) NOT NULL DEFAULT '' AFTER `room_code`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'use_date_end', "DATE NOT NULL DEFAULT '1970-01-01' AFTER `use_date`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'selected_dates_count', "INT UNSIGNED NOT NULL DEFAULT 1 AFTER `use_date_end`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'usage_start_time', "CHAR(5) NOT NULL DEFAULT '09:00' AFTER `selected_dates_count`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'usage_end_time', "CHAR(5) NOT NULL DEFAULT '10:00' AFTER `usage_start_time`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'usage_time', "VARCHAR(20) NOT NULL DEFAULT '09:00~10:00' AFTER `usage_end_time`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'access_code', "CHAR(12) DEFAULT NULL AFTER `usage_time`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'reservation_status', "VARCHAR(32) NOT NULL DEFAULT 'pending' AFTER `access_code`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'status_reason', "VARCHAR(500) DEFAULT NULL AFTER `reservation_status`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'switchbot_status', "VARCHAR(32) NOT NULL DEFAULT 'queued' AFTER `status_reason`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'switchbot_message', "VARCHAR(500) DEFAULT NULL AFTER `switchbot_status`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'google_sync_status', "VARCHAR(32) NOT NULL DEFAULT 'pending' AFTER `switchbot_message`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'google_sync_message', "VARCHAR(500) DEFAULT NULL AFTER `google_sync_status`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'user_mail_status', "VARCHAR(32) NOT NULL DEFAULT 'pending' AFTER `google_sync_message`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'admin_mail_status', "VARCHAR(32) NOT NULL DEFAULT 'pending' AFTER `user_mail_status`");
+        reservation_add_column_if_missing($pdo, 'reservations', 'updated_at', "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `created_at`");
+
+        $pdo->exec("UPDATE `reservations` SET `use_date_end` = `use_date` WHERE `use_date_end` = '1970-01-01' OR `use_date_end` IS NULL");
+        $pdo->exec("UPDATE `reservations` SET `room_label` = CASE `room_code` WHEN 'tamoku' THEN '多目的室' WHEN 'orange' THEN 'オレンジの部屋' ELSE `room_code` END WHERE `room_label` = ''");
+
+        reservation_add_index_if_missing($pdo, 'reservations', 'idx_reservations_room_date', 'KEY `idx_reservations_room_date` (`room_code`, `use_date`)');
+        reservation_add_index_if_missing($pdo, 'reservations', 'idx_reservations_use_date_end', 'KEY `idx_reservations_use_date_end` (`use_date_end`)');
+        reservation_add_index_if_missing($pdo, 'reservations', 'idx_reservations_status', 'KEY `idx_reservations_status` (`reservation_status`)');
+        reservation_add_index_if_missing($pdo, 'reservations', 'idx_reservations_email', 'KEY `idx_reservations_email` (`email`)');
+        reservation_add_index_if_missing($pdo, 'reservations', 'idx_reservations_created_at', 'KEY `idx_reservations_created_at` (`created_at`)');
+    }
+
+    if (reservation_table_exists($pdo, 'room_calendar_reservations')) {
+        reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'reservation_id', 'BIGINT UNSIGNED NOT NULL DEFAULT 0 AFTER `id`');
+        reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'usage_start_time', "CHAR(5) NOT NULL DEFAULT '09:00' AFTER `email`");
+        reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'usage_end_time', "CHAR(5) NOT NULL DEFAULT '10:00' AFTER `usage_start_time`");
+        reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'usage_time', "VARCHAR(20) NOT NULL DEFAULT '09:00~10:00' AFTER `usage_end_time`");
+        reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'access_code_start_at', 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER `access_code`');
+        reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'access_code_end_at', 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER `access_code_start_at`');
+        reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'switchbot_request_id', 'VARCHAR(120) DEFAULT NULL AFTER `switchbot_status`');
+        reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'switchbot_command_id', 'VARCHAR(120) DEFAULT NULL AFTER `switchbot_request_id`');
+        reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'switchbot_message', 'VARCHAR(500) DEFAULT NULL AFTER `switchbot_command_id`');
+        reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'google_event_id', 'VARCHAR(255) DEFAULT NULL AFTER `switchbot_message`');
+        reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'google_calendar_id', 'VARCHAR(255) DEFAULT NULL AFTER `google_event_id`');
+        reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'google_sync_message', 'VARCHAR(500) DEFAULT NULL AFTER `google_sync_status`');
+        reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'updated_at', 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `created_at`');
+
+        reservation_add_index_if_missing($pdo, 'room_calendar_reservations', 'idx_room_calendar_reservations_reservation_id', 'KEY `idx_room_calendar_reservations_reservation_id` (`reservation_id`)');
+        reservation_add_index_if_missing($pdo, 'room_calendar_reservations', 'idx_room_calendar_reservations_use_date', 'KEY `idx_room_calendar_reservations_use_date` (`use_date`)');
+        reservation_add_index_if_missing($pdo, 'room_calendar_reservations', 'idx_room_calendar_reservations_switchbot_status', 'KEY `idx_room_calendar_reservations_switchbot_status` (`switchbot_status`)');
+        reservation_add_index_if_missing($pdo, 'room_calendar_reservations', 'idx_room_calendar_reservations_google_sync_status', 'KEY `idx_room_calendar_reservations_google_sync_status` (`google_sync_status`)');
+    }
+}
+
 function reservation_install_schema(PDO $pdo): void
 {
     static $installed = false;
@@ -169,6 +265,8 @@ function reservation_install_schema(PDO $pdo): void
             $pdo->exec($statement);
         }
     }
+
+    reservation_migrate_existing_schema($pdo);
 }
 
 function reservation_fetch_detail_rows(PDO $pdo, int $reservationId): array

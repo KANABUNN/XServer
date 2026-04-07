@@ -44,6 +44,17 @@ function h(?string $value): string
 {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
+
+
+function result_base_path(): string
+{
+    $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    $dir = trim(str_replace('\\', '/', dirname($scriptName)));
+    if ($dir === '' || $dir === '.') {
+        return '';
+    }
+    return rtrim($dir, '/');
+}
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -98,7 +109,7 @@ function h(?string $value): string
     <?php endif; ?>
 
     <div class="button-group">
-      <a href="/book/" class="terms-link-btn">入力画面へ戻る</a>
+      <a href="<?php echo h((result_base_path() !== "" ? result_base_path() : "")."/"); ?>" class="terms-link-btn">入力画面へ戻る</a>
     </div>
   </div>
 </body>

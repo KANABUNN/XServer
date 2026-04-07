@@ -12,6 +12,17 @@ require_once __DIR__ . '/../../apps/smtp_mailer.php';
 require_once __DIR__ . '/../../apps/mail_html_templates.php';
 require_once __DIR__ . '/../../apps/reservation_service.php';
 
+function reservation_current_base_path(): string
+{
+    $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    $dir = trim(str_replace('\\', '/', dirname($scriptName)));
+    if ($dir === '' || $dir === '.') {
+        return '';
+    }
+    return rtrim($dir, '/');
+}
+
+
 try {
     if (!is_array($cfg)) {
         throw new RuntimeException('config.php の形式が不正です。');
@@ -33,7 +44,8 @@ try {
 
     reservation_send_emails($cfg, $pdo, $reservation);
 
-    header('Location: /book/result.php?token=' . rawurlencode((string)$reservation['request_token']), true, 303);
+    $basePath = reservation_current_base_path();
+    header('Location: ' . ($basePath !== '' ? $basePath : '') . '/result.php?token=' . rawurlencode((string)$reservation['request_token']), true, 303);
     exit;
 } catch (Throwable $e) {
     $id = bin2hex(random_bytes(6));
@@ -41,6 +53,7 @@ try {
     error_log('[reservation:' . $id . '] ' . $e->getFile() . ':' . $e->getLine());
     error_log('[reservation:' . $id . '] POST=' . json_encode($_POST, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-    header('Location: /book/mistake.html', true, 303);
+    $basePath = reservation_current_base_path();
+    header('Location: ' . ($basePath !== '' ? $basePath : '') . '/mistake.html', true, 303);
     exit;
 }

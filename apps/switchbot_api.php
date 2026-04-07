@@ -346,11 +346,23 @@ function switchbot_build_room_status(array $cfg, string $roomCode, array $keypad
 
 function switchbot_datetime_to_unix_seconds(string $datetimeLocal, string $timezone): int
 {
-    $dt = DateTimeImmutable::createFromFormat('Y-m-d\TH:i', $datetimeLocal, new DateTimeZone($timezone));
-    if (!$dt || $dt->format('Y-m-d\TH:i') !== $datetimeLocal) {
-        throw new InvalidArgumentException('日時は YYYY-MM-DDTHH:MM 形式で入力してください。');
+    $value = trim($datetimeLocal);
+    $tz = new DateTimeZone($timezone);
+    $formats = ['Y-m-d\TH:i', 'Y-m-d H:i:s', 'Y-m-d H:i', 'Y-m-d\TH:i:s'];
+
+    foreach ($formats as $format) {
+        $dt = DateTimeImmutable::createFromFormat($format, $value, $tz);
+        if ($dt !== false && $dt->format($format) === $value) {
+            return $dt->getTimestamp();
+        }
     }
-    return $dt->getTimestamp();
+
+    try {
+        $fallback = new DateTimeImmutable($value, $tz);
+        return $fallback->getTimestamp();
+    } catch (Throwable $e) {
+        throw new InvalidArgumentException('日時は YYYY-MM-DDTHH:MM または YYYY-MM-DD HH:MM[:SS] 形式で入力してください。');
+    }
 }
 
 function switchbot_create_time_limited_key(array $cfg, string $deviceId, string $name, string $password, string $startAt, string $endAt): array

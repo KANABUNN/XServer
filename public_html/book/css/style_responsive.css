@@ -43,6 +43,7 @@
   }
 
   .container {
+    width: min(100%, calc(100vw - 20px));
     border-radius: 18px;
     padding: 20px 12px;
   }
