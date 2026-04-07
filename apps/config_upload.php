@@ -24,6 +24,8 @@ return [
         'booking_min_days_before' => 2,
         'booking_max_months_ahead' => 2,
         'time_step_minutes' => 15,
+        'booking_time_start' => '09:00',
+        'booking_time_end' => '20:00',
         'access_code_digits' => 6,
         'access_code_padding_minutes' => 10,
         'switchbot_required_for_confirmation' => true,

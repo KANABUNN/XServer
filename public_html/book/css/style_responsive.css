@@ -64,3 +64,36 @@
     padding: 16px;
   }
 }
+
+
+@media (max-width: 900px) {
+  .hero-actions {
+    justify-content: stretch;
+  }
+
+  .hero-action-btn {
+    width: 100%;
+  }
+
+  .manual-dialog-body {
+    padding: 12px;
+  }
+
+  .manual-embed-wrap,
+  .manual-pdf-frame {
+    min-height: 62vh;
+    height: 62vh;
+  }
+}
+
+@media (max-width: 640px) {
+  .manual-dialog {
+    width: calc(100vw - 12px);
+  }
+
+  .manual-embed-wrap,
+  .manual-pdf-frame {
+    min-height: 56vh;
+    height: 56vh;
+  }
+}

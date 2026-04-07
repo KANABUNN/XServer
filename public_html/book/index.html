@@ -5,14 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>貸し部屋予約</title>
   <link rel="icon" href="icon.png">
-  <link rel="stylesheet" href="css/style.css?v=20260407b">
-  <link rel="stylesheet" href="css/style_responsive.css?v=20260407b">
+  <link rel="stylesheet" href="css/style.css?v=20260407c">
+  <link rel="stylesheet" href="css/style_responsive.css?v=20260407c">
 </head>
 <body>
   <div class="container">
     <header class="hero">
       <h1>貸し部屋予約</h1>
-      <p class="subtitle">メールアドレス・団体名・部屋・利用日・利用時間を入力して、予約をその場で申請できます。</p>
+      <p class="subtitle">メールアドレス・団体名・部屋・利用日・利用時間を入力して、予約をその場で申請できます。利用時間は 9:00〜20:00 の範囲で指定できます。</p>
+      <div class="hero-actions">
+        <button type="button" class="terms-link-btn hero-action-btn" id="openManualDialog">利用マニュアルを見る</button>
+      </div>
     </header>
 
     <form action="submit.php" method="post" class="form" id="reservationForm">
@@ -59,6 +62,7 @@
 
         <div class="form-group">
           <label for="usage_start_time">利用開始時刻 <span class="required">*</span></label>
+          <span class="field-note">9:00〜20:00 の範囲で選択できます</span>
           <select name="usage_start_time" id="usage_start_time" required></select>
         </div>
 
@@ -163,6 +167,28 @@
     </form>
   </dialog>
 
-  <script src="js/calendar.js?v=20260407b" defer></script>
+
+  <dialog id="manualDialog" class="terms-dialog manual-dialog">
+    <form method="dialog" class="terms-dialog-card manual-dialog-card">
+      <div class="terms-dialog-head">
+        <h2>利用マニュアル</h2>
+        <button type="submit" class="dialog-close-btn" aria-label="閉じる">×</button>
+      </div>
+      <div class="terms-dialog-body manual-dialog-body">
+        <div class="manual-embed-wrap">
+          <object data="manuals/booking_user_manual.pdf#view=FitH" type="application/pdf" class="manual-pdf-frame">
+            <p>PDF を表示できない場合は、<a href="manuals/booking_user_manual.pdf" target="_blank" rel="noopener">こちらから開いてください</a>。</p>
+          </object>
+        </div>
+      </div>
+      <div class="terms-dialog-actions">
+        <a href="manuals/booking_user_manual.pdf" target="_blank" rel="noopener" class="terms-link-btn">新しいタブで開く</a>
+        <button type="submit" class="calendar-nav-btn">閉じる</button>
+      </div>
+    </form>
+  </dialog>
+
+
+  <script src="js/calendar.js?v=20260407c" defer></script>
 </body>
 </html>

@@ -16,6 +16,8 @@
   const termsDialog = document.getElementById('termsDialog');
   const agreeFromDialogBtn = document.getElementById('agreeFromDialog');
   const agreeTerms = document.getElementById('agreeTerms');
+  const openManualDialogBtn = document.getElementById('openManualDialog');
+  const manualDialog = document.getElementById('manualDialog');
 
   if (!form || !roomSelect || !hiddenInput || !displayInput || !usageStartSelect || !usageEndSelect || !calendarGrid || !calendarTitle || !calendarStatusText || !calendarDetail) {
     return;
@@ -28,6 +30,9 @@
   currentMonth.setDate(1);
   let minDate = null;
   let maxDate = null;
+  let bookingTimeStart = '09:00';
+  let bookingTimeEnd = '20:00';
+  let bookingStepMinutes = 15;
 
   function formatDateKey(date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -47,6 +52,17 @@
     const copy = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     copy.setHours(0, 0, 0, 0);
     return copy;
+  }
+
+  function timeToMinutes(value) {
+    const [hours, minutes] = value.split(':').map(Number);
+    return (hours * 60) + minutes;
+  }
+
+  function minutesToTime(totalMinutes) {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
   }
 
   function isWithinRange(date) {
@@ -89,6 +105,7 @@
           <li><strong>選択部屋</strong><span>${roomName}</span></li>
           <li><strong>選択日数</strong><span>${selectedDates.length}日</span></li>
           <li><strong>利用時間</strong><span>${usageStartSelect.value || '--:--'}~${usageEndSelect.value || '--:--'}</span></li>
+          <li><strong>指定可能時刻</strong><span>${bookingTimeStart}~${bookingTimeEnd}</span></li>
         </ul>
         <div class="selected-date-list-wrap">
           <strong>選択中の日付</strong>
@@ -129,13 +146,13 @@
     const startDay = firstDay.getDay();
     const lastDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
 
-    for (let i = 0; i < startDay; i++) {
+    for (let i = 0; i < startDay; i += 1) {
       const empty = document.createElement('div');
       empty.className = 'calendar-day is-empty';
       calendarGrid.appendChild(empty);
     }
 
-    for (let day = 1; day <= lastDate; day++) {
+    for (let day = 1; day <= lastDate; day += 1) {
       const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
       const dateKey = formatDateKey(cellDate);
       const data = monthData[dateKey] || { tamoku: false, orange: false };
@@ -180,10 +197,14 @@
       monthData = json.days || {};
       if (json.min_date) minDate = normalizeDate(parseDateKey(json.min_date));
       if (json.max_date) maxDate = normalizeDate(parseDateKey(json.max_date));
+      if (json.time_start) bookingTimeStart = String(json.time_start);
+      if (json.time_end) bookingTimeEnd = String(json.time_end);
+      if (json.time_step_minutes) bookingStepMinutes = Number(json.time_step_minutes) || 15;
+      fillTimeSelects();
 
       renderCalendar();
       calendarStatusText.textContent = minDate && maxDate
-        ? `予約可能期間: ${formatDateKey(minDate)} ～ ${formatDateKey(maxDate)}`
+        ? `予約可能期間: ${formatDateKey(minDate)} ～ ${formatDateKey(maxDate)} / 指定可能時刻: ${bookingTimeStart} ～ ${bookingTimeEnd}`
         : '予約状況を表示しています。';
     } catch (error) {
       calendarGrid.innerHTML = '<p class="calendar-error">予約状況の取得に失敗しました。</p>';
@@ -200,22 +221,38 @@
   }
 
   function buildTimeOptions() {
+    const startMinutes = timeToMinutes(bookingTimeStart);
+    const endMinutes = timeToMinutes(bookingTimeEnd);
     const options = [];
-    for (let h = 0; h < 24; h++) {
-      for (let m = 0; m < 60; m += 15) {
-        options.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-      }
+    for (let minutes = startMinutes; minutes <= endMinutes; minutes += bookingStepMinutes) {
+      options.push(minutesToTime(minutes));
     }
-    options.push('24:00');
     return options;
   }
 
   function fillTimeSelects() {
+    const startValue = usageStartSelect.value;
+    const endValue = usageEndSelect.value;
     const options = buildTimeOptions();
-    usageStartSelect.innerHTML = '<option value="">開始時刻を選択してください</option>' + options.filter((v) => v !== '24:00').map((v) => `<option value="${v}">${v}</option>`).join('');
-    usageEndSelect.innerHTML = '<option value="">終了時刻を選択してください</option>' + options.map((v) => `<option value="${v}">${v}</option>`).join('');
-    usageStartSelect.value = '09:00';
-    usageEndSelect.value = '18:00';
+    const startOptions = options.filter((value) => value !== bookingTimeEnd);
+    const endOptions = options.filter((value) => value !== bookingTimeStart);
+
+    usageStartSelect.innerHTML = '<option value="">開始時刻を選択してください</option>' + startOptions.map((value) => `<option value="${value}">${value}</option>`).join('');
+    usageEndSelect.innerHTML = '<option value="">終了時刻を選択してください</option>' + endOptions.map((value) => `<option value="${value}">${value}</option>`).join('');
+
+    if (startOptions.includes(startValue)) {
+      usageStartSelect.value = startValue;
+    } else if (!usageStartSelect.value) {
+      usageStartSelect.value = bookingTimeStart;
+    }
+
+    if (endOptions.includes(endValue)) {
+      usageEndSelect.value = endValue;
+    } else if (!usageEndSelect.value || usageEndSelect.value <= usageStartSelect.value) {
+      const defaultEndMinutes = Math.min(timeToMinutes(bookingTimeEnd), timeToMinutes(bookingTimeStart) + 60);
+      const defaultEndValue = minutesToTime(defaultEndMinutes);
+      usageEndSelect.value = endOptions.includes(defaultEndValue) ? defaultEndValue : endOptions[endOptions.length - 1];
+    }
   }
 
   roomSelect.addEventListener('change', () => {
@@ -225,7 +262,16 @@
     renderDetail();
   });
 
-  usageStartSelect.addEventListener('change', renderDetail);
+  usageStartSelect.addEventListener('change', () => {
+    if (usageEndSelect.value && usageStartSelect.value >= usageEndSelect.value) {
+      const nextEndMinutes = Math.min(timeToMinutes(bookingTimeEnd), timeToMinutes(usageStartSelect.value) + bookingStepMinutes);
+      const nextEndValue = minutesToTime(nextEndMinutes);
+      if (nextEndValue > usageStartSelect.value) {
+        usageEndSelect.value = nextEndValue;
+      }
+    }
+    renderDetail();
+  });
   usageEndSelect.addEventListener('change', renderDetail);
 
   form.addEventListener('submit', (event) => {
@@ -250,6 +296,10 @@
       alert('利用終了時刻は開始時刻より後にしてください。');
       return;
     }
+    if (usageStartSelect.value < bookingTimeStart || usageEndSelect.value > bookingTimeEnd) {
+      event.preventDefault();
+      alert(`利用時間は ${bookingTimeStart}〜${bookingTimeEnd} の範囲で指定してください。`);
+    }
   });
 
   prevMonthBtn?.addEventListener('click', () => moveMonth(-1));
@@ -270,9 +320,17 @@
     }
   });
 
+  openManualDialogBtn?.addEventListener('click', () => {
+    if (typeof manualDialog?.showModal === 'function') {
+      manualDialog.showModal();
+    }
+  });
+
   agreeFromDialogBtn?.addEventListener('click', () => {
     agreeTerms.checked = true;
-    termsDialog.close();
+    if (typeof termsDialog?.close === 'function') {
+      termsDialog.close();
+    }
   });
 
   fillTimeSelects();

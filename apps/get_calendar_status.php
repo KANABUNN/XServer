@@ -23,12 +23,16 @@ try {
     $days = reservation_fetch_month_status($pdo, $year, $month);
 
     [$minDate, $maxDate] = reservation_allowed_range($cfg);
+    [$timeStart, $timeEnd] = reservation_allowed_time_bounds($cfg);
     echo json_encode([
         'ok' => true,
         'days' => $days,
         'min_date' => $minDate->format('Y-m-d'),
         'max_date' => $maxDate->format('Y-m-d'),
         'today' => reservation_now($cfg)->format('Y-m-d'),
+        'time_start' => $timeStart,
+        'time_end' => $timeEnd,
+        'time_step_minutes' => reservation_time_step_minutes($cfg),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     http_response_code(500);

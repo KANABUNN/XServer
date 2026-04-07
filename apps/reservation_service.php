@@ -31,6 +31,23 @@ function reservation_time_step_minutes(array $cfg): int
     return max(1, (int)($cfg['reservation']['time_step_minutes'] ?? 15));
 }
 
+function reservation_allowed_time_bounds(array $cfg): array
+{
+    $timeStart = trim((string)($cfg['reservation']['booking_time_start'] ?? '09:00'));
+    $timeEnd = trim((string)($cfg['reservation']['booking_time_end'] ?? '20:00'));
+
+    reservation_assert_time_value($timeStart, reservation_time_step_minutes($cfg), false);
+    reservation_assert_time_value($timeEnd, reservation_time_step_minutes($cfg), true);
+
+    $startMinutes = reservation_time_to_minutes($timeStart);
+    $endMinutes = reservation_time_to_minutes($timeEnd);
+    if ($endMinutes <= $startMinutes) {
+        throw new RuntimeException('config.php の予約時刻範囲が不正です。');
+    }
+
+    return [$timeStart, $timeEnd];
+}
+
 function reservation_validate_form_input(array $cfg, array $source): array
 {
     $email = trim((string)($source['email'] ?? ''));
@@ -68,10 +85,17 @@ function reservation_validate_form_input(array $cfg, array $source): array
     reservation_assert_time_value($usageStartTime, reservation_time_step_minutes($cfg), false);
     reservation_assert_time_value($usageEndTime, reservation_time_step_minutes($cfg), true);
 
+    [$allowedStartTime, $allowedEndTime] = reservation_allowed_time_bounds($cfg);
+    $allowedStartMinutes = reservation_time_to_minutes($allowedStartTime);
+    $allowedEndMinutes = reservation_time_to_minutes($allowedEndTime);
+
     $startMinutes = reservation_time_to_minutes($usageStartTime);
     $endMinutes = reservation_time_to_minutes($usageEndTime);
     if ($endMinutes <= $startMinutes) {
         throw new RuntimeException('利用時間の終了は開始より後にしてください。');
+    }
+    if ($startMinutes < $allowedStartMinutes || $endMinutes > $allowedEndMinutes) {
+        throw new RuntimeException('利用時間は ' . $allowedStartTime . '〜' . $allowedEndTime . ' の範囲で指定してください。');
     }
 
     [$minDate, $maxDate] = reservation_allowed_range($cfg);
