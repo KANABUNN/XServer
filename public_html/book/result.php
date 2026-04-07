@@ -79,8 +79,6 @@ function result_base_path(): string
           <li><strong>メールアドレス</strong><span><?php echo h((string)$row['email']); ?></span></li>
           <li><strong>団体名</strong><span><?php echo h((string)$row['organization_name']); ?></span></li>
           <li><strong>選択日数</strong><span><?php echo h((string)$row['selected_dates_count']); ?>日</span></li>
-          <li><strong>SwitchBot 状態</strong><span><?php echo h((string)($row['switchbot_status'] ?? '')); ?></span></li>
-          <li><strong>Google 連携</strong><span><?php echo h((string)($row['google_sync_status'] ?? '')); ?></span></li>
           <?php if ((string)($row['status_reason'] ?? '') !== ''): ?>
             <li><strong>理由 / 備考</strong><span><?php echo h((string)$row['status_reason']); ?></span></li>
           <?php endif; ?>
