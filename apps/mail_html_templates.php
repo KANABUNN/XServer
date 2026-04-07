@@ -51,7 +51,9 @@ function reservation_mail_rows(array $reservation): array
         }
         $rows[] = [
             'use_date' => (string)($row['use_date'] ?? ''),
+            'room_label' => (string)($row['room_label'] ?? ''),
             'usage_time' => (string)($row['usage_time'] ?? ''),
+            'access_code' => (string)($row['access_code'] ?? ''),
             'switchbot_status' => (string)($row['switchbot_status'] ?? ''),
             'google_sync_status' => (string)($row['google_sync_status'] ?? ''),
         ];
@@ -59,7 +61,7 @@ function reservation_mail_rows(array $reservation): array
     return $rows;
 }
 
-function reservation_mail_dates_html(array $dateRows): string
+function reservation_mail_dates_html(array $dateRows, bool $withCodes = false): string
 {
     if ($dateRows === []) {
         return '<p style="margin:0;">日付情報を取得できませんでした。</p>';
@@ -68,8 +70,11 @@ function reservation_mail_dates_html(array $dateRows): string
     $items = '';
     foreach ($dateRows as $row) {
         $date = reservation_mail_escape((string)($row['use_date'] ?? ''));
+        $room = reservation_mail_escape((string)($row['room_label'] ?? ''));
         $usage = reservation_mail_escape((string)($row['usage_time'] ?? ''));
-        $items .= '<li style="margin:0 0 8px;">' . $date . ' / ' . $usage . '</li>';
+        $code = reservation_mail_escape((string)($row['access_code'] ?? ''));
+        $extra = $withCodes && $code !== '' ? ' / パスコード: <strong>' . $code . '</strong>' : '';
+        $items .= '<li style="margin:0 0 8px;">' . $date . ' / ' . $room . ' / ' . $usage . $extra . '</li>';
     }
 
     return '<ul style="margin:0;padding-left:1.4em;line-height:1.9;">' . $items . '</ul>';
@@ -78,13 +83,10 @@ function reservation_mail_dates_html(array $dateRows): string
 function build_user_result_mail(array $reservation): array
 {
     $status = (string)($reservation['reservation_status'] ?? '');
-    $roomLabel = (string)($reservation['room_label'] ?? '');
     $organizationName = (string)($reservation['organization_name'] ?? '');
-    $accessCode = (string)($reservation['access_code'] ?? '');
     $reason = (string)($reservation['status_reason'] ?? '');
     $switchbotStatus = (string)($reservation['switchbot_status'] ?? '');
     $dateRows = reservation_mail_rows($reservation);
-    $usageTime = (string)($reservation['usage_time'] ?? '');
 
     $subject = $status === 'confirmed'
         ? '【貸し部屋予約】予約確定のお知らせ'
@@ -102,19 +104,9 @@ function build_user_result_mail(array $reservation): array
     $tableRows = [
         ['メールアドレス', reservation_mail_escape((string)($reservation['email'] ?? ''))],
         ['団体名', reservation_mail_escape($organizationName)],
-        ['部屋', reservation_mail_escape($roomLabel)],
-        ['利用時間', reservation_mail_escape($usageTime)],
-        ['利用日', reservation_mail_dates_html($dateRows)],
+        ['選択日数', reservation_mail_escape((string)($reservation['selected_dates_count'] ?? '0')) . '日'],
+        ['予約内容', reservation_mail_dates_html($dateRows, in_array($status, ['confirmed', 'error'], true))],
     ];
-
-    if ($accessCode !== '' && in_array($status, ['confirmed', 'error'], true)) {
-        $tableRows[] = [
-            '入室用パスコード',
-            '<span style="display:inline-block;padding:8px 14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;font-size:22px;letter-spacing:0.18em;font-weight:700;">'
-            . reservation_mail_escape($accessCode)
-            . '</span>'
-        ];
-    }
 
     if ($reason !== '') {
         $tableRows[] = ['備考', nl2br(reservation_mail_escape($reason))];
@@ -140,12 +132,13 @@ HTML;
 </table>
 HTML;
 
-    $bodyParts[] = '<p style="margin:0;font-size:13px;line-height:1.8;color:#6b7280;">※ SwitchBot のパスコード有効期間は、指定利用時間の前後10分を自動的に含めて発行されます。</p>';
+    $bodyParts[] = '<p style="margin:0;font-size:13px;line-height:1.8;color:#6b7280;">※ SwitchBot のパスコード有効期間は、各日付で指定した利用時間の前後10分を自動的に含めて発行されます。</p>';
 
     return [
         'to' => (string)($reservation['email'] ?? ''),
         'subject' => $subject,
-        'body' => trim(strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", implode('', $bodyParts)))),
+        'body' => trim(strip_tags(str_replace(['<br>', '<br/>', '<br />'], "
+", implode('', $bodyParts)))),
         'html_body' => reservation_mail_card($subject, implode('', $bodyParts)),
     ];
 }
@@ -166,10 +159,8 @@ function build_admin_notice_mail(array $reservation): array
         ['処理結果', reservation_mail_escape($statusLabel)],
         ['メールアドレス', reservation_mail_escape((string)($reservation['email'] ?? ''))],
         ['団体名', reservation_mail_escape((string)($reservation['organization_name'] ?? ''))],
-        ['部屋', reservation_mail_escape((string)($reservation['room_label'] ?? ''))],
-        ['利用時間', reservation_mail_escape((string)($reservation['usage_time'] ?? ''))],
-        ['利用日', reservation_mail_dates_html($dateRows)],
-        ['パスコード', reservation_mail_escape((string)($reservation['access_code'] ?? ''))],
+        ['選択日数', reservation_mail_escape((string)($reservation['selected_dates_count'] ?? '0')) . '日'],
+        ['予約内容', reservation_mail_dates_html($dateRows, true)],
         ['SwitchBot状態', reservation_mail_escape((string)($reservation['switchbot_status'] ?? ''))],
         ['Google連携', reservation_mail_escape((string)($reservation['google_sync_status'] ?? ''))],
         ['理由 / メッセージ', nl2br(reservation_mail_escape((string)($reservation['status_reason'] ?? $reservation['switchbot_message'] ?? '')))],
@@ -195,7 +186,8 @@ HTML;
     return [
         'to' => '',
         'subject' => $title,
-        'body' => trim(strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $bodyHtml))),
+        'body' => trim(strip_tags(str_replace(['<br>', '<br/>', '<br />'], "
+", $bodyHtml))),
         'html_body' => reservation_mail_card($title, $bodyHtml),
     ];
 }

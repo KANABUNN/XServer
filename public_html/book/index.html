@@ -5,77 +5,58 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>貸し部屋予約</title>
   <link rel="icon" href="icon.png">
-  <link rel="stylesheet" href="css/style.css?v=20260407c">
-  <link rel="stylesheet" href="css/style_responsive.css?v=20260407c">
+  <link rel="stylesheet" href="css/style.css?v=20260407e">
+  <link rel="stylesheet" href="css/style_responsive.css?v=20260407e">
 </head>
 <body>
   <div class="container">
     <header class="hero">
       <h1>貸し部屋予約</h1>
-      <p class="subtitle">メールアドレス・団体名・部屋・利用日・利用時間を入力して、予約をその場で申請できます。利用時間は 9:00〜20:00 の範囲で指定できます。</p>
+      <p class="subtitle">カレンダーで利用日を選んだあと、各日付ごとに部屋と利用時間を設定して予約できます。利用時間は 9:00〜20:00 の範囲です。</p>
       <div class="hero-actions">
         <button type="button" class="terms-link-btn hero-action-btn" id="openManualDialog">利用マニュアルを見る</button>
       </div>
     </header>
 
     <form action="submit.php" method="post" class="form" id="reservationForm">
-      <div class="form-grid">
-        <div class="form-group">
-          <label for="email">メールアドレス <span class="required">*</span></label>
-          <input
-            type="email"
-            name="email"
-            id="email"
-            placeholder="s(学籍番号)@bene.fit.ac.jp または (団体名)@bene.fit.ac.jp"
-            pattern="^[^@]+@bene\.fit\.ac\.jp$"
-            title="@bene.fit.ac.jp のメールアドレスのみ使用できます"
-            required
-          >
+      <section class="panel">
+        <div class="panel-head">
+          <h2>1. 利用者情報</h2>
+          <p>メールアドレス・団体名を入力してください。</p>
         </div>
 
-        <div class="form-group">
-          <label for="organization_name">団体名 <span class="required">*</span></label>
-          <input
-            type="text"
-            name="organization_name"
-            id="organization_name"
-            maxlength="150"
-            placeholder="例：総合管理事務局"
-            required
-          >
-        </div>
+        <div class="form-grid user-grid">
+          <div class="form-group">
+            <label for="email">メールアドレス <span class="required">*</span></label>
+            <input
+              type="email"
+              name="email"
+              id="email"
+              placeholder="s(学籍番号)@bene.fit.ac.jp または (団体名)@bene.fit.ac.jp"
+              pattern="^[^@]+@bene\.fit\.ac\.jp$"
+              title="@bene.fit.ac.jp のメールアドレスのみ使用できます"
+              required
+            >
+          </div>
 
-        <div class="form-group">
-          <label for="room_code">部屋 <span class="required">*</span></label>
-          <select name="room_code" id="room_code" required>
-            <option value="">部屋を選択してください</option>
-            <option value="tamoku">多目的室</option>
-            <option value="orange">オレンジの部屋</option>
-          </select>
+          <div class="form-group">
+            <label for="organization_name">団体名 <span class="required">*</span></label>
+            <input
+              type="text"
+              name="organization_name"
+              id="organization_name"
+              maxlength="150"
+              placeholder="例：総合管理事務局"
+              required
+            >
+          </div>
         </div>
+      </section>
 
-        <div class="form-group">
-          <label for="use_dates_display">選択した利用日 <span class="required">*</span></label>
-          <input type="text" id="use_dates_display" placeholder="カレンダーから複数選択できます" readonly required>
-          <input type="hidden" name="use_dates" id="use_dates">
-        </div>
-
-        <div class="form-group">
-          <label for="usage_start_time">利用開始時刻 <span class="required">*</span></label>
-          <span class="field-note">9:00〜20:00 の範囲で選択できます</span>
-          <select name="usage_start_time" id="usage_start_time" required></select>
-        </div>
-
-        <div class="form-group">
-          <label for="usage_end_time">利用終了時刻 <span class="required">*</span></label>
-          <select name="usage_end_time" id="usage_end_time" required></select>
-        </div>
-      </div>
-
-      <section class="calendar-panel" aria-labelledby="calendarHeading">
-        <div class="calendar-header">
+      <section class="panel calendar-panel" aria-labelledby="calendarHeading">
+        <div class="panel-head calendar-header">
           <div>
-            <h2 id="calendarHeading">利用日の選択</h2>
+            <h2 id="calendarHeading">2. 利用日の選択</h2>
             <p class="calendar-caption">予約可能期間は本日から2日後〜2か月先までです。複数日を選択できます。</p>
           </div>
           <div class="calendar-nav">
@@ -91,8 +72,9 @@
         </div>
 
         <div class="calendar-legend">
-          <span><i class="legend-box legend-available"></i>空き</span>
-          <span><i class="legend-box legend-booked"></i>選択中の部屋で予約済み</span>
+          <span><i class="legend-box legend-available"></i>選択可</span>
+          <span><i class="legend-box legend-partial"></i>一部の部屋のみ空き</span>
+          <span><i class="legend-box legend-booked"></i>満室</span>
           <span><i class="legend-box legend-disabled"></i>選択不可</span>
           <span><i class="legend-box legend-selected"></i>選択中</span>
         </div>
@@ -100,18 +82,35 @@
         <div class="calendar-grid" id="calendarGrid"></div>
 
         <div class="calendar-detail" id="calendarDetail">
-          <p class="calendar-detail-placeholder">部屋を選び、利用日をクリックしてください。</p>
+          <p class="calendar-detail-placeholder">利用日をクリックして選択してください。選択後に日付ごとの部屋・利用時間を設定できます。</p>
         </div>
       </section>
 
-      <div class="form-group terms-consent">
-        <button type="button" class="terms-link-btn" id="openTermsDialog">利用規約を開く</button>
-        <label class="consent-tile" for="agreeTerms">
-          <input type="checkbox" id="agreeTerms" name="agree_terms" value="1" required>
-          <span class="consent-mark" aria-hidden="true"></span>
-          <span class="consent-text">利用規約に同意します <span class="required">*</span></span>
-        </label>
-      </div>
+      <section class="panel detail-panel is-hidden" id="detailPanel">
+        <div class="panel-head">
+          <h2>3. 日付ごとの設定</h2>
+          <p>選んだ各日付について、部屋と利用開始 / 終了時刻を設定してください。</p>
+        </div>
+
+        <div class="date-config-list" id="dateConfigList"></div>
+        <input type="hidden" name="reservation_details" id="reservationDetails">
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>4. 規約の確認</h2>
+          <p>内容を確認し、同意したうえで送信してください。</p>
+        </div>
+
+        <div class="form-group terms-consent">
+          <button type="button" class="terms-link-btn" id="openTermsDialog">利用規約を開く</button>
+          <label class="consent-tile" for="agreeTerms">
+            <input type="checkbox" id="agreeTerms" name="agree_terms" value="1" required>
+            <span class="consent-mark" aria-hidden="true"></span>
+            <span class="consent-text">利用規約に同意します <span class="required">*</span></span>
+          </label>
+        </div>
+      </section>
 
       <button type="submit" class="submit-btn">予約する</button>
     </form>
@@ -129,33 +128,33 @@
         <section>
           <h3>1. 予約方法</h3>
           <ul>
-            <li>予約は本ページの入力フォームから行います。</li>
-            <li>入力項目は、メールアドレス、団体名、部屋、利用日、利用時間、規約への同意です。</li>
-            <li>利用日は複数選択できますが、部屋と利用時間は1回の申請内で共通です。</li>
+            <li>予約はカレンダーから利用日を選択し、その後に各日付ごとの部屋と利用時間を入力して行います。</li>
+            <li>入力項目は、メールアドレス、団体名、利用日、日付ごとの部屋、日付ごとの利用時間、規約への同意です。</li>
+            <li>利用時間は 9:00〜20:00 の範囲で、15分刻みで指定します。</li>
             <li>予約対象日は、本日から2日後〜2か月先までです。</li>
           </ul>
         </section>
         <section>
           <h3>2. 予約の成立</h3>
           <ul>
-            <li>選択した日付のうち1日でも同じ部屋に既存予約がある場合、その申請全体は受け付けできません。</li>
-            <li>予約結果は、入力されたメールアドレスに自動送信されます。</li>
-            <li>予約発生通知は総合管理事務局にも自動送信されます。</li>
+            <li>各日付の設定内容に基づいて、自動的に DB 登録・SwitchBot 連携・Google カレンダー連携・メール送信が行われます。</li>
+            <li>選択した日付のうち1日でも、指定部屋がすでに予約済みである場合、その申請は受け付けできません。</li>
+            <li>予約結果は入力メールアドレスに送信され、同時に総合管理事務局にも通知されます。</li>
           </ul>
         </section>
         <section>
           <h3>3. 入室用パスコード</h3>
           <ul>
-            <li>入室用パスコードは申請ごとに6桁で自動生成されます。</li>
-            <li>複数日を一括申請した場合、同じ申請内では同一のパスコードを使用します。</li>
-            <li>SwitchBot 側の有効時間は、指定利用時間の前後10分を含めて設定されます。</li>
+            <li>日付ごとに6桁のパスコードを自動生成します。</li>
+            <li>SwitchBot 側の有効時間は、各日付の指定利用時間の前後10分を含めて設定されます。</li>
+            <li>メールには日付ごとの部屋・利用時間・パスコードが記載されます。</li>
           </ul>
         </section>
         <section>
           <h3>4. 注意事項</h3>
           <ul>
-            <li>Google カレンダー連携や SwitchBot 連携に障害が発生した場合、管理側で追加確認を行うことがあります。</li>
-            <li>虚偽の団体名、メールアドレス、利用日での申請は禁止します。</li>
+            <li>Google カレンダー連携や SwitchBot 連携に障害が発生した場合、管理側で確認を行うことがあります。</li>
+            <li>虚偽の団体名、メールアドレス、利用内容での申請は禁止します。</li>
             <li>運用上の詳細ルールが別途ある場合は、総合管理事務局の案内を優先します。</li>
           </ul>
         </section>
@@ -166,7 +165,6 @@
       </div>
     </form>
   </dialog>
-
 
   <dialog id="manualDialog" class="terms-dialog manual-dialog">
     <form method="dialog" class="terms-dialog-card manual-dialog-card">
@@ -188,7 +186,6 @@
     </form>
   </dialog>
 
-
-  <script src="js/calendar.js?v=20260407c" defer></script>
+  <script src="js/calendar.js?v=20260407e" defer></script>
 </body>
 </html>

@@ -1,14 +1,12 @@
 (() => {
   const form = document.getElementById('reservationForm');
-  const roomSelect = document.getElementById('room_code');
-  const hiddenInput = document.getElementById('use_dates');
-  const displayInput = document.getElementById('use_dates_display');
-  const usageStartSelect = document.getElementById('usage_start_time');
-  const usageEndSelect = document.getElementById('usage_end_time');
   const calendarGrid = document.getElementById('calendarGrid');
   const calendarTitle = document.getElementById('calendarTitle');
   const calendarStatusText = document.getElementById('calendarStatusText');
   const calendarDetail = document.getElementById('calendarDetail');
+  const detailPanel = document.getElementById('detailPanel');
+  const dateConfigList = document.getElementById('dateConfigList');
+  const reservationDetailsInput = document.getElementById('reservationDetails');
   const prevMonthBtn = document.getElementById('prevMonth');
   const nextMonthBtn = document.getElementById('nextMonth');
   const goAvailableStartBtn = document.getElementById('goAvailableStart');
@@ -19,13 +17,14 @@
   const openManualDialogBtn = document.getElementById('openManualDialog');
   const manualDialog = document.getElementById('manualDialog');
 
-  if (!form || !roomSelect || !hiddenInput || !displayInput || !usageStartSelect || !usageEndSelect || !calendarGrid || !calendarTitle || !calendarStatusText || !calendarDetail) {
+  if (!form || !calendarGrid || !calendarTitle || !calendarStatusText || !calendarDetail || !detailPanel || !dateConfigList || !reservationDetailsInput) {
     return;
   }
 
   const weekdayLabels = ['日', '月', '火', '水', '木', '金', '土'];
-  let monthData = {};
-  let selectedDates = [];
+  const statusByDate = {};
+  const selectedDates = [];
+  const detailMap = {};
   let currentMonth = new Date();
   currentMonth.setDate(1);
   let minDate = null;
@@ -33,6 +32,12 @@
   let bookingTimeStart = '09:00';
   let bookingTimeEnd = '20:00';
   let bookingStepMinutes = 15;
+
+  function normalizeDate(date) {
+    const copy = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    copy.setHours(0, 0, 0, 0);
+    return copy;
+  }
 
   function formatDateKey(date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -48,12 +53,6 @@
     return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日（${weekdayLabels[date.getDay()]}）`;
   }
 
-  function normalizeDate(date) {
-    const copy = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    copy.setHours(0, 0, 0, 0);
-    return copy;
-  }
-
   function timeToMinutes(value) {
     const [hours, minutes] = value.split(':').map(Number);
     return (hours * 60) + minutes;
@@ -65,6 +64,18 @@
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
   }
 
+  function buildTimeOptions(startValue, endValue, { includeEnd = false } = {}) {
+    const options = [];
+    const startMinutes = timeToMinutes(startValue);
+    const endMinutes = timeToMinutes(endValue);
+    const limit = includeEnd ? endMinutes : endMinutes - bookingStepMinutes;
+
+    for (let minutes = startMinutes; minutes <= limit; minutes += bookingStepMinutes) {
+      options.push(minutesToTime(minutes));
+    }
+    return options;
+  }
+
   function isWithinRange(date) {
     const target = normalizeDate(date);
     if (minDate && target < minDate) return false;
@@ -72,47 +83,226 @@
     return true;
   }
 
-  function isBookedOnSelectedRoom(dateKey) {
-    const roomCode = roomSelect.value;
-    if (!roomCode) return false;
-    return Boolean(monthData[dateKey]?.[roomCode]);
+  function getDayStatus(dateKey) {
+    return statusByDate[dateKey] || { tamoku: false, orange: false };
   }
 
-  function isSelectable(dateKey) {
-    if (!roomSelect.value) return false;
-    const date = parseDateKey(dateKey);
-    return isWithinRange(date) && !isBookedOnSelectedRoom(dateKey);
+  function isFullyBooked(dateKey) {
+    const day = getDayStatus(dateKey);
+    return Boolean(day.tamoku && day.orange);
   }
 
-  function updateSelectedFields() {
-    selectedDates.sort();
-    hiddenInput.value = JSON.stringify(selectedDates);
-    displayInput.value = selectedDates.length ? selectedDates.map(formatDateLabel).join(' / ') : '';
+  function getAvailableRooms(dateKey) {
+    const day = getDayStatus(dateKey);
+    const rooms = [];
+    if (!day.tamoku) rooms.push({ code: 'tamoku', label: '多目的室' });
+    if (!day.orange) rooms.push({ code: 'orange', label: 'オレンジの部屋' });
+    return rooms;
   }
 
-  function renderDetail() {
-    if (!selectedDates.length) {
-      calendarDetail.innerHTML = '<p class="calendar-detail-placeholder">部屋を選び、利用日をクリックしてください。</p>';
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function selectedSortedDates() {
+    return [...selectedDates].sort();
+  }
+
+  function ensureDetail(dateKey) {
+    if (!detailMap[dateKey]) {
+      detailMap[dateKey] = {
+        use_date: dateKey,
+        room_code: '',
+        usage_start_time: bookingTimeStart,
+        usage_end_time: minutesToTime(Math.min(timeToMinutes(bookingTimeStart) + 60, timeToMinutes(bookingTimeEnd))),
+      };
+    }
+    return detailMap[dateKey];
+  }
+
+  function syncHiddenInput() {
+    const rows = selectedSortedDates().map((dateKey) => {
+      const detail = ensureDetail(dateKey);
+      return {
+        use_date: dateKey,
+        room_code: detail.room_code || '',
+        usage_start_time: detail.usage_start_time || '',
+        usage_end_time: detail.usage_end_time || '',
+      };
+    });
+    reservationDetailsInput.value = JSON.stringify(rows);
+  }
+
+  function renderCalendarDetail() {
+    const dates = selectedSortedDates();
+    if (!dates.length) {
+      calendarDetail.innerHTML = '<p class="calendar-detail-placeholder">利用日をクリックして選択してください。選択後に日付ごとの部屋・利用時間を設定できます。</p>';
       return;
     }
 
-    const roomName = roomSelect.options[roomSelect.selectedIndex]?.textContent || '未選択';
-    const selectedHtml = selectedDates.map((dateKey) => `<li>${formatDateLabel(dateKey)}</li>`).join('');
+    const list = dates.map((dateKey) => {
+      const rooms = getAvailableRooms(dateKey);
+      const roomText = rooms.length === 0
+        ? '満室'
+        : rooms.map((room) => room.label).join(' / ');
+      return `<li>${escapeHtml(formatDateLabel(dateKey))}<span>空き部屋: ${escapeHtml(roomText)}</span></li>`;
+    }).join('');
+
     calendarDetail.innerHTML = `
       <div class="calendar-detail-card">
-        <h3>選択中の予約内容</h3>
-        <ul class="calendar-detail-list">
-          <li><strong>選択部屋</strong><span>${roomName}</span></li>
-          <li><strong>選択日数</strong><span>${selectedDates.length}日</span></li>
-          <li><strong>利用時間</strong><span>${usageStartSelect.value || '--:--'}~${usageEndSelect.value || '--:--'}</span></li>
-          <li><strong>指定可能時刻</strong><span>${bookingTimeStart}~${bookingTimeEnd}</span></li>
-        </ul>
-        <div class="selected-date-list-wrap">
-          <strong>選択中の日付</strong>
-          <ul class="selected-date-list">${selectedHtml}</ul>
-        </div>
+        <h3>選択中の日付</h3>
+        <ul class="selected-date-summary">${list}</ul>
       </div>
     `;
+  }
+
+  function buildRoomOptions(detail, rooms) {
+    const currentRoomSelectable = rooms.some((room) => room.code === detail.room_code);
+    if (detail.room_code && !currentRoomSelectable) {
+      detail.room_code = '';
+    }
+
+    return ['<option value="">部屋を選択してください</option>']
+      .concat(rooms.map((room) => `<option value="${room.code}" ${detail.room_code === room.code ? 'selected' : ''}>${room.label}</option>`))
+      .join('');
+  }
+
+  function buildStartOptions(detail) {
+    const options = buildTimeOptions(bookingTimeStart, bookingTimeEnd, { includeEnd: false });
+    if (!options.includes(detail.usage_start_time)) {
+      detail.usage_start_time = options[0] || '';
+    }
+    return ['<option value="">開始時刻</option>']
+      .concat(options.map((value) => `<option value="${value}" ${detail.usage_start_time === value ? 'selected' : ''}>${value}</option>`))
+      .join('');
+  }
+
+  function normalizeEndTime(detail) {
+    const startMinutes = timeToMinutes(detail.usage_start_time || bookingTimeStart);
+    const minEndMinutes = startMinutes + bookingStepMinutes;
+    const maxEndMinutes = timeToMinutes(bookingTimeEnd);
+    let endMinutes = detail.usage_end_time ? timeToMinutes(detail.usage_end_time) : (minEndMinutes + 45);
+
+    if (endMinutes <= startMinutes) {
+      endMinutes = minEndMinutes;
+    }
+    if (endMinutes > maxEndMinutes) {
+      endMinutes = maxEndMinutes;
+    }
+    if (endMinutes < minEndMinutes) {
+      endMinutes = minEndMinutes;
+    }
+
+    detail.usage_end_time = minutesToTime(endMinutes);
+  }
+
+  function buildEndOptions(detail) {
+    normalizeEndTime(detail);
+    const endOptions = buildTimeOptions(minutesToTime(timeToMinutes(detail.usage_start_time) + bookingStepMinutes), bookingTimeEnd, { includeEnd: true });
+    if (!endOptions.includes(detail.usage_end_time)) {
+      detail.usage_end_time = endOptions[0] || '';
+    }
+    return ['<option value="">終了時刻</option>']
+      .concat(endOptions.map((value) => `<option value="${value}" ${detail.usage_end_time === value ? 'selected' : ''}>${value}</option>`))
+      .join('');
+  }
+
+  function renderDetailCards() {
+    const dates = selectedSortedDates();
+    if (!dates.length) {
+      detailPanel.classList.add('is-hidden');
+      dateConfigList.innerHTML = '';
+      syncHiddenInput();
+      return;
+    }
+
+    detailPanel.classList.remove('is-hidden');
+    dateConfigList.innerHTML = dates.map((dateKey) => {
+      const detail = ensureDetail(dateKey);
+      const rooms = getAvailableRooms(dateKey);
+      const roomOptions = buildRoomOptions(detail, rooms);
+      const startOptions = buildStartOptions(detail);
+      const endOptions = buildEndOptions(detail);
+      const roomBadge = rooms.length === 0 ? '<span class="inline-warning">この日は満室です</span>' : '';
+
+      return `
+        <article class="date-config-card" data-date-card="${dateKey}">
+          <div class="date-config-head">
+            <div>
+              <h3>${escapeHtml(formatDateLabel(dateKey))}</h3>
+              ${roomBadge}
+            </div>
+            <button type="button" class="remove-date-btn" data-remove-date="${dateKey}">この日を外す</button>
+          </div>
+
+          <div class="date-config-grid">
+            <label class="form-group">
+              <span>部屋 <span class="required">*</span></span>
+              <select class="detail-room-select" data-date="${dateKey}">${roomOptions}</select>
+            </label>
+
+            <label class="form-group">
+              <span>利用開始時刻 <span class="required">*</span></span>
+              <select class="detail-start-select" data-date="${dateKey}">${startOptions}</select>
+            </label>
+
+            <label class="form-group">
+              <span>利用終了時刻 <span class="required">*</span></span>
+              <select class="detail-end-select" data-date="${dateKey}">${endOptions}</select>
+            </label>
+          </div>
+        </article>
+      `;
+    }).join('');
+
+    dateConfigList.querySelectorAll('.detail-room-select').forEach((select) => {
+      select.addEventListener('change', () => {
+        const dateKey = select.dataset.date;
+        if (!dateKey) return;
+        ensureDetail(dateKey).room_code = select.value;
+        syncHiddenInput();
+      });
+    });
+
+    dateConfigList.querySelectorAll('.detail-start-select').forEach((select) => {
+      select.addEventListener('change', () => {
+        const dateKey = select.dataset.date;
+        if (!dateKey) return;
+        const detail = ensureDetail(dateKey);
+        detail.usage_start_time = select.value;
+        normalizeEndTime(detail);
+        renderDetailCards();
+      });
+    });
+
+    dateConfigList.querySelectorAll('.detail-end-select').forEach((select) => {
+      select.addEventListener('change', () => {
+        const dateKey = select.dataset.date;
+        if (!dateKey) return;
+        ensureDetail(dateKey).usage_end_time = select.value;
+        syncHiddenInput();
+      });
+    });
+
+    dateConfigList.querySelectorAll('.remove-date-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        const dateKey = button.dataset.removeDate;
+        if (!dateKey) return;
+        const index = selectedDates.indexOf(dateKey);
+        if (index >= 0) selectedDates.splice(index, 1);
+        delete detailMap[dateKey];
+        renderCalendar();
+        renderCalendarDetail();
+        renderDetailCards();
+      });
+    });
+
+    syncHiddenInput();
   }
 
   function renderWeekdayHeader() {
@@ -124,19 +314,6 @@
     });
   }
 
-  function toggleDate(dateKey) {
-    if (!isSelectable(dateKey)) return;
-    const idx = selectedDates.indexOf(dateKey);
-    if (idx >= 0) {
-      selectedDates.splice(idx, 1);
-    } else {
-      selectedDates.push(dateKey);
-    }
-    updateSelectedFields();
-    renderCalendar();
-    renderDetail();
-  }
-
   function renderCalendar() {
     calendarGrid.innerHTML = '';
     renderWeekdayHeader();
@@ -146,41 +323,53 @@
     const startDay = firstDay.getDay();
     const lastDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
 
-    for (let i = 0; i < startDay; i += 1) {
+    for (let i = 0; i < startDay; i++) {
       const empty = document.createElement('div');
       empty.className = 'calendar-day is-empty';
       calendarGrid.appendChild(empty);
     }
 
-    for (let day = 1; day <= lastDate; day += 1) {
+    for (let day = 1; day <= lastDate; day++) {
       const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
       const dateKey = formatDateKey(cellDate);
-      const data = monthData[dateKey] || { tamoku: false, orange: false };
-      const isOutOfRange = !isWithinRange(cellDate);
-      const booked = isBookedOnSelectedRoom(dateKey);
-      const selectable = !isOutOfRange && roomSelect.value && !booked;
+      const dayStatus = getDayStatus(dateKey);
+      const inRange = isWithinRange(cellDate);
+      const fullBooked = isFullyBooked(dateKey);
+      const partial = !fullBooked && (dayStatus.tamoku || dayStatus.orange);
       const selected = selectedDates.includes(dateKey);
+      const selectable = inRange && !fullBooked;
 
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'calendar-day';
-      if (isOutOfRange || !roomSelect.value) button.classList.add('is-disabled');
-      if (booked) button.classList.add('is-booked');
+      if (!inRange) button.classList.add('is-disabled');
+      if (fullBooked) button.classList.add('is-booked');
+      if (partial) button.classList.add('is-partial');
       if (selected) button.classList.add('is-selected');
-      if (selectable) button.classList.add('is-available');
+      if (selectable && !selected && !partial) button.classList.add('is-available');
 
       button.disabled = !selectable;
       button.dataset.date = dateKey;
       button.innerHTML = `
         <span class="calendar-day-number">${day}</span>
-        <span class="calendar-day-note">${booked ? '予約済み' : (selected ? '選択中' : (selectable ? '選択可' : '対象外'))}</span>
-        <span class="calendar-room-state">多:${data.tamoku ? '×' : '○'} / 橙:${data.orange ? '×' : '○'}</span>
+        <span class="calendar-day-note">${!inRange ? '対象外' : (fullBooked ? '満室' : (selected ? '選択中' : (partial ? '一部空き' : '選択可')))}</span>
+        <span class="calendar-room-state">多:${dayStatus.tamoku ? '×' : '○'} / 橙:${dayStatus.orange ? '×' : '○'}</span>
       `;
-      button.addEventListener('click', () => toggleDate(dateKey));
+      button.addEventListener('click', () => {
+        const idx = selectedDates.indexOf(dateKey);
+        if (idx >= 0) {
+          selectedDates.splice(idx, 1);
+          delete detailMap[dateKey];
+        } else {
+          selectedDates.push(dateKey);
+          ensureDetail(dateKey);
+        }
+        renderCalendar();
+        renderCalendarDetail();
+        renderDetailCards();
+      });
       calendarGrid.appendChild(button);
     }
-
-    renderDetail();
   }
 
   async function loadMonth(date) {
@@ -194,17 +383,22 @@
         throw new Error(json.message || '予約状況の取得に失敗しました。');
       }
 
-      monthData = json.days || {};
+      Object.entries(json.days || {}).forEach(([dateKey, day]) => {
+        statusByDate[dateKey] = day;
+      });
+
       if (json.min_date) minDate = normalizeDate(parseDateKey(json.min_date));
       if (json.max_date) maxDate = normalizeDate(parseDateKey(json.max_date));
-      if (json.time_start) bookingTimeStart = String(json.time_start);
-      if (json.time_end) bookingTimeEnd = String(json.time_end);
+      if (json.time_start) bookingTimeStart = json.time_start;
+      if (json.time_end) bookingTimeEnd = json.time_end;
       if (json.time_step_minutes) bookingStepMinutes = Number(json.time_step_minutes) || 15;
-      fillTimeSelects();
 
       renderCalendar();
+      renderCalendarDetail();
+      renderDetailCards();
+
       calendarStatusText.textContent = minDate && maxDate
-        ? `予約可能期間: ${formatDateKey(minDate)} ～ ${formatDateKey(maxDate)} / 指定可能時刻: ${bookingTimeStart} ～ ${bookingTimeEnd}`
+        ? `予約可能期間: ${formatDateKey(minDate)} ～ ${formatDateKey(maxDate)} / 利用時間: ${bookingTimeStart}～${bookingTimeEnd}`
         : '予約状況を表示しています。';
     } catch (error) {
       calendarGrid.innerHTML = '<p class="calendar-error">予約状況の取得に失敗しました。</p>';
@@ -220,85 +414,46 @@
     loadMonth(currentMonth);
   }
 
-  function buildTimeOptions() {
-    const startMinutes = timeToMinutes(bookingTimeStart);
-    const endMinutes = timeToMinutes(bookingTimeEnd);
-    const options = [];
-    for (let minutes = startMinutes; minutes <= endMinutes; minutes += bookingStepMinutes) {
-      options.push(minutesToTime(minutes));
-    }
-    return options;
-  }
-
-  function fillTimeSelects() {
-    const startValue = usageStartSelect.value;
-    const endValue = usageEndSelect.value;
-    const options = buildTimeOptions();
-    const startOptions = options.filter((value) => value !== bookingTimeEnd);
-    const endOptions = options.filter((value) => value !== bookingTimeStart);
-
-    usageStartSelect.innerHTML = '<option value="">開始時刻を選択してください</option>' + startOptions.map((value) => `<option value="${value}">${value}</option>`).join('');
-    usageEndSelect.innerHTML = '<option value="">終了時刻を選択してください</option>' + endOptions.map((value) => `<option value="${value}">${value}</option>`).join('');
-
-    if (startOptions.includes(startValue)) {
-      usageStartSelect.value = startValue;
-    } else if (!usageStartSelect.value) {
-      usageStartSelect.value = bookingTimeStart;
+  function validateBeforeSubmit() {
+    const dates = selectedSortedDates();
+    if (!dates.length) {
+      alert('利用日を1日以上選択してください。');
+      return false;
     }
 
-    if (endOptions.includes(endValue)) {
-      usageEndSelect.value = endValue;
-    } else if (!usageEndSelect.value || usageEndSelect.value <= usageStartSelect.value) {
-      const defaultEndMinutes = Math.min(timeToMinutes(bookingTimeEnd), timeToMinutes(bookingTimeStart) + 60);
-      const defaultEndValue = minutesToTime(defaultEndMinutes);
-      usageEndSelect.value = endOptions.includes(defaultEndValue) ? defaultEndValue : endOptions[endOptions.length - 1];
-    }
-  }
+    const allowedStartMinutes = timeToMinutes(bookingTimeStart);
+    const allowedEndMinutes = timeToMinutes(bookingTimeEnd);
 
-  roomSelect.addEventListener('change', () => {
-    selectedDates = [];
-    updateSelectedFields();
-    renderCalendar();
-    renderDetail();
-  });
-
-  usageStartSelect.addEventListener('change', () => {
-    if (usageEndSelect.value && usageStartSelect.value >= usageEndSelect.value) {
-      const nextEndMinutes = Math.min(timeToMinutes(bookingTimeEnd), timeToMinutes(usageStartSelect.value) + bookingStepMinutes);
-      const nextEndValue = minutesToTime(nextEndMinutes);
-      if (nextEndValue > usageStartSelect.value) {
-        usageEndSelect.value = nextEndValue;
+    for (const dateKey of dates) {
+      const detail = ensureDetail(dateKey);
+      if (!detail.room_code || !detail.usage_start_time || !detail.usage_end_time) {
+        alert(`${formatDateLabel(dateKey)} の部屋と利用時間を設定してください。`);
+        return false;
+      }
+      const startMinutes = timeToMinutes(detail.usage_start_time);
+      const endMinutes = timeToMinutes(detail.usage_end_time);
+      if (endMinutes <= startMinutes) {
+        alert(`${formatDateLabel(dateKey)} の利用終了時刻は開始時刻より後にしてください。`);
+        return false;
+      }
+      if (startMinutes < allowedStartMinutes || endMinutes > allowedEndMinutes) {
+        alert(`${formatDateLabel(dateKey)} の利用時間は ${bookingTimeStart}〜${bookingTimeEnd} の範囲で指定してください。`);
+        return false;
+      }
+      const roomStillAvailable = getAvailableRooms(dateKey).some((room) => room.code === detail.room_code);
+      if (!roomStillAvailable) {
+        alert(`${formatDateLabel(dateKey)} の選択中の部屋は現在予約できません。`);
+        return false;
       }
     }
-    renderDetail();
-  });
-  usageEndSelect.addEventListener('change', renderDetail);
+
+    syncHiddenInput();
+    return true;
+  }
 
   form.addEventListener('submit', (event) => {
-    if (!roomSelect.value) {
+    if (!validateBeforeSubmit()) {
       event.preventDefault();
-      alert('部屋を選択してください。');
-      roomSelect.focus();
-      return;
-    }
-    if (!selectedDates.length) {
-      event.preventDefault();
-      alert('利用日を1日以上選択してください。');
-      return;
-    }
-    if (!usageStartSelect.value || !usageEndSelect.value) {
-      event.preventDefault();
-      alert('利用時間を指定してください。');
-      return;
-    }
-    if (usageStartSelect.value >= usageEndSelect.value) {
-      event.preventDefault();
-      alert('利用終了時刻は開始時刻より後にしてください。');
-      return;
-    }
-    if (usageStartSelect.value < bookingTimeStart || usageEndSelect.value > bookingTimeEnd) {
-      event.preventDefault();
-      alert(`利用時間は ${bookingTimeStart}〜${bookingTimeEnd} の範囲で指定してください。`);
     }
   });
 
@@ -315,7 +470,7 @@
   });
 
   openTermsDialogBtn?.addEventListener('click', () => {
-    if (typeof termsDialog.showModal === 'function') {
+    if (typeof termsDialog?.showModal === 'function') {
       termsDialog.showModal();
     }
   });
@@ -333,8 +488,8 @@
     }
   });
 
-  fillTimeSelects();
-  updateSelectedFields();
+  renderCalendarDetail();
+  renderDetailCards();
   const initial = new Date();
   initial.setDate(1);
   currentMonth = initial;

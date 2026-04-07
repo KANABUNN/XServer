@@ -1,33 +1,59 @@
 @media (max-width: 900px) {
   .container {
-    padding: 28px 20px;
+    width: min(100%, 100%);
+    padding: 26px 18px;
   }
 
-  .form-grid {
+  .user-grid,
+  .date-config-grid {
     grid-template-columns: 1fr;
   }
 
   .calendar-header,
   .calendar-status-row,
   .terms-dialog-head,
-  .terms-dialog-actions {
+  .terms-dialog-actions,
+  .date-config-head {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .hero-actions {
+    justify-content: stretch;
+  }
+
+  .hero-action-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .calendar-nav {
+    width: 100%;
+  }
+
+  .calendar-nav-btn,
+  .terms-link-btn {
+    flex: 1 1 auto;
   }
 }
 
 @media (max-width: 640px) {
   body {
-    padding: 12px;
+    padding: 10px;
   }
 
   .container {
     border-radius: 18px;
-    padding: 22px 14px;
+    padding: 20px 12px;
   }
 
   h1 {
     font-size: 30px;
+  }
+
+  .panel {
+    padding: 16px;
+    border-radius: 16px;
   }
 
   .calendar-grid {
@@ -35,7 +61,7 @@
   }
 
   .calendar-day {
-    min-height: 92px;
+    min-height: 88px;
     padding: 8px;
     border-radius: 12px;
   }
@@ -49,46 +75,16 @@
     font-size: 11px;
   }
 
-  .calendar-nav {
-    width: 100%;
-  }
-
-  .calendar-nav-btn,
-  .terms-link-btn {
-    flex: 1 1 auto;
+  .terms-dialog,
+  .manual-dialog {
+    width: calc(100vw - 12px);
   }
 
   .terms-dialog-body,
   .terms-dialog-head,
-  .terms-dialog-actions {
-    padding: 16px;
-  }
-}
-
-
-@media (max-width: 900px) {
-  .hero-actions {
-    justify-content: stretch;
-  }
-
-  .hero-action-btn {
-    width: 100%;
-  }
-
+  .terms-dialog-actions,
   .manual-dialog-body {
-    padding: 12px;
-  }
-
-  .manual-embed-wrap,
-  .manual-pdf-frame {
-    min-height: 62vh;
-    height: 62vh;
-  }
-}
-
-@media (max-width: 640px) {
-  .manual-dialog {
-    width: calc(100vw - 12px);
+    padding: 14px;
   }
 
   .manual-embed-wrap,

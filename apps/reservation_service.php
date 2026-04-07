@@ -52,13 +52,10 @@ function reservation_validate_form_input(array $cfg, array $source): array
 {
     $email = trim((string)($source['email'] ?? ''));
     $organizationName = trim((string)($source['organization_name'] ?? ''));
-    $roomCode = trim((string)($source['room_code'] ?? $source['select'] ?? ''));
     $agreeTerms = (string)($source['agree_terms'] ?? '') !== '';
-    $usageStartTime = trim((string)($source['usage_start_time'] ?? ''));
-    $usageEndTime = trim((string)($source['usage_end_time'] ?? ''));
-    $useDates = reservation_extract_use_dates($source);
+    $details = reservation_extract_detail_rows($source);
 
-    if ($email === '' || $organizationName === '' || $roomCode === '' || $useDates === [] || $usageStartTime === '' || $usageEndTime === '') {
+    if ($email === '' || $organizationName === '') {
         throw new RuntimeException('必須項目が不足しています。');
     }
     if (!$agreeTerms) {
@@ -73,13 +70,26 @@ function reservation_validate_form_input(array $cfg, array $source): array
         throw new RuntimeException('@' . $allowedDomain . ' のメールアドレスのみ利用できます。');
     }
 
-    if (!in_array($roomCode, ['tamoku', 'orange'], true)) {
-        throw new RuntimeException('部屋の指定が不正です。');
-    }
-
     $orgLength = function_exists('mb_strlen') ? mb_strlen($organizationName, 'UTF-8') : strlen($organizationName);
     if ($orgLength > 150) {
         throw new RuntimeException('団体名は150文字以内で入力してください。');
+    }
+
+    if ($details !== []) {
+        return reservation_validate_detail_rows($cfg, $email, $organizationName, $details);
+    }
+
+    $roomCode = trim((string)($source['room_code'] ?? $source['select'] ?? ''));
+    $usageStartTime = trim((string)($source['usage_start_time'] ?? ''));
+    $usageEndTime = trim((string)($source['usage_end_time'] ?? ''));
+    $useDates = reservation_extract_use_dates($source);
+
+    if ($roomCode === '' || $useDates === [] || $usageStartTime === '' || $usageEndTime === '') {
+        throw new RuntimeException('必須項目が不足しています。');
+    }
+
+    if (!in_array($roomCode, ['tamoku', 'orange'], true)) {
+        throw new RuntimeException('部屋の指定が不正です。');
     }
 
     reservation_assert_time_value($usageStartTime, reservation_time_step_minutes($cfg), false);
@@ -114,6 +124,18 @@ function reservation_validate_form_input(array $cfg, array $source): array
 
     sort($useDates, SORT_STRING);
 
+    $normalizedDetails = [];
+    foreach ($useDates as $useDate) {
+        $normalizedDetails[] = [
+            'use_date' => $useDate,
+            'room_code' => $roomCode,
+            'room_label' => reservation_room_label($roomCode),
+            'usage_start_time' => $usageStartTime,
+            'usage_end_time' => $usageEndTime,
+            'usage_time' => $usageStartTime . '~' . $usageEndTime,
+        ];
+    }
+
     return [
         'email' => $email,
         'organization_name' => $organizationName,
@@ -126,7 +148,130 @@ function reservation_validate_form_input(array $cfg, array $source): array
         'usage_start_time' => $usageStartTime,
         'usage_end_time' => $usageEndTime,
         'usage_time' => $usageStartTime . '~' . $usageEndTime,
+        'details' => $normalizedDetails,
     ];
+}
+
+function reservation_validate_detail_rows(array $cfg, string $email, string $organizationName, array $details): array
+{
+    [$allowedStartTime, $allowedEndTime] = reservation_allowed_time_bounds($cfg);
+    $allowedStartMinutes = reservation_time_to_minutes($allowedStartTime);
+    $allowedEndMinutes = reservation_time_to_minutes($allowedEndTime);
+
+    $timezone = new DateTimeZone(reservation_timezone($cfg));
+    [$minDate, $maxDate] = reservation_allowed_range($cfg);
+    $normalized = [];
+    $seenDates = [];
+
+    foreach ($details as $detail) {
+        if (!is_array($detail)) {
+            continue;
+        }
+
+        $useDate = trim((string)($detail['use_date'] ?? ''));
+        $roomCode = trim((string)($detail['room_code'] ?? ''));
+        $usageStartTime = trim((string)($detail['usage_start_time'] ?? ''));
+        $usageEndTime = trim((string)($detail['usage_end_time'] ?? ''));
+
+        if ($useDate === '' || $roomCode === '' || $usageStartTime === '' || $usageEndTime === '') {
+            throw new RuntimeException('日付ごとの部屋・利用時間をすべて指定してください。');
+        }
+        if (isset($seenDates[$useDate])) {
+            throw new RuntimeException('同じ日付が重複して指定されています: ' . $useDate);
+        }
+        $seenDates[$useDate] = true;
+
+        if (!in_array($roomCode, ['tamoku', 'orange'], true)) {
+            throw new RuntimeException('部屋の指定が不正です。');
+        }
+
+        reservation_assert_time_value($usageStartTime, reservation_time_step_minutes($cfg), false);
+        reservation_assert_time_value($usageEndTime, reservation_time_step_minutes($cfg), true);
+
+        $startMinutes = reservation_time_to_minutes($usageStartTime);
+        $endMinutes = reservation_time_to_minutes($usageEndTime);
+        if ($endMinutes <= $startMinutes) {
+            throw new RuntimeException($useDate . ' の利用終了時刻は開始時刻より後にしてください。');
+        }
+        if ($startMinutes < $allowedStartMinutes || $endMinutes > $allowedEndMinutes) {
+            throw new RuntimeException($useDate . ' の利用時間は ' . $allowedStartTime . '〜' . $allowedEndTime . ' の範囲で指定してください。');
+        }
+
+        $dt = DateTimeImmutable::createFromFormat('Y-m-d', $useDate, $timezone);
+        if (!$dt || $dt->format('Y-m-d') !== $useDate) {
+            throw new RuntimeException('利用日の形式が不正です。');
+        }
+        if ($dt < $minDate || $dt > $maxDate) {
+            throw new RuntimeException(
+                '利用日は ' . $minDate->format('Y-m-d') . ' から ' . $maxDate->format('Y-m-d') . ' の範囲で指定してください。'
+            );
+        }
+
+        $normalized[] = [
+            'use_date' => $useDate,
+            'room_code' => $roomCode,
+            'room_label' => reservation_room_label($roomCode),
+            'usage_start_time' => $usageStartTime,
+            'usage_end_time' => $usageEndTime,
+            'usage_time' => $usageStartTime . '~' . $usageEndTime,
+        ];
+    }
+
+    if ($normalized === []) {
+        throw new RuntimeException('利用日を1日以上設定してください。');
+    }
+
+    usort($normalized, static function (array $a, array $b): int {
+        return strcmp((string)$a['use_date'], (string)$b['use_date']);
+    });
+
+    $first = $normalized[0];
+    $useDates = array_values(array_map(static fn(array $row): string => (string)$row['use_date'], $normalized));
+
+    return [
+        'email' => $email,
+        'organization_name' => $organizationName,
+        'room_code' => (string)$first['room_code'],
+        'room_label' => (string)$first['room_label'],
+        'use_dates' => $useDates,
+        'use_date' => $useDates[0],
+        'use_date_end' => $useDates[count($useDates) - 1],
+        'selected_dates_count' => count($useDates),
+        'usage_start_time' => (string)$first['usage_start_time'],
+        'usage_end_time' => (string)$first['usage_end_time'],
+        'usage_time' => (string)$first['usage_time'],
+        'details' => $normalized,
+    ];
+}
+
+function reservation_extract_detail_rows(array $source): array
+{
+    $raw = $source['reservation_details'] ?? $source['details'] ?? [];
+    if (is_string($raw)) {
+        $trimmed = trim($raw);
+        if ($trimmed === '') {
+            return [];
+        }
+        $decoded = json_decode($trimmed, true);
+        if (is_array($decoded)) {
+            $raw = $decoded;
+        } else {
+            throw new RuntimeException('日付ごとの設定データを解釈できませんでした。');
+        }
+    }
+
+    if (!is_array($raw)) {
+        return [];
+    }
+
+    $rows = [];
+    foreach ($raw as $item) {
+        if (is_array($item)) {
+            $rows[] = $item;
+        }
+    }
+
+    return $rows;
 }
 
 function reservation_extract_use_dates(array $source): array
@@ -205,10 +350,9 @@ function reservation_generate_access_code(PDO $pdo, array $cfg, int $maxAttempts
     $max = (int)str_repeat('9', $digits);
 
     $stmt = $pdo->prepare(
-        'SELECT COUNT(*) FROM reservations '
+        'SELECT COUNT(*) FROM room_calendar_reservations '
         . 'WHERE access_code = :access_code '
-        . 'AND use_date_end >= CURDATE() '
-        . 'AND reservation_status IN ("pending","confirmed","error")'
+        . 'AND access_code_end_at >= NOW()'
     );
 
     for ($i = 0; $i < $maxAttempts; $i++) {
@@ -431,9 +575,10 @@ function reservation_update_status(PDO $pdo, int $reservationId, array $fields):
     $stmt->execute($params);
 }
 
-function reservation_try_insert_slot(PDO $pdo, int $reservationId, array $validated, string $useDate, string $accessCode, array $cfg): int
+function reservation_try_insert_slot(PDO $pdo, int $reservationId, array $validated, array $detail, string $accessCode, array $cfg): int
 {
-    [$startAt, $endAt] = reservation_access_code_window($cfg, $useDate, $validated['usage_start_time'], $validated['usage_end_time']);
+    $useDate = (string)$detail['use_date'];
+    [$startAt, $endAt] = reservation_access_code_window($cfg, $useDate, (string)$detail['usage_start_time'], (string)$detail['usage_end_time']);
 
     $stmt = $pdo->prepare(
         'INSERT INTO room_calendar_reservations (reservation_id, use_date, room_code, room_label, organization_name, email, usage_start_time, usage_end_time, usage_time, access_code, access_code_start_at, access_code_end_at, switchbot_status, google_sync_status) '
@@ -442,13 +587,13 @@ function reservation_try_insert_slot(PDO $pdo, int $reservationId, array $valida
     $stmt->execute([
         ':reservation_id' => $reservationId,
         ':use_date' => $useDate,
-        ':room_code' => (string)$validated['room_code'],
-        ':room_label' => (string)$validated['room_label'],
+        ':room_code' => (string)$detail['room_code'],
+        ':room_label' => (string)$detail['room_label'],
         ':organization_name' => (string)$validated['organization_name'],
         ':email' => (string)$validated['email'],
-        ':usage_start_time' => (string)$validated['usage_start_time'],
-        ':usage_end_time' => (string)$validated['usage_end_time'],
-        ':usage_time' => (string)$validated['usage_time'],
+        ':usage_start_time' => (string)$detail['usage_start_time'],
+        ':usage_end_time' => (string)$detail['usage_end_time'],
+        ':usage_time' => (string)$detail['usage_time'],
         ':access_code' => $accessCode,
         ':access_code_start_at' => $startAt,
         ':access_code_end_at' => $endAt,
@@ -535,21 +680,25 @@ function reservation_process_submission(array $cfg, PDO $pdo, array $validated):
     reservation_install_schema($pdo);
 
     $requestToken = reservation_generate_request_token();
-    $accessCode = reservation_generate_access_code($pdo, $cfg);
+    $details = $validated['details'] ?? [];
+    if (!is_array($details) || $details === []) {
+        throw new RuntimeException('予約明細を取得できませんでした。');
+    }
 
+    $summary = $details[0];
     $reservationId = reservation_create_row($pdo, [
         'request_token' => $requestToken,
         'email' => $validated['email'],
         'organization_name' => $validated['organization_name'],
-        'room_code' => $validated['room_code'],
-        'room_label' => $validated['room_label'],
+        'room_code' => (string)$summary['room_code'],
+        'room_label' => (string)$summary['room_label'],
         'use_date' => $validated['use_date'],
         'use_date_end' => $validated['use_date_end'],
         'selected_dates_count' => $validated['selected_dates_count'],
-        'usage_start_time' => $validated['usage_start_time'],
-        'usage_end_time' => $validated['usage_end_time'],
-        'usage_time' => $validated['usage_time'],
-        'access_code' => $accessCode,
+        'usage_start_time' => (string)$summary['usage_start_time'],
+        'usage_end_time' => (string)$summary['usage_end_time'],
+        'usage_time' => (string)$summary['usage_time'],
+        'access_code' => '',
         'reservation_status' => 'pending',
         'status_reason' => '',
         'switchbot_status' => 'queued',
@@ -561,11 +710,16 @@ function reservation_process_submission(array $cfg, PDO $pdo, array $validated):
     ]);
 
     $conflictDate = null;
+    $firstAccessCode = '';
     try {
         $pdo->beginTransaction();
-        foreach ($validated['use_dates'] as $useDate) {
-            $conflictDate = $useDate;
-            reservation_try_insert_slot($pdo, $reservationId, $validated, $useDate, $accessCode, $cfg);
+        foreach ($details as $detail) {
+            $conflictDate = (string)$detail['use_date'];
+            $accessCode = reservation_generate_access_code($pdo, $cfg);
+            if ($firstAccessCode === '') {
+                $firstAccessCode = $accessCode;
+            }
+            reservation_try_insert_slot($pdo, $reservationId, $validated, $detail, $accessCode, $cfg);
         }
         $pdo->commit();
     } catch (Throwable $e) {
@@ -587,6 +741,10 @@ function reservation_process_submission(array $cfg, PDO $pdo, array $validated):
         return reservation_fetch_by_token($pdo, $requestToken) ?? [];
     }
 
+    if ($firstAccessCode !== '') {
+        reservation_update_status($pdo, $reservationId, ['access_code' => $firstAccessCode]);
+    }
+
     $slotRows = reservation_fetch_detail_rows($pdo, $reservationId);
     $switchStatuses = [];
     $switchMessages = [];
@@ -596,12 +754,12 @@ function reservation_process_submission(array $cfg, PDO $pdo, array $validated):
     foreach ($slotRows as $slot) {
         $switchResult = reservation_issue_switchbot_access_code(
             $cfg,
-            (string)$validated['room_code'],
+            (string)$slot['room_code'],
             (string)$validated['organization_name'],
-            $accessCode,
+            (string)$slot['access_code'],
             (string)$slot['use_date'],
-            (string)$validated['usage_start_time'],
-            (string)$validated['usage_end_time']
+            (string)$slot['usage_start_time'],
+            (string)$slot['usage_end_time']
         );
 
         reservation_update_slot($pdo, (int)$slot['id'], [
@@ -638,7 +796,13 @@ function reservation_process_submission(array $cfg, PDO $pdo, array $validated):
     }
 
     $switchSummaryStatus = $allSwitchOk ? 'requested' : ($hasSwitchFailure ? 'partial_error' : 'queued');
-    $googleSummaryStatus = !$googleEnabled ? 'disabled' : ($googleAllOk ? 'synced' : ($googleFailed ? 'partial_error' : 'queued'));
+    $googleSummaryStatus = $googleAllOk ? ($googleEnabled ? 'synced' : 'disabled') : ($googleFailed ? 'partial_error' : 'queued');
+    if ($googleFailed) {
+        $reason = trim($reason . ' Google カレンダー連携で失敗があります。' . ($googleMessages !== [] ? ' ' . implode(' / ', array_unique($googleMessages)) : ''));
+        if ($reservationStatus === 'confirmed') {
+            $reservationStatus = 'error';
+        }
+    }
 
     reservation_update_status($pdo, $reservationId, [
         'reservation_status' => $reservationStatus,
