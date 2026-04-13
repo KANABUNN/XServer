@@ -50,3 +50,25 @@
     padding: 8px;
   }
 }
+
+
+@media (max-width: 1200px) {
+  .checkbox-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .calendar-manual-section {
+    padding: 14px;
+  }
+
+  .calendar-day-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .calendar-add-btn {
+    width: 100%;
+  }
+}

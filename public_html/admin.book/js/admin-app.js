@@ -6,6 +6,12 @@
   const q = (selector) => document.querySelector(selector);
   const hasPermission = (permission) => permissions.includes(permission);
 
+  const calendarState = {
+    month: '',
+    rows: [],
+    selectedDate: '',
+  };
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -20,8 +26,14 @@
     if (el) el.textContent = value;
   }
 
+  function badgeClass(status) {
+    const safe = String(status || 'default').replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
+    return `badge badge-${safe}`;
+  }
+
   function statusBadge(status) {
-    return `<span class="status-badge">${escapeHtml(status || '-')}</span>`;
+    const label = status || '-';
+    return `<span class="${badgeClass(label)}">${escapeHtml(label)}</span>`;
   }
 
   function rangeLabel(row) {
@@ -70,6 +82,28 @@
     if (adminNavBtn) adminNavBtn.style.display = 'none';
   }
 
+  function toggleCalendarCreateAccess() {
+    const section = q('#calendarManualSection');
+    if (!section) return;
+    if (hasPermission('calendar.create')) return;
+    section.hidden = true;
+  }
+
+  function selectCalendarDate(date) {
+    calendarState.selectedDate = date || '';
+    const input = q('#manualUseDate');
+    if (input && date) input.value = date;
+    document.querySelectorAll('.calendar-day[data-date]').forEach((dayEl) => {
+      dayEl.classList.toggle('is-selected', dayEl.dataset.date === calendarState.selectedDate);
+    });
+  }
+
+  function detectConflictLabel(date, roomCode) {
+    const row = calendarState.rows.find((item) => item.use_date === date && item.room_code === roomCode);
+    if (!row) return '';
+    return `${row.room_label || roomCode} / ${row.organization_name || '既存予約'}`;
+  }
+
   async function loadDashboard() {
     setText('#dashboardStatusText', '読み込み中...');
     try {
@@ -112,6 +146,26 @@
     }
   }
 
+  function bindCalendarDaySelection() {
+    document.querySelectorAll('.calendar-day[data-date]').forEach((dayEl) => {
+      dayEl.addEventListener('click', (event) => {
+        if (event.target instanceof HTMLElement && event.target.closest('.calendar-add-btn')) {
+          return;
+        }
+        selectCalendarDate(dayEl.dataset.date || '');
+      });
+    });
+
+    document.querySelectorAll('.calendar-add-btn').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const date = button.dataset.date || '';
+        selectCalendarDate(date);
+        q('#manualOrganizationName')?.focus();
+      });
+    });
+  }
+
   async function loadCalendar() {
     setText('#calendarStatusText', '読み込み中...');
     try {
@@ -122,6 +176,9 @@
       const tbody = q('#calendarListBody');
       if (!grid || !tbody) return;
 
+      calendarState.month = json.month || month;
+      calendarState.rows = Array.isArray(json.rows) ? json.rows : [];
+
       const weekdayLabels = ['日', '月', '火', '水', '木', '金', '土'];
       const target = new Date(`${json.month}-01T00:00:00`);
       const firstDay = new Date(target.getFullYear(), target.getMonth(), 1);
@@ -129,42 +186,55 @@
       const daysInMonth = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
 
       grid.innerHTML = weekdayLabels.map((label) => `<div class="calendar-weekday">${label}</div>`).join('');
-      for (let i = 0; i < startDay; i++) {
+      for (let i = 0; i < startDay; i += 1) {
         grid.insertAdjacentHTML('beforeend', '<div class="calendar-day is-empty"></div>');
       }
 
       const map = json.day_map || {};
-      for (let day = 1; day <= daysInMonth; day++) {
+      for (let day = 1; day <= daysInMonth; day += 1) {
         const dateKey = `${json.month}-${String(day).padStart(2, '0')}`;
         const items = map[dateKey] || [];
         const content = items.length
-          ? items.map((item) => `<div class="calendar-entry"><strong>${escapeHtml(item.room_label)}</strong><span>${escapeHtml(item.organization_name)} / ${escapeHtml(item.usage_time || '')}</span></div>`).join('')
+          ? items.map((item) => `
+              <div class="calendar-entry">
+                <strong>${escapeHtml(item.room_label)}</strong>
+                <span>${escapeHtml(item.organization_name)} / ${escapeHtml(item.usage_time || '')}</span>
+              </div>
+            `).join('')
           : '<div class="calendar-entry empty">予約なし</div>';
 
         grid.insertAdjacentHTML('beforeend', `
-          <div class="calendar-day">
-            <span class="calendar-day-number">${day}</span>
+          <div class="calendar-day" data-date="${escapeHtml(dateKey)}">
+            <div class="calendar-day-head">
+              <span class="calendar-day-number">${day}</span>
+              ${hasPermission('calendar.create') ? `<button type="button" class="calendar-add-btn secondary" data-date="${escapeHtml(dateKey)}">追加</button>` : ''}
+            </div>
             ${content}
           </div>
         `);
       }
 
-      tbody.innerHTML = json.rows.length
-        ? json.rows.map((row) => `
+      tbody.innerHTML = calendarState.rows.length
+        ? calendarState.rows.map((row) => `
           <tr>
             <td>${escapeHtml(row.use_date)}</td>
             <td>${escapeHtml(row.usage_time || '')}</td>
             <td>${escapeHtml(row.room_label)}</td>
             <td>${escapeHtml(row.organization_name)}</td>
-            <td>${escapeHtml(row.email)}</td>
-            <td>${escapeHtml(row.access_code)}</td>
+            <td>${escapeHtml(row.email || '')}</td>
+            <td>${escapeHtml(row.access_code || '')}</td>
             <td>${statusBadge(row.switchbot_status || '')}</td>
             <td>${statusBadge(row.google_sync_status || '')}</td>
           </tr>
         `).join('')
         : '<tr><td colspan="8" class="empty">該当する予約はありません。</td></tr>';
 
-      setText('#calendarMetaText', `${json.rows.length}件の予約日があります。`);
+      bindCalendarDaySelection();
+      if (calendarState.selectedDate.startsWith(`${json.month}-`)) {
+        selectCalendarDate(calendarState.selectedDate);
+      }
+
+      setText('#calendarMetaText', `${calendarState.rows.length}件の予約日があります。`);
       setText('#calendarStatusText', json.message || '読込完了');
     } catch (error) {
       setText('#calendarStatusText', error instanceof Error ? error.message : '読込に失敗しました。');
@@ -185,9 +255,9 @@
             <td>${escapeHtml(row.usage_time || '')}</td>
             <td>${escapeHtml(row.room_label)}</td>
             <td>${escapeHtml(row.organization_name)}</td>
-            <td>${escapeHtml(row.email)}</td>
-            <td>${escapeHtml(row.access_code)}</td>
-            <td>${escapeHtml(row.access_code_start_at)}<br>${escapeHtml(row.access_code_end_at)}</td>
+            <td>${escapeHtml(row.email || '')}</td>
+            <td>${escapeHtml(row.access_code || '')}</td>
+            <td>${escapeHtml(row.access_code_start_at || '')}<br>${escapeHtml(row.access_code_end_at || '')}</td>
             <td>${statusBadge(row.switchbot_status || '')}</td>
             <td>${escapeHtml(row.switchbot_request_id || '')}</td>
           </tr>
@@ -308,6 +378,60 @@
     q('#adminPassword').value = '';
   }
 
+  function resetManualCalendarForm() {
+    calendarState.selectedDate = '';
+    q('#manualUseDate').value = '';
+    q('#manualRoomCode').value = 'tamoku';
+    q('#manualOrganizationName').value = '';
+    q('#manualUsageStartTime').value = '09:00';
+    q('#manualUsageEndTime').value = '10:00';
+    q('#manualEmail').value = '';
+    q('#manualSyncGoogle').checked = true;
+    q('#manualIssueSwitchbot').checked = true;
+    setText('#calendarManualStatusText', '');
+    document.querySelectorAll('.calendar-day[data-date]').forEach((dayEl) => dayEl.classList.remove('is-selected'));
+  }
+
+  async function submitManualCalendarCreate() {
+    if (!hasPermission('calendar.create')) return;
+
+    const payload = {
+      use_date: q('#manualUseDate').value || '',
+      room_code: q('#manualRoomCode').value || 'tamoku',
+      organization_name: q('#manualOrganizationName').value || '',
+      usage_start_time: q('#manualUsageStartTime').value || '09:00',
+      usage_end_time: q('#manualUsageEndTime').value || '10:00',
+      email: q('#manualEmail').value || '',
+      sync_google: q('#manualSyncGoogle').checked,
+      issue_switchbot: q('#manualIssueSwitchbot').checked,
+    };
+
+    if (!payload.use_date || !payload.organization_name.trim()) {
+      setText('#calendarManualStatusText', '利用日と団体名を入力してください。');
+      return;
+    }
+
+    const conflictLabel = detectConflictLabel(payload.use_date, payload.room_code);
+    if (conflictLabel && !window.confirm(`同日・同室に既存予約があります。\n${conflictLabel}\n\nこのまま上書きしますか？`)) {
+      return;
+    }
+
+    const submitButton = q('#calendarManualCreateBtn');
+    if (submitButton) submitButton.disabled = true;
+    setText('#calendarManualStatusText', '登録中...');
+
+    try {
+      const json = await api('calendar_manual_create', payload);
+      setText('#calendarManualStatusText', `${json.message || '登録しました。'} 予約状態:${json.reservation_status || '-'} / 利用者メール:${json.user_mail_status || '-'} / 管理通知:${json.admin_mail_status || '-'}`);
+      calendarState.selectedDate = payload.use_date;
+      await Promise.allSettled([loadCalendar(), loadDashboard(), loadPasscodes(), loadAuditLogs()]);
+    } catch (error) {
+      setText('#calendarManualStatusText', error instanceof Error ? error.message : '登録に失敗しました。');
+    } finally {
+      if (submitButton) submitButton.disabled = false;
+    }
+  }
+
   function initButtons() {
     const now = new Date();
     const monthString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -325,7 +449,13 @@
     });
 
     q('#calendarReloadBtn')?.addEventListener('click', loadCalendar);
-    q('#calendarMonth')?.addEventListener('change', loadCalendar);
+    q('#calendarMonth')?.addEventListener('change', () => {
+      resetManualCalendarForm();
+      loadCalendar();
+    });
+    q('#calendarManualCreateBtn')?.addEventListener('click', submitManualCalendarCreate);
+    q('#calendarManualResetBtn')?.addEventListener('click', resetManualCalendarForm);
+
     q('#passcodeReloadBtn')?.addEventListener('click', loadPasscodes);
 
     q('#adminReloadBtn')?.addEventListener('click', () => {
@@ -339,8 +469,10 @@
 
   async function init() {
     toggleAdminViewAccess();
+    toggleCalendarCreateAccess();
     initSidebar();
     initButtons();
+    resetManualCalendarForm();
     await Promise.allSettled([
       loadDashboard(),
       loadCalendar(),

@@ -10,6 +10,20 @@ function admin_index_h(?string $value): string
 {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
+
+function admin_index_time_options(string $selected = '', bool $allow2400 = false): string
+{
+    $html = '';
+    $maxMinutes = $allow2400 ? 24 * 60 : (24 * 60) - 15;
+    for ($minutes = 0; $minutes <= $maxMinutes; $minutes += 15) {
+        $hour = intdiv($minutes, 60);
+        $minute = $minutes % 60;
+        $value = sprintf('%02d:%02d', $hour, $minute);
+        $isSelected = $value === $selected ? ' selected' : '';
+        $html .= '<option value="' . admin_index_h($value) . '"' . $isSelected . '>' . admin_index_h($value) . '</option>';
+    }
+    return $html;
+}
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -30,8 +44,8 @@ function admin_index_h(?string $value): string
       'csrfToken' => $csrfToken,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
   </script>
-  <link rel="stylesheet" href="./css/reservation-admin.css?v=20260406a">
-  <link rel="stylesheet" href="./css/reservation-admin-responsive.css?v=20260406a">
+  <link rel="stylesheet" href="./css/reservation-admin.css?v=20260413a">
+  <link rel="stylesheet" href="./css/reservation-admin-responsive.css?v=20260413a">
 </head>
 <body>
   <div class="admin-shell">
@@ -66,7 +80,7 @@ function admin_index_h(?string $value): string
           <header class="page-head">
             <div>
               <h1>予約一覧</h1>
-              <p class="lead">利用者側から自動処理された予約の一覧です。複数日予約、利用時間、確定 / 却下 / 要確認 / 外部連携状況を確認できます。</p>
+              <p class="lead">利用者側から自動処理された予約と、管理者画面から追加した予約の一覧です。複数日予約、利用時間、確定 / 却下 / 要確認 / 外部連携状況を確認できます。</p>
             </div>
             <div class="head-actions">
               <button id="dashboardReloadBtn" type="button" class="secondary">再読込</button>
@@ -116,6 +130,7 @@ function admin_index_h(?string $value): string
                   <option value="rejected">却下</option>
                   <option value="error">要確認</option>
                   <option value="pending">保留</option>
+                  <option value="replaced">上書き済み</option>
                 </select>
               </label>
 
@@ -166,7 +181,7 @@ function admin_index_h(?string $value): string
           <header class="page-head">
             <div>
               <h1>月間カレンダー</h1>
-              <p class="lead">確定済みまたは確認中の予約日を月単位で確認できます。</p>
+              <p class="lead">確定済みまたは確認中の予約日を月単位で確認できます。日付セルからそのまま予約の追加 / 上書き登録も行えます。</p>
             </div>
             <div class="head-actions">
               <button id="calendarReloadBtn" type="button" class="secondary">再読込</button>
@@ -187,6 +202,78 @@ function admin_index_h(?string $value): string
             </div>
 
             <div class="calendar-admin-grid" id="calendarAdminGrid"></div>
+
+            <div class="calendar-manual-section" id="calendarManualSection">
+              <div class="page-head page-head-compact">
+                <div>
+                  <h2>カレンダーへ追加 / 上書き</h2>
+                  <p class="lead">日付セルまたは「追加」ボタンを押すと利用日が入ります。同日・同室に既存予約がある場合は、その枠を上書きします。</p>
+                </div>
+              </div>
+
+              <div class="calendar-form-grid calendar-manual-grid">
+                <label class="field">
+                  <span>利用日</span>
+                  <input type="date" id="manualUseDate">
+                </label>
+
+                <label class="field">
+                  <span>部屋</span>
+                  <select id="manualRoomCode">
+                    <option value="tamoku">多目的室</option>
+                    <option value="orange">オレンジの部屋</option>
+                  </select>
+                </label>
+
+                <label class="field field-wide">
+                  <span>団体名</span>
+                  <input type="text" id="manualOrganizationName" maxlength="150" placeholder="例：総合管理事務局">
+                </label>
+
+                <label class="field">
+                  <span>利用開始時刻</span>
+                  <select id="manualUsageStartTime"><?php echo admin_index_time_options('09:00', false); ?></select>
+                </label>
+
+                <label class="field">
+                  <span>利用終了時刻</span>
+                  <select id="manualUsageEndTime"><?php echo admin_index_time_options('10:00', true); ?></select>
+                </label>
+
+                <label class="field field-wide">
+                  <span>利用者向けメールアドレス <small>※入力されている場合のみ送信</small></span>
+                  <input type="email" id="manualEmail" maxlength="255" placeholder="例：group@example.jp">
+                </label>
+              </div>
+
+              <div class="checkbox-grid">
+                <label class="check-card">
+                  <input type="checkbox" id="manualSyncGoogle" checked>
+                  <span>
+                    <strong>Google カレンダーに反映する</strong>
+                    <small>部屋に対応する共有カレンダーへ予定を追加します。</small>
+                  </span>
+                </label>
+
+                <label class="check-card">
+                  <input type="checkbox" id="manualIssueSwitchbot" checked>
+                  <span>
+                    <strong>SwitchBot でパスコードを発行する</strong>
+                    <small>有効期間付きのパスコードを発行します。</small>
+                  </span>
+                </label>
+              </div>
+
+              <div class="toolbar">
+                <button id="calendarManualCreateBtn" type="button">追加 / 上書き登録</button>
+                <button id="calendarManualResetBtn" type="button" class="secondary">入力クリア</button>
+              </div>
+
+              <div class="meta-row">
+                <div class="meta" id="calendarManualMetaText">利用者向けメールはメールアドレス入力時のみ送信されます。sogokanri@bene.fit.ac.jp への通知は Google / SwitchBot の両方を選択したときのみ送信します。</div>
+                <div class="status" id="calendarManualStatusText" aria-live="polite"></div>
+              </div>
+            </div>
 
             <div class="table-wrap">
               <table>
@@ -380,6 +467,6 @@ function admin_index_h(?string $value): string
     </main>
   </div>
 
-  <script src="./js/admin-app.js?v=20260406a" defer></script>
+  <script src="./js/admin-app.js?v=20260413a" defer></script>
 </body>
 </html>
