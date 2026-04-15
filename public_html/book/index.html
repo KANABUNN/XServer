@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>貸し部屋予約</title>
   <link rel="icon" href="icon.png">
-  <link rel="stylesheet" href="css/style.css?v=20260407e">
-  <link rel="stylesheet" href="css/style_responsive.css?v=20260407e">
+  <link rel="stylesheet" href="css/style.css?v=20260415a">
+  <link rel="stylesheet" href="css/style_responsive.css?v=20260415a">
 </head>
 <body>
   <div class="container">
@@ -124,40 +124,15 @@
         <h2>貸し部屋予約 利用規約</h2>
         <button type="submit" class="dialog-close-btn" aria-label="閉じる">×</button>
       </div>
-      <div class="terms-dialog-body">
-        <section>
-          <h3>1. 予約方法</h3>
-          <ul>
-            <li>予約はカレンダーから利用日を選択し、その後に各日付ごとの部屋と利用時間を入力して行います。</li>
-            <li>入力項目は、メールアドレス、団体名、利用日、日付ごとの部屋、日付ごとの利用時間、規約への同意です。</li>
-            <li>利用時間は 9:00〜20:00 の範囲で、15分刻みで指定します。</li>
-            <li>予約対象日は、本日から2日後〜2か月先までです。</li>
-          </ul>
-        </section>
-        <section>
-          <h3>2. 予約の成立</h3>
-          <ul>
-            <li>各日付の設定内容に基づいて、自動的に DB 登録・SwitchBot 連携・Google カレンダー連携・メール送信が行われます。</li>
-            <li>選択した日付のうち1日でも、指定部屋がすでに予約済みである場合、その申請は受け付けできません。</li>
-            <li>予約結果は入力メールアドレスに送信され、同時に総合管理事務局にも通知されます。</li>
-          </ul>
-        </section>
-        <section>
-          <h3>3. 入室用パスコード</h3>
-          <ul>
-            <li>日付ごとに6桁のパスコードを自動生成します。</li>
-            <li>SwitchBot 側の有効時間は、各日付の指定利用時間の前後10分を含めて設定されます。</li>
-            <li>メールには日付ごとの部屋・利用時間・パスコードが記載されます。</li>
-          </ul>
-        </section>
-        <section>
-          <h3>4. 注意事項</h3>
-          <ul>
-            <li>Google カレンダー連携や SwitchBot 連携に障害が発生した場合、管理側で確認を行うことがあります。</li>
-            <li>虚偽の団体名、メールアドレス、利用内容での申請は禁止します。</li>
-            <li>運用上の詳細ルールが別途ある場合は、総合管理事務局の案内を優先します。</li>
-          </ul>
-        </section>
+      <div class="terms-dialog-body terms-dialog-body-embed">
+        <iframe
+          src="terms.html"
+          title="貸し部屋予約 利用規約"
+          class="terms-iframe"
+          loading="lazy"
+        >
+          <p>利用規約を表示できません。<a href="terms.html" target="_blank" rel="noopener">利用規約を開く</a>してください。</p>
+        </iframe>
       </div>
       <div class="terms-dialog-actions">
         <button type="button" class="calendar-nav-btn" id="agreeFromDialog">内容を確認し、同意する</button>

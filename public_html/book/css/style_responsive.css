@@ -89,7 +89,8 @@
   }
 
   .manual-embed-wrap,
-  .manual-pdf-frame {
+  .manual-pdf-frame,
+  .terms-iframe {
     min-height: 56vh;
     height: 56vh;
   }
