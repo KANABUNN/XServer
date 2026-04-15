@@ -1,8 +1,24 @@
 <?php
 declare(strict_types=1);
 
-use PHPMailer\PHPMailer\Exception;
-use PHPMailer\PHPMailer\PHPMailer;
+function smtp_mailer_phpmailer_class(): string
+{
+    $mailerClass = 'PHPMailer\\PHPMailer\\PHPMailer';
+    if (class_exists($mailerClass)) {
+        return $mailerClass;
+    }
+
+    $autoload = dirname(__DIR__) . '/vendor/autoload.php';
+    if (is_file($autoload)) {
+        require_once $autoload;
+    }
+
+    if (!class_exists($mailerClass)) {
+        throw new RuntimeException('PHPMailer is not installed or vendor/autoload.php cannot be loaded.');
+    }
+
+    return $mailerClass;
+}
 
 function send_mail_smtp(array $cfg, array $mailData): void
 {
@@ -16,7 +32,8 @@ function send_mail_smtp(array $cfg, array $mailData): void
         throw new RuntimeException('宛先メールアドレスが未指定です。');
     }
 
-    $mail = new PHPMailer(true);
+    $mailerClass = smtp_mailer_phpmailer_class();
+    $mail = new $mailerClass(true);
 
     try {
         $mail->isSMTP();
@@ -56,10 +73,15 @@ function send_mail_smtp(array $cfg, array $mailData): void
 
         $mail->Subject = (string)($mailData['subject'] ?? '');
         $mail->Body = $htmlBody !== '' ? $htmlBody : nl2br(htmlspecialchars($plainBody, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
-        $mail->AltBody = PHPMailer::normalizeBreaks($plainBody, "\r\n");
+        $mail->AltBody = $mailerClass::normalizeBreaks($plainBody, "\r\n");
 
         $mail->send();
-    } catch (Exception $e) {
-        throw new RuntimeException('メール送信に失敗しました: ' . $mail->ErrorInfo);
+    } catch (\Exception $e) {
+        $errorInfo = trim((string)$mail->ErrorInfo);
+        throw new RuntimeException(
+            'メール送信に失敗しました: ' . ($errorInfo !== '' ? $errorInfo : $e->getMessage()),
+            0,
+            $e
+        );
     }
 }

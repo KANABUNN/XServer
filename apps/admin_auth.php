@@ -896,6 +896,7 @@ function admin_auth_require_permission(string $permission, ?array $user = null):
         'message' => 'この操作を実行する権限がありません。',
         'required_permission' => $permission,
     ], 403);
+    exit;
 }
 
 function admin_auth_require_login(array $options = []): array
