@@ -94,3 +94,19 @@
     order: 2;
   }
 }
+
+
+@media (max-width: 768px) {
+  .modal-overlay {
+    padding: 12px;
+  }
+
+  .modal-dialog {
+    max-height: calc(100vh - 24px);
+    border-radius: 20px;
+  }
+
+  .calendar-detail-dialog {
+    padding: 16px;
+  }
+}

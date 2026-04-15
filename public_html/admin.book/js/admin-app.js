@@ -105,7 +105,28 @@
     return `${dateKey} (${weekdays[date.getDay()]})`;
   }
 
-  function selectCalendarDate(date) {
+  function isCalendarDetailDialogOpen() {
+    const dialog = q('#calendarDetailDialog');
+    return !!(dialog && !dialog.hidden);
+  }
+
+  function openCalendarDetailDialog() {
+    const dialog = q('#calendarDetailDialog');
+    if (!dialog) return;
+    dialog.hidden = false;
+    document.body.classList.add('modal-open');
+  }
+
+  function closeCalendarDetailDialog() {
+    const dialog = q('#calendarDetailDialog');
+    if (!dialog) return;
+    dialog.hidden = true;
+    document.body.classList.remove('modal-open');
+    setText('#calendarDetailStatusText', '');
+  }
+
+  function selectCalendarDate(date, options = {}) {
+    const { openDialog = true } = options;
     calendarState.selectedDate = date || '';
     const input = q('#manualUseDate');
     if (input && date) input.value = date;
@@ -113,6 +134,9 @@
       dayEl.classList.toggle('is-selected', dayEl.dataset.date === calendarState.selectedDate);
     });
     renderCalendarDateDetail(calendarState.selectedDate);
+    if (date && openDialog) {
+      openCalendarDetailDialog();
+    }
   }
 
   function detectConflictLabel(date, roomCode) {
@@ -282,7 +306,7 @@
         if (event.target instanceof HTMLElement && event.target.closest('.calendar-add-btn')) {
           return;
         }
-        selectCalendarDate(dayEl.dataset.date || '');
+        selectCalendarDate(dayEl.dataset.date || '', { openDialog: true });
       });
     });
 
@@ -290,7 +314,7 @@
       button.addEventListener('click', (event) => {
         event.stopPropagation();
         const date = button.dataset.date || '';
-        selectCalendarDate(date);
+        selectCalendarDate(date, { openDialog: false });
         q('#manualOrganizationName')?.focus();
       });
     });
@@ -369,8 +393,9 @@
 
       bindCalendarDaySelection();
       if (calendarState.selectedDate.startsWith(`${json.month}-`)) {
-        selectCalendarDate(calendarState.selectedDate);
+        selectCalendarDate(calendarState.selectedDate, { openDialog: isCalendarDetailDialogOpen() });
       } else {
+        closeCalendarDetailDialog();
         renderCalendarDateDetail('');
       }
 
@@ -531,6 +556,7 @@
     q('#manualIssueSwitchbot').checked = true;
     setText('#calendarManualStatusText', '');
     setText('#calendarDetailStatusText', '');
+    closeCalendarDetailDialog();
     document.querySelectorAll('.calendar-day[data-date]').forEach((dayEl) => dayEl.classList.remove('is-selected'));
     renderCalendarDateDetail('');
   }
@@ -598,6 +624,17 @@
     });
     q('#calendarManualCreateBtn')?.addEventListener('click', submitManualCalendarCreate);
     q('#calendarManualResetBtn')?.addEventListener('click', resetManualCalendarForm);
+    q('#calendarDetailCloseBtn')?.addEventListener('click', closeCalendarDetailDialog);
+    q('#calendarDetailDialog')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) {
+        closeCalendarDetailDialog();
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && isCalendarDetailDialogOpen()) {
+        closeCalendarDetailDialog();
+      }
+    });
 
     q('#passcodeReloadBtn')?.addEventListener('click', loadPasscodes);
 

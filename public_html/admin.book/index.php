@@ -204,23 +204,30 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
 
             <div class="calendar-admin-grid" id="calendarAdminGrid"></div>
 
-            <section class="calendar-detail-section" id="calendarDetailSection">
-              <div class="page-head page-head-compact">
-                <div>
-                  <h2 id="calendarDetailTitle">日付を選択してください</h2>
-                  <p class="lead" id="calendarDetailLead">予約が入っている日をクリックすると、部屋ごとの詳細を表示します。</p>
+            <div class="modal-overlay calendar-detail-modal" id="calendarDetailDialog" hidden>
+              <div class="modal-dialog calendar-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="calendarDetailTitle">
+                <div class="calendar-detail-dialog-head">
+                  <div class="page-head page-head-compact">
+                    <div>
+                      <h2 id="calendarDetailTitle">日付を選択してください</h2>
+                      <p class="lead" id="calendarDetailLead">予約が入っている日をクリックすると、部屋ごとの詳細を表示します。</p>
+                    </div>
+                    <div class="head-actions">
+                      <button type="button" class="secondary modal-close-btn" id="calendarDetailCloseBtn" aria-label="閉じる">閉じる</button>
+                    </div>
+                  </div>
+
+                  <div class="meta-row">
+                    <div class="meta" id="calendarDetailMetaText">まだ日付が選択されていません。</div>
+                    <div class="status" id="calendarDetailStatusText" aria-live="polite"></div>
+                  </div>
+                </div>
+
+                <div class="calendar-detail-cards" id="calendarDetailCards">
+                  <article class="calendar-detail-empty">日付を選択すると詳細が表示されます。</article>
                 </div>
               </div>
-
-              <div class="meta-row">
-                <div class="meta" id="calendarDetailMetaText">まだ日付が選択されていません。</div>
-                <div class="status" id="calendarDetailStatusText" aria-live="polite"></div>
-              </div>
-
-              <div class="calendar-detail-cards" id="calendarDetailCards">
-                <article class="calendar-detail-empty">日付を選択すると詳細が表示されます。</article>
-              </div>
-            </section>
+            </div>
 
             <div class="calendar-manual-section" id="calendarManualSection">
               <div class="page-head page-head-compact">
