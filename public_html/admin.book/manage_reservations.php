@@ -236,7 +236,7 @@ function manage_calendar_manual_create(PDO $pdo, array $cfg, array $user, array 
     admin_auth_install_schema($pdo);
 
     $data = manage_validate_manual_create_input($input);
-    $accessWindow = reservation_access_code_window($cfg, $data['use_date'], $data['usage_start_time'], $data['usage_end_time']);
+    [$accessCodeStartAt, $accessCodeEndAt] = reservation_access_code_window($cfg, $data['use_date'], $data['usage_start_time'], $data['usage_end_time']);
     $accessCode = $data['issue_switchbot'] ? reservation_generate_access_code($pdo, $cfg) : '';
     $requestToken = reservation_generate_request_token();
 
@@ -281,8 +281,8 @@ function manage_calendar_manual_create(PDO $pdo, array $cfg, array $user, array 
             'usage_end_time' => $data['usage_end_time'],
             'usage_time' => $data['usage_time'],
             'access_code' => $accessCode,
-            'access_code_start_at' => $accessWindow['start_at'],
-            'access_code_end_at' => $accessWindow['end_at'],
+            'access_code_start_at' => $accessCodeStartAt,
+            'access_code_end_at' => $accessCodeEndAt,
             'switchbot_status' => $data['issue_switchbot'] ? 'queued' : 'skipped',
             'google_sync_status' => $data['sync_google'] ? (google_calendar_sync_enabled($cfg) ? 'queued' : 'disabled') : 'skipped',
         ]);
