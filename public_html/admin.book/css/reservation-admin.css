@@ -483,3 +483,129 @@ button:disabled {
   color: var(--muted);
   line-height: 1.7;
 }
+
+
+.badge-deleted {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #d1d5db;
+}
+
+button.danger {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.calendar-day.has-reservation {
+  border-color: #c7d2fe;
+  background: #fcfcff;
+}
+
+.calendar-day.is-today {
+  border-color: #2563eb;
+  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.12);
+  background: #eff6ff;
+}
+
+.calendar-today-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.calendar-detail-section {
+  margin: 0 0 18px;
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px solid #dbe4f0;
+  background: #ffffff;
+}
+
+.calendar-detail-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.calendar-detail-card,
+.calendar-detail-empty {
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 18px;
+}
+
+.calendar-detail-empty {
+  color: var(--muted);
+  text-align: center;
+}
+
+.calendar-detail-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.calendar-detail-card-head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.calendar-detail-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.calendar-detail-item + .calendar-detail-item {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.calendar-detail-list {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.calendar-detail-list div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.calendar-detail-list dt {
+  font-weight: 700;
+  color: #475569;
+}
+
+.calendar-detail-list dd {
+  margin: 0;
+  line-height: 1.8;
+}
+
+.calendar-detail-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.muted-inline {
+  color: var(--muted);
+}

@@ -9,7 +9,15 @@
   const calendarState = {
     month: '',
     rows: [],
+    dayMap: {},
     selectedDate: '',
+    today: (() => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    })(),
   };
 
   function escapeHtml(value) {
@@ -89,6 +97,14 @@
     section.hidden = true;
   }
 
+  function formatCalendarDateLabel(dateKey) {
+    if (!dateKey) return '';
+    const date = new Date(`${dateKey}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return dateKey;
+    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    return `${dateKey} (${weekdays[date.getDay()]})`;
+  }
+
   function selectCalendarDate(date) {
     calendarState.selectedDate = date || '';
     const input = q('#manualUseDate');
@@ -96,12 +112,126 @@
     document.querySelectorAll('.calendar-day[data-date]').forEach((dayEl) => {
       dayEl.classList.toggle('is-selected', dayEl.dataset.date === calendarState.selectedDate);
     });
+    renderCalendarDateDetail(calendarState.selectedDate);
   }
 
   function detectConflictLabel(date, roomCode) {
     const row = calendarState.rows.find((item) => item.use_date === date && item.room_code === roomCode);
     if (!row) return '';
     return `${row.room_label || roomCode} / ${row.organization_name || '既存予約'}`;
+  }
+
+
+  function buildCalendarRoomGroups(items) {
+    return items.reduce((groups, item) => {
+      const key = item.room_code || item.room_label || 'unknown';
+      if (!groups[key]) {
+        groups[key] = {
+          room_code: item.room_code || '',
+          room_label: item.room_label || item.room_code || '',
+          rows: [],
+        };
+      }
+      groups[key].rows.push(item);
+      return groups;
+    }, {});
+  }
+
+  function bindCalendarDetailDeleteButtons() {
+    document.querySelectorAll('.calendar-slot-delete-btn').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const slotId = Number(button.dataset.slotId || 0);
+        const roomLabel = button.dataset.roomLabel || '';
+        const organizationName = button.dataset.organizationName || '';
+        const useDate = button.dataset.useDate || calendarState.selectedDate || '';
+        if (!slotId) return;
+
+        const confirmed = window.confirm(
+          `${useDate}\n${roomLabel} / ${organizationName}\n\nこの予約枠を削除しますか？`
+        );
+        if (!confirmed) return;
+
+        button.disabled = true;
+        setText('#calendarDetailStatusText', '削除中...');
+        try {
+          const json = await api('calendar_slot_delete', { slot_id: slotId });
+          setText('#calendarDetailStatusText', json.message || '削除しました。');
+          await Promise.allSettled([loadCalendar(), loadDashboard(), loadPasscodes(), loadAuditLogs()]);
+        } catch (error) {
+          setText('#calendarDetailStatusText', error instanceof Error ? error.message : '削除に失敗しました。');
+        } finally {
+          button.disabled = false;
+        }
+      });
+    });
+  }
+
+  function renderCalendarDateDetail(dateKey) {
+    const titleEl = q('#calendarDetailTitle');
+    const leadEl = q('#calendarDetailLead');
+    const metaEl = q('#calendarDetailMetaText');
+    const cardsEl = q('#calendarDetailCards');
+    if (!titleEl || !leadEl || !metaEl || !cardsEl) return;
+
+    if (!dateKey) {
+      titleEl.textContent = '日付を選択してください';
+      leadEl.textContent = '予約が入っている日をクリックすると、部屋ごとの詳細を表示します。';
+      metaEl.textContent = 'まだ日付が選択されていません。';
+      cardsEl.innerHTML = '<article class="calendar-detail-empty">日付を選択すると詳細が表示されます。</article>';
+      return;
+    }
+
+    const items = Array.isArray(calendarState.dayMap[dateKey]) ? calendarState.dayMap[dateKey] : [];
+    titleEl.textContent = `${formatCalendarDateLabel(dateKey)} の予約詳細`;
+    leadEl.textContent = items.length > 0
+      ? '部屋ごとの予約内容です。削除はこの画面から行えます。'
+      : 'この日は現在、予約が入っていません。';
+    metaEl.textContent = items.length > 0 ? `${items.length}件の予約枠があります。` : 'この日の予約枠はありません。';
+
+    if (items.length === 0) {
+      cardsEl.innerHTML = '<article class="calendar-detail-empty">この日の予約はありません。</article>';
+      return;
+    }
+
+    const groups = Object.values(buildCalendarRoomGroups(items));
+    cardsEl.innerHTML = groups.map((group) => {
+      const body = group.rows.map((row) => `
+        <div class="calendar-detail-item">
+          <dl class="calendar-detail-list">
+            <div><dt>団体名</dt><dd>${escapeHtml(row.organization_name || '')}</dd></div>
+            <div><dt>利用時間</dt><dd>${escapeHtml(row.usage_time || '')}</dd></div>
+            <div><dt>利用者メール</dt><dd>${row.email ? escapeHtml(row.email) : '<span class="muted-inline">未入力</span>'}</dd></div>
+            <div><dt>パスコード</dt><dd>${row.access_code ? escapeHtml(row.access_code) : '<span class="muted-inline">未発行</span>'}</dd></div>
+            <div><dt>SwitchBot</dt><dd>${statusBadge(row.switchbot_status || '')}</dd></div>
+            <div><dt>Google</dt><dd>${statusBadge(row.google_sync_status || '')}</dd></div>
+          </dl>
+          ${hasPermission('calendar.delete') ? `
+            <div class="calendar-detail-actions">
+              <button
+                type="button"
+                class="danger calendar-slot-delete-btn"
+                data-slot-id="${escapeHtml(String(row.id || ''))}"
+                data-use-date="${escapeHtml(row.use_date || '')}"
+                data-room-label="${escapeHtml(row.room_label || '')}"
+                data-organization-name="${escapeHtml(row.organization_name || '')}"
+              >この予約枠を削除</button>
+            </div>
+          ` : ''}
+        </div>
+      `).join('');
+
+      return `
+        <article class="calendar-detail-card">
+          <header class="calendar-detail-card-head">
+            <h3>${escapeHtml(group.room_label || group.room_code || '部屋未設定')}</h3>
+            <span class="calendar-detail-count">${escapeHtml(String(group.rows.length))}件</span>
+          </header>
+          ${body}
+        </article>
+      `;
+    }).join('');
+
+    bindCalendarDetailDeleteButtons();
   }
 
   async function loadDashboard() {
@@ -178,6 +308,7 @@
 
       calendarState.month = json.month || month;
       calendarState.rows = Array.isArray(json.rows) ? json.rows : [];
+      calendarState.dayMap = json.day_map || {};
 
       const weekdayLabels = ['日', '月', '火', '水', '木', '金', '土'];
       const target = new Date(`${json.month}-01T00:00:00`);
@@ -203,10 +334,17 @@
             `).join('')
           : '<div class="calendar-entry empty">予約なし</div>';
 
+        const classNames = [
+          'calendar-day',
+          dateKey === calendarState.today ? 'is-today' : '',
+          items.length > 0 ? 'has-reservation' : '',
+        ].filter(Boolean).join(' ');
+
         grid.insertAdjacentHTML('beforeend', `
-          <div class="calendar-day" data-date="${escapeHtml(dateKey)}">
+          <div class="${classNames}" data-date="${escapeHtml(dateKey)}">
             <div class="calendar-day-head">
               <span class="calendar-day-number">${day}</span>
+              ${dateKey === calendarState.today ? '<span class="calendar-today-chip">今日</span>' : ''}
               ${hasPermission('calendar.create') ? `<button type="button" class="calendar-add-btn secondary" data-date="${escapeHtml(dateKey)}">追加</button>` : ''}
             </div>
             ${content}
@@ -232,9 +370,12 @@
       bindCalendarDaySelection();
       if (calendarState.selectedDate.startsWith(`${json.month}-`)) {
         selectCalendarDate(calendarState.selectedDate);
+      } else {
+        renderCalendarDateDetail('');
       }
 
-      setText('#calendarMetaText', `${calendarState.rows.length}件の予約日があります。`);
+      const reservedDateCount = Object.keys(calendarState.dayMap).length;
+      setText('#calendarMetaText', `${reservedDateCount}日 / ${calendarState.rows.length}件の予約枠があります。`);
       setText('#calendarStatusText', json.message || '読込完了');
     } catch (error) {
       setText('#calendarStatusText', error instanceof Error ? error.message : '読込に失敗しました。');
@@ -389,7 +530,9 @@
     q('#manualSyncGoogle').checked = true;
     q('#manualIssueSwitchbot').checked = true;
     setText('#calendarManualStatusText', '');
+    setText('#calendarDetailStatusText', '');
     document.querySelectorAll('.calendar-day[data-date]').forEach((dayEl) => dayEl.classList.remove('is-selected'));
+    renderCalendarDateDetail('');
   }
 
   async function submitManualCalendarCreate() {

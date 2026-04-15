@@ -48,6 +48,10 @@ try {
             manage_require_permission($user, 'calendar.create');
             manage_calendar_manual_create($pdo, $cfg, $user, $input);
             break;
+        case 'calendar_slot_delete':
+            manage_require_permission($user, 'calendar.delete');
+            manage_calendar_slot_delete($pdo, $cfg, $user, $input);
+            break;
         case 'passcode_list':
             manage_require_permission($user, 'access.view');
             manage_passcode_list($pdo);
@@ -201,7 +205,7 @@ function manage_calendar_month(PDO $pdo, array $input): void
     $monthEnd = (new DateTimeImmutable($monthStart))->modify('+1 month')->format('Y-m-d');
 
     $stmt = $pdo->prepare(
-        'SELECT id, reservation_id, use_date, room_code, room_label, organization_name, email, usage_time, access_code, switchbot_status, google_sync_status '
+        'SELECT id, reservation_id, use_date, room_code, room_label, organization_name, email, usage_start_time, usage_end_time, usage_time, access_code, switchbot_status, google_sync_status '
         . 'FROM room_calendar_reservations '
         . 'WHERE use_date >= :month_start AND use_date < :month_end '
         . 'ORDER BY use_date ASC, room_code ASC'
@@ -374,6 +378,174 @@ function manage_calendar_manual_create(PDO $pdo, array $cfg, array $user, array 
         'admin_mail_status' => (string)($reservation['admin_mail_status'] ?? ''),
         'mail_result' => $mailResult,
     ]);
+}
+
+
+function manage_calendar_slot_delete(PDO $pdo, array $cfg, array $user, array $input): void
+{
+    reservation_install_schema($pdo);
+    admin_auth_install_schema($pdo);
+
+    $slotId = manage_validate_slot_delete_input($input);
+    $slot = manage_fetch_calendar_slot_by_id($pdo, $slotId);
+    if ($slot === null) {
+        throw new RuntimeException('削除対象の予約枠が見つかりません。');
+    }
+
+    $reservationId = (int)($slot['reservation_id'] ?? 0);
+    if ($reservationId < 1) {
+        throw new RuntimeException('削除対象の予約IDが不正です。');
+    }
+
+    $googleDelete = manage_delete_google_event_for_slot($cfg, $slot);
+
+    try {
+        $pdo->beginTransaction();
+
+        $delete = $pdo->prepare('DELETE FROM room_calendar_reservations WHERE id = :id');
+        $delete->execute([':id' => $slotId]);
+
+        manage_refresh_reservation_after_slot_delete($pdo, $reservationId, $slot);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    $reservation = manage_fetch_reservation_by_id($pdo, $reservationId);
+
+    admin_auth_write_audit_log($pdo, $user, 'calendar.slot_delete', 'reservation', $reservationId, [
+        'slot_id' => $slotId,
+        'use_date' => (string)($slot['use_date'] ?? ''),
+        'room_code' => (string)($slot['room_code'] ?? ''),
+        'room_label' => (string)($slot['room_label'] ?? ''),
+        'organization_name' => (string)($slot['organization_name'] ?? ''),
+        'google_delete_status' => (string)($googleDelete['status'] ?? ''),
+        'google_delete_message' => (string)($googleDelete['message'] ?? ''),
+        'reservation_status' => (string)($reservation['reservation_status'] ?? ''),
+    ]);
+
+    $message = '予約を削除しました。';
+    if (($googleDelete['status'] ?? '') === 'missing_ignored') {
+        $message .= ' Google カレンダー上に予定が見つからなかったため、そのままスルーしました。';
+    } elseif (($googleDelete['status'] ?? '') === 'warning') {
+        $message .= ' ただし Google カレンダー削除で確認事項があります。' . ((string)($googleDelete['message'] ?? '') !== '' ? ' ' . (string)$googleDelete['message'] : '');
+    }
+
+    json_response([
+        'ok' => true,
+        'message' => $message,
+        'slot_id' => $slotId,
+        'google_delete_status' => (string)($googleDelete['status'] ?? ''),
+        'google_delete_message' => (string)($googleDelete['message'] ?? ''),
+        'reservation_status' => (string)($reservation['reservation_status'] ?? 'deleted'),
+    ]);
+}
+
+function manage_validate_slot_delete_input(array $input): int
+{
+    $slotId = (int)($input['slot_id'] ?? 0);
+    if ($slotId < 1) {
+        throw new RuntimeException('削除対象の予約枠IDが不正です。');
+    }
+    return $slotId;
+}
+
+function manage_fetch_calendar_slot_by_id(PDO $pdo, int $slotId): ?array
+{
+    $stmt = $pdo->prepare('SELECT * FROM room_calendar_reservations WHERE id = :id LIMIT 1');
+    $stmt->execute([':id' => $slotId]);
+    $row = $stmt->fetch();
+    return is_array($row) ? $row : null;
+}
+
+function manage_refresh_reservation_after_slot_delete(PDO $pdo, int $reservationId, array $deletedSlot): void
+{
+    $remaining = reservation_fetch_detail_rows($pdo, $reservationId);
+    if ($remaining === []) {
+        reservation_update_status($pdo, $reservationId, [
+            'room_code' => (string)($deletedSlot['room_code'] ?? ''),
+            'room_label' => (string)($deletedSlot['room_label'] ?? ''),
+            'use_date' => (string)($deletedSlot['use_date'] ?? date('Y-m-d')),
+            'use_date_end' => (string)($deletedSlot['use_date'] ?? date('Y-m-d')),
+            'selected_dates_count' => 0,
+            'usage_start_time' => (string)($deletedSlot['usage_start_time'] ?? '09:00'),
+            'usage_end_time' => (string)($deletedSlot['usage_end_time'] ?? '10:00'),
+            'usage_time' => (string)($deletedSlot['usage_time'] ?? '09:00~10:00'),
+            'access_code' => null,
+            'reservation_status' => 'deleted',
+            'status_reason' => '管理者画面から削除されました。',
+            'switchbot_status' => 'deleted',
+            'google_sync_status' => 'deleted',
+        ]);
+        return;
+    }
+
+    manage_refresh_reservation_from_slots($pdo, $reservationId);
+}
+
+function manage_delete_google_event_for_slot(array $cfg, array $slot): array
+{
+    $eventId = trim((string)($slot['google_event_id'] ?? ''));
+    $calendarId = trim((string)($slot['google_calendar_id'] ?? ''));
+
+    if ($eventId === '' || $calendarId === '') {
+        return ['status' => 'skipped', 'message' => 'Google カレンダー未登録のため削除をスキップしました。'];
+    }
+
+    if (!function_exists('google_calendar_sync_enabled') || !google_calendar_sync_enabled($cfg)) {
+        return ['status' => 'skipped', 'message' => 'Google カレンダー連携が無効のため削除をスキップしました。'];
+    }
+
+    try {
+        google_calendar_delete_via_gas($cfg, [
+            'reservation_id' => (int)($slot['reservation_id'] ?? 0),
+            'reservation_detail_id' => (int)($slot['id'] ?? 0),
+            'calendar_id' => $calendarId,
+            'event_id' => $eventId,
+            'use_date' => (string)($slot['use_date'] ?? ''),
+            'room_code' => (string)($slot['room_code'] ?? ''),
+            'room_label' => (string)($slot['room_label'] ?? ''),
+            'organization_name' => (string)($slot['organization_name'] ?? ''),
+        ]);
+        return ['status' => 'deleted', 'message' => 'deleted'];
+    } catch (Throwable $e) {
+        $message = trim($e->getMessage());
+        if (manage_is_google_missing_event_error($message)) {
+            return ['status' => 'missing_ignored', 'message' => $message];
+        }
+        return ['status' => 'warning', 'message' => $message];
+    }
+}
+
+function manage_is_google_missing_event_error(string $message): bool
+{
+    $normalized = function_exists('mb_strtolower') ? mb_strtolower($message, 'UTF-8') : strtolower($message);
+
+    $needles = [
+        'event not found',
+        'no event found',
+        'event does not exist',
+        'calendar event not found',
+        '指定された予定が見つかりません',
+        'イベントが見つかりません',
+        '予定が見つかりません',
+        '該当する予定が見つかりません',
+    ];
+    foreach ($needles as $needle) {
+        if (str_contains($normalized, $needle)) {
+            return true;
+        }
+    }
+
+    if (str_contains($normalized, '404') && (str_contains($normalized, 'event') || str_contains($normalized, '予定') || str_contains($normalized, 'イベント'))) {
+        return true;
+    }
+
+    return false;
 }
 
 function manage_passcode_list(PDO $pdo): void

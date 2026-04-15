@@ -72,3 +72,25 @@
     width: 100%;
   }
 }
+
+
+@media (max-width: 1200px) {
+  .calendar-detail-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .calendar-detail-list div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .calendar-detail-actions .danger {
+    width: 100%;
+  }
+
+  .calendar-today-chip {
+    order: 2;
+  }
+}

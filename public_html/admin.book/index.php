@@ -44,8 +44,8 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
       'csrfToken' => $csrfToken,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
   </script>
-  <link rel="stylesheet" href="./css/reservation-admin.css?v=20260413a">
-  <link rel="stylesheet" href="./css/reservation-admin-responsive.css?v=20260413a">
+  <link rel="stylesheet" href="./css/reservation-admin.css?v=20260415b">
+  <link rel="stylesheet" href="./css/reservation-admin-responsive.css?v=20260415b">
 </head>
 <body>
   <div class="admin-shell">
@@ -131,6 +131,7 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
                   <option value="error">要確認</option>
                   <option value="pending">保留</option>
                   <option value="replaced">上書き済み</option>
+                  <option value="deleted">削除済み</option>
                 </select>
               </label>
 
@@ -181,7 +182,7 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
           <header class="page-head">
             <div>
               <h1>月間カレンダー</h1>
-              <p class="lead">確定済みまたは確認中の予約日を月単位で確認できます。日付セルからそのまま予約の追加 / 上書き登録も行えます。</p>
+              <p class="lead">確定済みまたは確認中の予約日を月単位で確認できます。日付セルをクリックすると部屋ごとの予約詳細を表示し、そのまま追加 / 上書きや削除も行えます。</p>
             </div>
             <div class="head-actions">
               <button id="calendarReloadBtn" type="button" class="secondary">再読込</button>
@@ -202,6 +203,24 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
             </div>
 
             <div class="calendar-admin-grid" id="calendarAdminGrid"></div>
+
+            <section class="calendar-detail-section" id="calendarDetailSection">
+              <div class="page-head page-head-compact">
+                <div>
+                  <h2 id="calendarDetailTitle">日付を選択してください</h2>
+                  <p class="lead" id="calendarDetailLead">予約が入っている日をクリックすると、部屋ごとの詳細を表示します。</p>
+                </div>
+              </div>
+
+              <div class="meta-row">
+                <div class="meta" id="calendarDetailMetaText">まだ日付が選択されていません。</div>
+                <div class="status" id="calendarDetailStatusText" aria-live="polite"></div>
+              </div>
+
+              <div class="calendar-detail-cards" id="calendarDetailCards">
+                <article class="calendar-detail-empty">日付を選択すると詳細が表示されます。</article>
+              </div>
+            </section>
 
             <div class="calendar-manual-section" id="calendarManualSection">
               <div class="page-head page-head-compact">
@@ -467,6 +486,6 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
     </main>
   </div>
 
-  <script src="./js/admin-app.js?v=20260413a" defer></script>
+  <script src="./js/admin-app.js?v=20260415b" defer></script>
 </body>
 </html>
