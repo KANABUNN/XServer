@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS room_calendar_reservations (
     usage_start_time CHAR(5) NOT NULL,
     usage_end_time CHAR(5) NOT NULL,
     usage_time VARCHAR(20) NOT NULL,
-    access_code CHAR(12) NOT NULL,
+    access_code CHAR(12) DEFAULT NULL,
     access_code_start_at DATETIME NOT NULL,
     access_code_end_at DATETIME NOT NULL,
     switchbot_status VARCHAR(32) NOT NULL DEFAULT 'queued',
@@ -197,6 +197,14 @@ function reservation_add_index_if_missing(PDO $pdo, string $tableName, string $i
     $pdo->exec(sprintf('ALTER TABLE `%s` ADD %s', $tableName, $definition));
 }
 
+function reservation_drop_index_if_exists(PDO $pdo, string $tableName, string $indexName): void
+{
+    if (!reservation_index_exists($pdo, $tableName, $indexName)) {
+        return;
+    }
+    $pdo->exec(sprintf('ALTER TABLE `%s` DROP INDEX `%s`', $tableName, $indexName));
+}
+
 function reservation_migrate_existing_schema(PDO $pdo): void
 {
     if (reservation_table_exists($pdo, 'reservations')) {
@@ -243,6 +251,11 @@ function reservation_migrate_existing_schema(PDO $pdo): void
         reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'google_sync_message', 'VARCHAR(500) DEFAULT NULL AFTER `google_sync_status`');
         reservation_add_column_if_missing($pdo, 'room_calendar_reservations', 'updated_at', 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `created_at`');
 
+        $pdo->exec('ALTER TABLE `room_calendar_reservations` MODIFY COLUMN `access_code` CHAR(12) DEFAULT NULL');
+        $pdo->exec("UPDATE `room_calendar_reservations` SET `access_code` = NULL WHERE `access_code` = ''");
+        reservation_drop_index_if_exists($pdo, 'room_calendar_reservations', 'uq_room_calendar_reservations_access_code');
+
+        reservation_add_index_if_missing($pdo, 'room_calendar_reservations', 'idx_room_calendar_reservations_access_code', 'KEY `idx_room_calendar_reservations_access_code` (`access_code`)');
         reservation_add_index_if_missing($pdo, 'room_calendar_reservations', 'idx_room_calendar_reservations_reservation_id', 'KEY `idx_room_calendar_reservations_reservation_id` (`reservation_id`)');
         reservation_add_index_if_missing($pdo, 'room_calendar_reservations', 'idx_room_calendar_reservations_use_date', 'KEY `idx_room_calendar_reservations_use_date` (`use_date`)');
         reservation_add_index_if_missing($pdo, 'room_calendar_reservations', 'idx_room_calendar_reservations_switchbot_status', 'KEY `idx_room_calendar_reservations_switchbot_status` (`switchbot_status`)');

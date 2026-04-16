@@ -116,6 +116,7 @@ try {
             throw new RuntimeException('未対応の action です。');
     }
 } catch (Throwable $e) {
+    error_log(sprintf('[manage_reservations] %s in %s:%d', $e->getMessage(), $e->getFile(), $e->getLine()));
     http_response_code(500);
     echo json_encode([
         'ok' => false,
@@ -284,7 +285,7 @@ function manage_calendar_manual_create(PDO $pdo, array $cfg, array $user, array 
             'usage_start_time' => $data['usage_start_time'],
             'usage_end_time' => $data['usage_end_time'],
             'usage_time' => $data['usage_time'],
-            'access_code' => $accessCode,
+            'access_code' => $accessCode !== '' ? $accessCode : null,
             'access_code_start_at' => $accessCodeStartAt,
             'access_code_end_at' => $accessCodeEndAt,
             'switchbot_status' => $data['issue_switchbot'] ? 'queued' : 'skipped',
@@ -662,7 +663,7 @@ function manage_insert_manual_slot(PDO $pdo, array $data): int
         ':usage_start_time' => (string)$data['usage_start_time'],
         ':usage_end_time' => (string)$data['usage_end_time'],
         ':usage_time' => (string)$data['usage_time'],
-        ':access_code' => (string)$data['access_code'],
+        ':access_code' => $data['access_code'] !== '' ? (string)$data['access_code'] : null,
         ':access_code_start_at' => (string)$data['access_code_start_at'],
         ':access_code_end_at' => (string)$data['access_code_end_at'],
         ':switchbot_status' => (string)$data['switchbot_status'],
