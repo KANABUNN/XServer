@@ -1,5 +1,5 @@
 <?php
-$configPath = dirname(__DIR__, 2) . '/config.php';
+$configPath = __DIR__ . '/config.php';
 if (!file_exists($configPath)) {
     $configPath = dirname(__DIR__, 2) . '/config.example.php';
 }
