@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../../../includes/bootstrap.php';
+require_once __DIR__ . '/../../../apps/lend_core/bootstrap.php';
 $user = api_require_login();
 
 $assetSets = db()->query('SELECT id, asset_code, name, category, storage_location FROM asset_sets WHERE is_active = 1 ORDER BY category, name')->fetchAll();

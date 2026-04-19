@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../../includes/bootstrap.php';
+require_once __DIR__ . '/../../apps/lend_core/bootstrap.php';
 require_login();
 
 $user = current_user();
