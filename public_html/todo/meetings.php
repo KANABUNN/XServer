@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/../../app/bootstrap.php';
+require __DIR__ . '/../../apps/todo_core/bootstrap.php';
 db_init();
 require_login();
 
@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $meetings = query_all('SELECT m.*, (SELECT COUNT(*) FROM agenda_items a WHERE a.meeting_id = m.id) AS agenda_count, (SELECT COUNT(*) FROM tasks t WHERE t.meeting_id = m.id) AS task_count FROM meetings m ORDER BY meeting_date DESC, start_time DESC, id DESC');
-require __DIR__ . '/../../app/header.php';
+require __DIR__ . '/../../apps/todo_core/header.php';
 ?>
 <section class="page-head">
     <div>
@@ -125,4 +125,4 @@ require __DIR__ . '/../../app/header.php';
         </tbody>
     </table>
 </section>
-<?php require __DIR__ . '/../../app/footer.php'; ?>
+<?php require __DIR__ . '/../../apps/todo_core/footer.php'; ?>

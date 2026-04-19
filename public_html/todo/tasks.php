@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/../../app/bootstrap.php';
+require __DIR__ . '/../../apps/todo_core/bootstrap.php';
 db_init();
 require_login();
 
@@ -24,7 +24,7 @@ if ($assignee !== '') {
 $sqlWhere = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
 $tasks = query_all("SELECT t.*, m.title AS meeting_title, a.title AS agenda_title FROM tasks t LEFT JOIN meetings m ON m.id = t.meeting_id LEFT JOIN agenda_items a ON a.id = t.agenda_item_id $sqlWhere ORDER BY CASE t.status WHEN 'blocked' THEN 0 WHEN 'doing' THEN 1 WHEN 'todo' THEN 2 WHEN 'completed' THEN 3 ELSE 9 END, t.priority DESC, t.due_date ASC, t.id DESC", $params);
-require __DIR__ . '/../../app/header.php';
+require __DIR__ . '/../../apps/todo_core/header.php';
 ?>
 <section class="page-head">
     <div>
@@ -95,4 +95,4 @@ require __DIR__ . '/../../app/header.php';
         </tbody>
     </table>
 </section>
-<?php require __DIR__ . '/../../app/footer.php'; ?>
+<?php require __DIR__ . '/../../apps/todo_core/footer.php'; ?>

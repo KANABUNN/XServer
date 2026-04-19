@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/../../app/bootstrap.php';
+require __DIR__ . '/../../apps/todo_core/bootstrap.php';
 db_init();
 
 if (is_logged_in()) {
@@ -51,7 +51,7 @@ $flashes = consume_flash();
     <div class="hint-box">
         初期ユーザー: <code>admin</code><br>
         初期パスワード: <code>change-me</code><br>
-        公開前に <code>app/config.php</code> を変更してください。
+        公開前に <code>apps/todo_core/config.php</code> を変更してください。
     </div>
 </div>
 </body>

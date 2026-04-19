@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/../../app/bootstrap.php';
+require __DIR__ . '/../../apps/todo_core/bootstrap.php';
 db_init();
 require_login();
 
@@ -14,7 +14,7 @@ $nextMeetings = query_all('SELECT * FROM meetings ORDER BY meeting_date ASC, sta
 $recentTasks = query_all('SELECT t.*, m.title AS meeting_title FROM tasks t LEFT JOIN meetings m ON m.id = t.meeting_id ORDER BY t.updated_at DESC LIMIT 10');
 $recentLogs = query_all('SELECT * FROM activity_logs ORDER BY id DESC LIMIT 12');
 
-require __DIR__ . '/../../app/header.php';
+require __DIR__ . '/../../apps/todo_core/header.php';
 ?>
 <section class="page-head">
     <div>
@@ -108,4 +108,4 @@ require __DIR__ . '/../../app/header.php';
         </tbody>
     </table>
 </section>
-<?php require __DIR__ . '/../../app/footer.php'; ?>
+<?php require __DIR__ . '/../../apps/todo_core/footer.php'; ?>

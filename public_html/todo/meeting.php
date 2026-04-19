@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/../../app/bootstrap.php';
+require __DIR__ . '/../../apps/todo_core/bootstrap.php';
 db_init();
 require_login();
 
@@ -141,7 +141,7 @@ $agendas = query_all('SELECT * FROM agenda_items WHERE meeting_id = ? ORDER BY s
 $tasks = query_all('SELECT t.*, a.title AS agenda_title FROM tasks t LEFT JOIN agenda_items a ON a.id = t.agenda_item_id WHERE t.meeting_id = ? ORDER BY CASE t.status WHEN "blocked" THEN 0 WHEN "doing" THEN 1 WHEN "todo" THEN 2 WHEN "completed" THEN 3 ELSE 9 END, t.priority DESC, t.due_date ASC, t.id DESC', [$meetingId]);
 $comments = query_all('SELECT * FROM comments WHERE agenda_item_id IN (SELECT id FROM agenda_items WHERE meeting_id = ?) OR task_id IN (SELECT id FROM tasks WHERE meeting_id = ?) ORDER BY created_at DESC LIMIT 20', [$meetingId, $meetingId]);
 
-require __DIR__ . '/../../app/header.php';
+require __DIR__ . '/../../apps/todo_core/header.php';
 ?>
 <section class="page-head">
     <div>
@@ -417,4 +417,4 @@ require __DIR__ . '/../../app/header.php';
         </div>
     <?php endif; ?>
 </section>
-<?php require __DIR__ . '/../../app/footer.php'; ?>
+<?php require __DIR__ . '/../../apps/todo_core/footer.php'; ?>

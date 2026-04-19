@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/../../app/bootstrap.php';
+require __DIR__ . '/../../apps/todo_core/bootstrap.php';
 db_init();
 require_login();
 
@@ -17,7 +17,7 @@ if (($_GET['type'] ?? '') === 'tasks') {
     exit;
 }
 
-require __DIR__ . '/../../app/header.php';
+require __DIR__ . '/../../apps/todo_core/header.php';
 ?>
 <section class="page-head">
     <div>
@@ -36,4 +36,4 @@ require __DIR__ . '/../../app/header.php';
         </a>
     </div>
 </section>
-<?php require __DIR__ . '/../../app/footer.php'; ?>
+<?php require __DIR__ . '/../../apps/todo_core/footer.php'; ?>
