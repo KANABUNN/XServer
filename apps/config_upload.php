@@ -18,6 +18,12 @@ return [
         'password' => '',
     ],
 
+    'forms_db' => [
+        'dsn' => 'mysql:host=localhost;dbname=fitsc_forms;charset=utf8mb4',
+        'user' => '',
+        'password' => '',
+    ],
+
     'reservation' => [
         'timezone' => 'Asia/Tokyo',
         'email_domain' => 'bene.fit.ac.jp',
