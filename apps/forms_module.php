@@ -772,10 +772,10 @@ function forms_find_existing_submission(int $formId, string $normalizedEmail, st
         'SELECT *
          FROM managed_form_submissions
          WHERE form_id = :form_id
-           AND (normalized_email = :normalized_email OR normalized_organization = :normalized_organization)
+           AND (normalized_email = :match_email OR normalized_organization = :match_org)
          ORDER BY CASE
-             WHEN normalized_email = :normalized_email AND normalized_organization = :normalized_organization THEN 0
-             WHEN normalized_email = :normalized_email THEN 1
+             WHEN normalized_email = :rank_email_both AND normalized_organization = :rank_org_both THEN 0
+             WHEN normalized_email = :rank_email_only THEN 1
              ELSE 2
          END,
          updated_at DESC,
@@ -784,8 +784,11 @@ function forms_find_existing_submission(int $formId, string $normalizedEmail, st
     );
     $stmt->execute([
         ':form_id' => $formId,
-        ':normalized_email' => $normalizedEmail,
-        ':normalized_organization' => $normalizedOrganization,
+        ':match_email' => $normalizedEmail,
+        ':match_org' => $normalizedOrganization,
+        ':rank_email_both' => $normalizedEmail,
+        ':rank_org_both' => $normalizedOrganization,
+        ':rank_email_only' => $normalizedEmail,
     ]);
     $row = $stmt->fetch();
     return $row ?: null;
