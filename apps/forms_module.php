@@ -2,14 +2,34 @@
 declare(strict_types=1);
 
 
-function forms_db_name(): string
+function forms_cfg_value(array $source, array $keys, string $default = ''): string
 {
-    $global = $GLOBALS['config']['forms']['db_name'] ?? $GLOBALS['config']['forms_db']['database'] ?? $GLOBALS['config']['forms_db_name'] ?? null;
-    $name = is_string($global) ? trim($global) : '';
-    return $name !== '' ? $name : 'fitsc_forms';
+    foreach ($keys as $key) {
+        if (!array_key_exists($key, $source)) {
+            continue;
+        }
+        $value = $source[$key];
+        if ($value === null) {
+            continue;
+        }
+        return is_string($value) ? trim($value) : (string)$value;
+    }
+    return $default;
 }
 
-function forms_load_base_config(): array
+function forms_array_merge_replace(array $base, array $override): array
+{
+    foreach ($override as $key => $value) {
+        if (is_array($value) && isset($base[$key]) && is_array($base[$key])) {
+            $base[$key] = forms_array_merge_replace($base[$key], $value);
+            continue;
+        }
+        $base[$key] = $value;
+    }
+    return $base;
+}
+
+function forms_load_shared_config(): array
 {
     if (isset($GLOBALS['config']) && is_array($GLOBALS['config']) && isset($GLOBALS['config']['db']) && is_array($GLOBALS['config']['db'])) {
         return $GLOBALS['config'];
@@ -31,7 +51,57 @@ function forms_load_base_config(): array
         }
     }
 
-    throw new RuntimeException('forms 用の DB 設定を読み込めません。');
+    throw new RuntimeException('forms 用の共通設定を読み込めません。');
+}
+
+function forms_load_local_config(): array
+{
+    static $local = null;
+    if (is_array($local)) {
+        return $local;
+    }
+
+    $candidates = [
+        __DIR__ . '/forms_config.php',
+        __DIR__ . '/forms_config.local.php',
+    ];
+
+    foreach ($candidates as $candidate) {
+        if (!is_file($candidate)) {
+            continue;
+        }
+        $loaded = require $candidate;
+        if (is_array($loaded)) {
+            $local = $loaded;
+            return $local;
+        }
+    }
+
+    $local = [];
+    return $local;
+}
+
+function forms_runtime_config(): array
+{
+    static $runtime = null;
+    if (is_array($runtime)) {
+        return $runtime;
+    }
+
+    $runtime = forms_array_merge_replace(forms_load_shared_config(), forms_load_local_config());
+    return $runtime;
+}
+
+function forms_db_name(): string
+{
+    $config = forms_runtime_config();
+    $global = $config['forms']['db_name']
+        ?? $config['forms_db']['database']
+        ?? $config['forms_db']['dbname']
+        ?? $config['forms_db_name']
+        ?? null;
+    $name = is_string($global) ? trim($global) : '';
+    return $name !== '' ? $name : 'fitsc_forms';
 }
 
 function forms_build_dsn_from_parts(array $db, string $databaseName): string
@@ -81,29 +151,36 @@ function forms_rewrite_dsn_database(string $dsn, string $databaseName): string
 
 function forms_db_config(): array
 {
-    $config = forms_load_base_config();
+    $config = forms_runtime_config();
+
+    $baseDb = is_array($config['db'] ?? null) ? $config['db'] : [];
+    $baseUser = forms_cfg_value($baseDb, ['user', 'username']);
+    $basePass = forms_cfg_value($baseDb, ['password', 'pass', 'passwd']);
 
     if (isset($config['forms_db']) && is_array($config['forms_db'])) {
         $formsDb = $config['forms_db'];
+        $formsUser = forms_cfg_value($formsDb, ['user', 'username'], $baseUser);
+        $formsPass = forms_cfg_value($formsDb, ['password', 'pass', 'passwd'], $basePass);
+
         if (!empty($formsDb['dsn'])) {
             return [
                 'dsn' => (string)$formsDb['dsn'],
-                'user' => (string)($formsDb['user'] ?? $config['db']['user'] ?? ''),
-                'password' => (string)($formsDb['password'] ?? $config['db']['password'] ?? ''),
+                'user' => $formsUser,
+                'password' => $formsPass,
             ];
         }
-        if (!empty($formsDb['database']) || !empty($formsDb['host']) || !empty($formsDb['unix_socket'])) {
-            $databaseName = trim((string)($formsDb['database'] ?? forms_db_name()));
+        if (!empty($formsDb['database']) || !empty($formsDb['dbname']) || !empty($formsDb['host']) || !empty($formsDb['unix_socket'])) {
+            $databaseName = trim((string)($formsDb['database'] ?? $formsDb['dbname'] ?? forms_db_name()));
             return [
-                'dsn' => forms_build_dsn_from_parts($formsDb + ($config['db'] ?? []), $databaseName),
-                'user' => (string)($formsDb['user'] ?? $config['db']['user'] ?? ''),
-                'password' => (string)($formsDb['password'] ?? $config['db']['password'] ?? ''),
+                'dsn' => forms_build_dsn_from_parts($formsDb + $baseDb, $databaseName),
+                'user' => $formsUser,
+                'password' => $formsPass,
             ];
         }
     }
 
-    $db = $config['db'] ?? null;
-    if (!is_array($db)) {
+    $db = $baseDb;
+    if ($db === []) {
         throw new RuntimeException('forms 用の DB 設定が不正です。');
     }
 
@@ -117,8 +194,8 @@ function forms_db_config(): array
 
     return [
         'dsn' => $dsn,
-        'user' => (string)($db['user'] ?? ''),
-        'password' => (string)($db['password'] ?? ''),
+        'user' => $baseUser,
+        'password' => $basePass,
     ];
 }
 
@@ -613,9 +690,29 @@ function forms_allowed_extensions(array $settings): array
     return array_values(array_unique($result));
 }
 
+function forms_resolve_path(string $path): string
+{
+    $trimmed = trim($path);
+    if ($trimmed === '') {
+        return __DIR__ . '/forms_uploads';
+    }
+
+    if ($trimmed[0] === '/' || preg_match('/^[A-Za-z]:[\\/]/', $trimmed) === 1) {
+        return $trimmed;
+    }
+
+    return __DIR__ . '/' . ltrim($trimmed, '/');
+}
+
 function forms_upload_root(): string
 {
-    $path = __DIR__ . '/forms_uploads';
+    $config = forms_runtime_config();
+    $configured = forms_cfg_value((array)($config['forms'] ?? []), ['upload_root']);
+    if ($configured === '') {
+        $configured = forms_cfg_value((array)($config['forms_storage'] ?? []), ['upload_root']);
+    }
+
+    $path = forms_resolve_path($configured);
     if (!is_dir($path) && !mkdir($path, 0775, true) && !is_dir($path)) {
         throw new RuntimeException('添付ファイル保存ディレクトリを作成できません。');
     }

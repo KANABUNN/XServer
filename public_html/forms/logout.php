@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../../apps/lend_core/bootstrap.php';
+require_once __DIR__ . '/../../apps/forms_core/bootstrap.php';
 $_SESSION = [];
 if (ini_get('session.use_cookies')) {
     $params = session_get_cookie_params();
