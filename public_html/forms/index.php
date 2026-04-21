@@ -5,7 +5,7 @@ page_header('汎用フォーム', 'forms-public-page');
 ?>
 <header class="public-site-header">
     <div class="public-site-header__brand">
-        <div class="brand-mark" aria-hidden="true">F</div>
+        <div class="brand-mark" aria-hidden="true">Fit</div>
         <div>
             <p class="eyebrow">Flexible Forms</p>
             <h1>提出フォーム</h1>
