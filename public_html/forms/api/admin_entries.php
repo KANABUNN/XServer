@@ -12,8 +12,20 @@ if (!$form) {
     json_response(['ok' => false, 'message' => 'フォームが見つかりません。'], 404);
 }
 
+$filters = [
+    'query' => (string)($_GET['query'] ?? ''),
+    'status' => (string)($_GET['status'] ?? 'all'),
+    'date_from' => (string)($_GET['date_from'] ?? ''),
+    'date_to' => (string)($_GET['date_to'] ?? ''),
+    'limit' => (string)($_GET['limit'] ?? '100'),
+];
+
+$result = forms_fetch_admin_entries($formId, $filters);
+
 json_response([
     'ok' => true,
     'form' => $form,
-    'entries' => forms_fetch_admin_entries($formId),
+    'entries' => $result['entries'],
+    'summary' => $result['summary'],
+    'filters' => $result['filters'],
 ]);
