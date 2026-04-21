@@ -2,6 +2,7 @@
 $appName = $config['app_name'] ?? 'ToDo App';
 $flashes = consume_flash();
 $current = basename($_SERVER['PHP_SELF']);
+$user = current_user();
 ?>
 <!doctype html>
 <html lang="ja">
@@ -23,7 +24,7 @@ $current = basename($_SERVER['PHP_SELF']);
             <a class="<?= $current === 'export_csv.php' ? 'active' : '' ?>" href="export_csv.php">CSV出力</a>
         </nav>
         <div class="sidebar-footer">
-            <div>ログイン中: <?= e($_SESSION['username'] ?? '') ?></div>
+            <div>ログイン中: <?= e($user['display_name'] ?? $user['login_id'] ?? '') ?></div>
             <a href="logout.php" class="btn btn-ghost btn-small">ログアウト</a>
         </div>
     </aside>

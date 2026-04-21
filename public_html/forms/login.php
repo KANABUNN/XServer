@@ -11,7 +11,7 @@ page_header('ログイン', 'forms-login-page');
 <main class="auth-layout">
     <section class="card auth-card">
         <h1>フォーム管理ログイン</h1>
-        <p class="muted">既存の管理アカウントをそのまま利用します。</p>
+        <p class="muted">共通アカウントDBに登録された管理アカウントを利用します。</p>
 
         <?php if (isset($_GET['logged_out'])): ?>
             <div class="alert success">ログアウトしました。</div>
@@ -19,8 +19,8 @@ page_header('ログイン', 'forms-login-page');
 
         <form id="login-form" class="stack-form">
             <label>
-                <span>メールアドレス</span>
-                <input type="email" name="email" required autocomplete="username">
+                <span>ログインIDまたはメールアドレス</span>
+                <input type="text" name="email" required autocomplete="username">
             </label>
             <label>
                 <span>パスワード</span>

@@ -8,15 +8,15 @@ if (is_logged_in()) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
-    $username = trim($_POST['username'] ?? '');
+    $identifier = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    if (attempt_login($username, $password)) {
+    if (attempt_login($identifier, $password)) {
         flash('success', 'ログインしました。');
         redirect('index.php');
     }
 
-    flash('error', 'ユーザー名またはパスワードが違います。');
+    flash('error', 'ログインIDまたはメールアドレス、もしくはパスワードが違います。');
 }
 
 $flashes = consume_flash();
@@ -39,8 +39,8 @@ $flashes = consume_flash();
     <form method="post" class="form-grid single-col">
         <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
         <label>
-            <span>ユーザー名</span>
-            <input type="text" name="username" required value="<?= e(old('username', 'admin')) ?>">
+            <span>ログインIDまたはメールアドレス</span>
+            <input type="text" name="username" required value="<?= e(old('username', '')) ?>" autocomplete="username">
         </label>
         <label>
             <span>パスワード</span>
@@ -49,9 +49,7 @@ $flashes = consume_flash();
         <button type="submit" class="btn">ログイン</button>
     </form>
     <div class="hint-box">
-        初期ユーザー: <code>admin</code><br>
-        初期パスワード: <code>change-me</code><br>
-        公開前に <code>apps/todo_core/config.php</code> を変更してください。
+        共通アカウントDB <code>fitsc_account</code> の <code>shared_accounts</code> / <code>shared_account_app_roles</code> に <code>app_key = todo</code> の利用者を登録してください。
     </div>
 </div>
 </body>

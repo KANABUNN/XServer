@@ -1,23 +1,45 @@
 <?php
-function login_user(string $email, string $password): bool
-{
-    $stmt = db()->prepare('SELECT * FROM users WHERE email = :email AND is_active = 1 LIMIT 1');
-    $stmt->execute([':email' => $email]);
-    $user = $stmt->fetch();
+require_once dirname(__DIR__) . '/shared_accounts.php';
 
-    if (!$user || !password_verify($password, $user['password_hash'])) {
+function lend_auth_account_db(): PDO
+{
+    return shared_accounts_db($GLOBALS['config'] ?? [], [
+        dirname(__DIR__) . '/config.php',
+        dirname(__DIR__, 2) . '/includes/config.php',
+    ]);
+}
+
+function lend_auth_app_key(): string
+{
+    $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    return str_contains($scriptName, '/forms/') ? 'forms' : 'lend';
+}
+
+function login_user(string $identifier, string $password): bool
+{
+    $pdo = lend_auth_account_db();
+    $user = shared_accounts_attempt_login($pdo, $identifier, $password, lend_auth_app_key());
+
+    if (!$user) {
         return false;
     }
 
+    $roleKeys = is_array($user['role_keys'] ?? null) ? $user['role_keys'] : [];
+    $primaryRole = in_array('admin', $roleKeys, true) ? 'admin' : ((string)($roleKeys[0] ?? 'user'));
+
     $_SESSION['user'] = [
         'id' => (int)$user['id'],
-        'name' => $user['name'],
-        'email' => $user['email'],
-        'role' => $user['role'],
-        'organization' => $user['organization'],
+        'login_id' => (string)($user['login_id'] ?? ''),
+        'name' => (string)($user['display_name'] ?? ''),
+        'display_name' => (string)($user['display_name'] ?? ''),
+        'email' => (string)($user['email'] ?? ''),
+        'role' => $primaryRole,
+        'role_keys' => $roleKeys,
+        'organization' => (string)($user['organization_name'] ?? ''),
+        'organization_name' => (string)($user['organization_name'] ?? ''),
     ];
 
-    audit_log((int)$user['id'], $user['role'], 'login', 'session', null, [
+    audit_log((int)$user['id'], $primaryRole, 'login', 'session', null, [
         'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
         'ua' => $_SERVER['HTTP_USER_AGENT'] ?? '',
     ]);

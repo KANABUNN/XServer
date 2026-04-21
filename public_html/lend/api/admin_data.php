@@ -14,7 +14,7 @@ $pendingReservations = db()->query('
         u.organization,
         GROUP_CONCAT(a.name SEPARATOR " / ") AS asset_names
     FROM reservations r
-    INNER JOIN users u ON u.id = r.user_id
+    INNER JOIN fitsc_account.shared_accounts u ON u.id = r.user_id
     LEFT JOIN reservation_asset_sets ras ON ras.reservation_id = r.id
     LEFT JOIN asset_sets a ON a.id = ras.asset_set_id
     WHERE r.status = "pending"
@@ -37,7 +37,7 @@ $returnReview = db()->query('
         ct.state
     FROM checkout_transactions ct
     INNER JOIN reservations r ON r.id = ct.reservation_id
-    INNER JOIN users u ON u.id = ct.user_id
+    INNER JOIN fitsc_account.shared_accounts u ON u.id = ct.user_id
     INNER JOIN asset_sets a ON a.id = ct.asset_set_id
     WHERE ct.state IN ("return_declared","flagged")
     ORDER BY ct.return_declared_at DESC
@@ -54,7 +54,7 @@ $overdues = db()->query('
         ct.state
     FROM checkout_transactions ct
     INNER JOIN reservations r ON r.id = ct.reservation_id
-    INNER JOIN users u ON u.id = ct.user_id
+    INNER JOIN fitsc_account.shared_accounts u ON u.id = ct.user_id
     INNER JOIN asset_sets a ON a.id = ct.asset_set_id
     WHERE ct.state = "checked_out"
       AND r.end_at < NOW()

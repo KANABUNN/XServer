@@ -1,0 +1,352 @@
+:root {
+    --bg: #f4f7fb;
+    --panel: #ffffff;
+    --line: #d8e1ec;
+    --text: #1a2433;
+    --muted: #617086;
+    --accent: #1d5fd1;
+    --accent-dark: #154aa5;
+    --danger: #c13e48;
+    --success: #18855a;
+    --soft: #eef4ff;
+    --shadow: 0 18px 40px rgba(22, 40, 74, 0.08);
+    --radius: 18px;
+}
+
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--text);
+    background: linear-gradient(180deg, #eef4ff 0%, var(--bg) 240px);
+}
+
+a { color: inherit; text-decoration: none; }
+
+.account-login-body {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+}
+
+.account-login-card {
+    width: min(100%, 460px);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    box-shadow: var(--shadow);
+    padding: 28px;
+}
+
+.brand-block h1,
+.topbar h1,
+.section-head h2 {
+    margin: 0;
+}
+
+.brand-kicker {
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.brand-block p,
+.muted {
+    color: var(--muted);
+}
+
+.topbar {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 28px 32px 12px;
+}
+
+.topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.current-user-box {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    color: var(--muted);
+}
+
+.layout-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 20px;
+    padding: 0 32px 32px;
+}
+
+.summary-grid,
+.full-width {
+    grid-column: 1 / -1;
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px;
+}
+
+.stat-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stat-card span { color: var(--muted); }
+.stat-card strong { font-size: 34px; }
+
+.list-panel,
+.audit-panel,
+.profile-panel {
+    grid-column: 1 / 2;
+}
+
+.edit-panel {
+    grid-column: 2 / 3;
+    grid-row: 2 / span 3;
+    align-self: start;
+    position: sticky;
+    top: 16px;
+}
+
+.section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.section-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.search-form {
+    display: flex;
+    gap: 8px;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"] {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 15px;
+    background: #fff;
+}
+
+.form-stack {
+    display: grid;
+    gap: 14px;
+}
+
+.form-stack label,
+.role-card legend {
+    font-weight: 600;
+}
+
+.form-stack label span {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.two-col {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.role-matrix {
+    display: grid;
+    gap: 12px;
+}
+
+.role-card {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 12px 14px 10px;
+}
+
+.role-card legend {
+    padding: 0 6px;
+}
+
+.checkbox-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0;
+    font-weight: 400;
+}
+
+.checkbox-line span {
+    margin: 0 !important;
+}
+
+.top-align {
+    align-items: center;
+    padding-top: 30px;
+}
+
+.button-row,
+.role-badges {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    padding: 11px 16px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.button.primary {
+    background: var(--accent);
+    color: #fff;
+}
+.button.primary:hover { background: var(--accent-dark); }
+.button.ghost {
+    background: #fff;
+    border-color: var(--line);
+}
+.button.small { padding: 8px 12px; font-size: 13px; }
+.button.full { width: 100%; }
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 920px;
+}
+.data-table th,
+.data-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid #e8eef5;
+    text-align: left;
+    vertical-align: top;
+    font-size: 14px;
+}
+.data-table th {
+    color: var(--muted);
+    font-size: 13px;
+}
+.table-wrap { overflow: auto; }
+.subline { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.badge.soft { background: var(--soft); color: var(--accent); }
+.badge.success { background: #e8fff3; color: var(--success); }
+.badge.muted { background: #eef1f5; color: var(--muted); }
+
+.flash {
+    border-radius: 14px;
+    padding: 14px 16px;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+.flash.success {
+    background: #ecfff4;
+    border-color: #bfe5cd;
+    color: #166942;
+}
+.flash.error {
+    background: #fff0f1;
+    border-color: #f0c1c6;
+    color: #922f39;
+}
+
+.audit-list { display: grid; gap: 10px; }
+.audit-item {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+}
+.audit-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+.audit-meta span { color: var(--muted); font-size: 13px; }
+.audit-body, .empty, .read-only-box { color: var(--muted); }
+.narrow-form { max-width: 520px; }
+
+@media (max-width: 1200px) {
+    .layout-grid {
+        grid-template-columns: 1fr;
+    }
+    .edit-panel,
+    .list-panel,
+    .audit-panel,
+    .profile-panel {
+        grid-column: 1 / -1;
+        grid-row: auto;
+        position: static;
+    }
+}
+
+@media (max-width: 720px) {
+    .topbar,
+    .layout-grid {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+    .topbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .summary-grid,
+    .two-col {
+        grid-template-columns: 1fr;
+    }
+    .search-form,
+    .section-head,
+    .section-head-actions,
+    .topbar-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .current-user-box {
+        align-items: flex-start;
+    }
+}

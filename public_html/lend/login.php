@@ -11,7 +11,7 @@ page_header('ログイン', 'auth-page');
 <main class="auth-layout">
     <section class="card auth-card">
         <h1>備品貸出システム</h1>
-        <p class="muted">利用者向け画面・無人受付PC・管理画面の共通ログインです。</p>
+        <p class="muted">利用者向け画面・無人受付PC・管理画面の共通ログインです。共通DBのアカウントを参照します。</p>
 
         <?php if (isset($_GET['logged_out'])): ?>
             <div class="alert success">ログアウトしました。</div>
@@ -19,8 +19,8 @@ page_header('ログイン', 'auth-page');
 
         <form id="login-form" class="stack-form">
             <label>
-                <span>メールアドレス</span>
-                <input type="email" name="email" required placeholder="user1@example.jp">
+                <span>ログインIDまたはメールアドレス</span>
+                <input type="text" name="email" required placeholder="user1 または user1@example.jp" autocomplete="username">
             </label>
             <label>
                 <span>パスワード</span>
@@ -34,8 +34,7 @@ page_header('ログイン', 'auth-page');
         <div class="demo-box">
             <strong>サンプルアカウント</strong>
             <ul>
-                <li>利用者: user1@example.jp / password123</li>
-                <li>管理者: admin@example.jp / password123</li>
+                <li>サンプル表記は旧構成です。共通アカウントDB移行後は shared_accounts の内容に合わせてください。</li>
             </ul>
         </div>
     </section>
