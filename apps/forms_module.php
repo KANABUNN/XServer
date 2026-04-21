@@ -385,6 +385,8 @@ function forms_default_settings(): array
         'file_label' => '添付ファイル',
         'allowed_extensions' => 'pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,zip',
         'max_upload_size_mb' => 5,
+        'public_start_date' => '',
+        'public_end_date' => '',
         'submit_button_label' => '送信する',
         'completion_message' => '送信を受け付けました。',
     ];
@@ -466,6 +468,10 @@ function forms_build_form_record(array $row): array
         'is_active' => (bool)$row['is_active'],
         'sort_order' => (int)$row['sort_order'],
         'settings' => forms_decode_settings($row['settings_json'] ?? null),
+        'availability' => forms_public_period_context([
+            'settings' => forms_decode_settings($row['settings_json'] ?? null),
+            'is_active' => (bool)$row['is_active'],
+        ]),
         'fields' => [],
         'created_at' => (string)$row['created_at'],
         'updated_at' => (string)$row['updated_at'],
@@ -641,6 +647,17 @@ function forms_save_form(array $formData, array $fields): array
     $settings['file_label'] = trim((string)($formData['file_label'] ?? $settings['file_label'])) ?: '添付ファイル';
     $settings['allowed_extensions'] = trim((string)($formData['allowed_extensions'] ?? $settings['allowed_extensions'])) ?: $settings['allowed_extensions'];
     $settings['max_upload_size_mb'] = max(1, min(30, (int)($formData['max_upload_size_mb'] ?? $settings['max_upload_size_mb'])));
+    $settings['public_start_date'] = forms_validate_filter_date($formData['public_start_date'] ?? $settings['public_start_date'] ?? '');
+    $settings['public_end_date'] = forms_validate_filter_date($formData['public_end_date'] ?? $settings['public_end_date'] ?? '');
+    if (($formData['public_start_date'] ?? '') !== '' && $settings['public_start_date'] === '') {
+        throw new InvalidArgumentException('公開開始日の形式が不正です。');
+    }
+    if (($formData['public_end_date'] ?? '') !== '' && $settings['public_end_date'] === '') {
+        throw new InvalidArgumentException('公開終了日の形式が不正です。');
+    }
+    if ($settings['public_start_date'] !== '' && $settings['public_end_date'] !== '' && $settings['public_start_date'] > $settings['public_end_date']) {
+        throw new InvalidArgumentException('公開期間の開始日は終了日以前にしてください。');
+    }
     $settings['submit_button_label'] = trim((string)($formData['submit_button_label'] ?? $settings['submit_button_label'])) ?: '送信する';
     $settings['completion_message'] = trim((string)($formData['completion_message'] ?? $settings['completion_message'])) ?: '送信を受け付けました。';
 
@@ -712,13 +729,17 @@ function forms_save_form(array $formData, array $fields): array
 function forms_public_forms_payload(): array
 {
     $forms = forms_fetch_forms(true);
-    foreach ($forms as &$form) {
+    $visibleForms = [];
+    foreach ($forms as $form) {
+        if (!forms_is_publicly_available($form)) {
+            continue;
+        }
         $form['fields'] = array_values(array_filter($form['fields'], static function (array $field): bool {
             return $field['is_enabled'];
         }));
+        $visibleForms[] = $form;
     }
-    unset($form);
-    return $forms;
+    return $visibleForms;
 }
 
 function forms_allowed_extensions(array $settings): array
@@ -1110,6 +1131,79 @@ function forms_validate_filter_date(?string $value): string
     }
     $dt = DateTimeImmutable::createFromFormat('Y-m-d', $value);
     return ($dt && $dt->format('Y-m-d') === $value) ? $value : '';
+}
+
+function forms_today(): DateTimeImmutable
+{
+    return new DateTimeImmutable('now', new DateTimeZone('Asia/Tokyo'));
+}
+
+function forms_public_period_context(array $formOrSettings, ?bool $isActive = null): array
+{
+    $settings = isset($formOrSettings['settings']) && is_array($formOrSettings['settings']) ? $formOrSettings['settings'] : $formOrSettings;
+    $active = $isActive;
+    if ($active === null) {
+        $active = isset($formOrSettings['is_active']) ? (bool)$formOrSettings['is_active'] : true;
+    }
+
+    $startDate = forms_validate_filter_date($settings['public_start_date'] ?? '');
+    $endDate = forms_validate_filter_date($settings['public_end_date'] ?? '');
+    $today = forms_today()->format('Y-m-d');
+
+    $isOpen = true;
+    $status = 'always_open';
+    $label = '常時公開';
+    $note = '公開期間の制限はありません。';
+
+    if (!$active) {
+        $isOpen = false;
+        $status = 'inactive';
+        $label = '非公開';
+        $note = 'フォーム自体が非公開です。';
+    } elseif ($startDate !== '' || $endDate !== '') {
+        $rangeText = '';
+        if ($startDate !== '' && $endDate !== '') {
+            $rangeText = $startDate . ' 〜 ' . $endDate;
+        } elseif ($startDate !== '') {
+            $rangeText = $startDate . ' 以降';
+        } else {
+            $rangeText = $endDate . ' まで';
+        }
+
+        if ($startDate !== '' && $today < $startDate) {
+            $isOpen = false;
+            $status = 'scheduled';
+            $label = '受付前';
+            $note = '公開開始前です。公開予定: ' . $rangeText;
+        } elseif ($endDate !== '' && $today > $endDate) {
+            $isOpen = false;
+            $status = 'closed';
+            $label = '受付終了';
+            $note = '公開期間は終了しています。設定期間: ' . $rangeText;
+        } else {
+            $isOpen = true;
+            $status = 'open';
+            $label = '公開期間内';
+            $note = '公開期間: ' . $rangeText;
+        }
+    }
+
+    return [
+        'is_active' => $active,
+        'is_open' => $isOpen,
+        'status' => $status,
+        'label' => $label,
+        'note' => $note,
+        'start_date' => $startDate,
+        'end_date' => $endDate,
+        'today' => $today,
+    ];
+}
+
+function forms_is_publicly_available(array $form): bool
+{
+    $context = forms_public_period_context($form);
+    return $context['is_active'] && $context['is_open'];
 }
 
 function forms_admin_entry_filters(array $source): array

@@ -125,6 +125,7 @@ page_header('フォーム管理', 'forms-admin-page');
                 <article class="subcard">
                     <h3>入力設定</h3>
                     <div id="overview-setting-pills" class="meta-line"></div>
+                    <div id="overview-period-note" class="small-note"></div>
                 </article>
                 <article class="subcard">
                     <h3>回答状況</h3>
@@ -211,6 +212,21 @@ page_header('フォーム管理', 'forms-admin-page');
                             <span>許可する拡張子</span>
                             <input type="text" name="allowed_extensions" value="pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,zip">
                         </label>
+                    </section>
+
+                    <section class="subcard">
+                        <h3>公開期間</h3>
+                        <div class="two-col">
+                            <label>
+                                <span>公開開始日</span>
+                                <input type="date" name="public_start_date">
+                            </label>
+                            <label>
+                                <span>公開終了日</span>
+                                <input type="date" name="public_end_date">
+                            </label>
+                        </div>
+                        <p class="small-note">空欄にした側は制限しません。開始日と終了日の両方を入れると、その期間だけ利用者画面に表示し、期間外の直接送信も受け付けません。</p>
                     </section>
 
                     <section class="subcard">

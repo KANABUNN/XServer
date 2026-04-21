@@ -14,6 +14,10 @@ $form = forms_load_form($formId, true);
 if (!$form) {
     json_response(['ok' => false, 'message' => '対象フォームが見つかりません。'], 404);
 }
+if (!forms_is_publicly_available($form)) {
+    $availability = forms_public_period_context($form);
+    json_response(['ok' => false, 'message' => $availability['note'] ?: '現在このフォームは受付できません。'], 403);
+}
 
 $validation = forms_validate_submission($form, $_POST, $_FILES);
 if (!empty($validation['errors'])) {

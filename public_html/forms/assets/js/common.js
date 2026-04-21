@@ -70,3 +70,14 @@ function escapeHtml(value = '') {
     window.location.href = result.redirect || 'admin.php';
   });
 })();
+
+
+(function enforceNoSelection() {
+  if (!document.body.matches('.forms-public-page, .forms-admin-page')) return;
+  document.addEventListener('selectstart', (event) => {
+    if (event.target.closest('input, textarea, select, option, [contenteditable="true"], .allow-select')) {
+      return;
+    }
+    event.preventDefault();
+  });
+})();

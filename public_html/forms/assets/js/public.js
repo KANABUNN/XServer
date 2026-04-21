@@ -74,7 +74,7 @@ function renderActiveForm() {
 
   const form = publicState.forms.find((item) => item.id === publicState.activeFormId);
   if (!form) {
-    root.innerHTML = '<div class="empty-state">現在公開されているフォームはありません。</div>';
+    root.innerHTML = '<div class="empty-state">現在、公開期間中のフォームはありません。</div>';
     return;
   }
 
@@ -95,6 +95,8 @@ function renderActiveForm() {
     </label>
   ` : '';
 
+  const availabilityNote = form.availability?.note ? `<div class="inline-note allow-select">${escapeHtml(form.availability.note)}</div>` : '';
+
   root.innerHTML = `
     <form id="managed-public-form" class="stack-form">
       <input type="hidden" name="form_id" value="${form.id}">
@@ -104,6 +106,7 @@ function renderActiveForm() {
           ${form.description ? `<p class="muted">${escapeHtml(form.description)}</p>` : ''}
         </div>
       </div>
+      ${availabilityNote}
       <label class="form-block">
         <span>メールアドレス *</span>
         <input type="email" name="email" required>

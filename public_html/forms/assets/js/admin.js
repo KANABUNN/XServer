@@ -45,6 +45,21 @@ function createStatusBadge(status, label = null) {
   return `<span class="status-badge ${escapeHtml(meta.className)}">${escapeHtml(label || meta.label)}</span>`;
 }
 
+function availabilityBadge(availability = {}, isActive = true) {
+  if (!isActive) {
+    return '<span class="pill period-pill period-inactive">非公開</span>';
+  }
+  const status = availability.status || 'always_open';
+  const labelMap = {
+    always_open: '常時公開',
+    open: '公開期間内',
+    scheduled: '受付前',
+    closed: '受付終了',
+    inactive: '非公開',
+  };
+  return `<span class="pill period-pill period-${escapeHtml(status)}">${escapeHtml(availability.label || labelMap[status] || '公開状態')}</span>`;
+}
+
 function fieldRowDataToHtml(field = {}) {
   const template = document.getElementById('field-row-template');
   const fragment = template.content.cloneNode(true);
@@ -116,6 +131,7 @@ function renderFormList() {
               <strong>${escapeHtml(form.name)}</strong>
               <div class="meta-line">
                 ${createStatusBadge(form.is_active ? 'resolved' : 'on_hold', form.is_active ? '公開中' : '非公開')}
+                ${availabilityBadge(form.availability, form.is_active)}
                 <span class="pill">slug: ${escapeHtml(form.slug)}</span>
               </div>
             </div>
@@ -146,6 +162,7 @@ function renderWorkspaceHeader(form) {
     <span class="pill">ID: ${escapeHtml(String(form.id))}</span>
     <span class="pill">slug: ${escapeHtml(form.slug)}</span>
     ${createStatusBadge(form.is_active ? 'resolved' : 'on_hold', form.is_active ? '公開中' : '非公開')}
+    ${availabilityBadge(form.availability, form.is_active)}
     <span class="pill">追加項目 ${escapeHtml(String((form.fields || []).length))}件</span>
   `;
 }
@@ -162,8 +179,9 @@ function renderSelectedFormSidebar(form) {
   }
 
   const summary = adminState.entriesResult?.summary || { total_count: 0, filtered_count: 0 };
+  const availability = form.availability || {};
   pill.className = `status-badge ${form.is_active ? 'status-resolved' : 'status-on-hold'}`;
-  pill.textContent = form.is_active ? '公開中' : '非公開';
+  pill.textContent = form.is_active ? (availability.label || '公開中') : '非公開';
 
   body.innerHTML = `
     <article class="mini-info-card">
@@ -171,6 +189,7 @@ function renderSelectedFormSidebar(form) {
       <div class="meta-line">
         <span class="pill">slug: ${escapeHtml(form.slug)}</span>
         <span class="pill">順序 ${escapeHtml(String(form.sort_order ?? 0))}</span>
+        ${availabilityBadge(form.availability, form.is_active)}
       </div>
     </article>
     <article class="mini-info-card">
@@ -191,8 +210,9 @@ function renderOverview(form) {
   const fieldCount = (form?.fields || []).length;
   const requiredFieldCount = (form?.fields || []).filter((field) => Boolean(field.is_required)).length;
   const newCount = (summary.status_counts || []).find((item) => item.status === 'new')?.count || 0;
+  const availability = form?.availability || {};
 
-  document.getElementById('overview-kpi-status').textContent = form ? (form.is_active ? '公開中' : '非公開') : '未選択';
+  document.getElementById('overview-kpi-status').textContent = form ? (form.is_active ? (availability.label || '公開中') : '非公開') : '未選択';
   document.getElementById('overview-kpi-fields').textContent = String(fieldCount);
   document.getElementById('overview-kpi-entries').textContent = String(summary.total_count || 0);
   document.getElementById('overview-kpi-new').textContent = String(newCount);
@@ -205,6 +225,8 @@ function renderOverview(form) {
       ['フォーム名', form.name],
       ['slug', form.slug],
       ['公開状態', form.is_active ? '公開中' : '非公開'],
+      ['公開期間', availability.start_date || availability.end_date ? `${availability.start_date || '指定なし'} 〜 ${availability.end_date || '指定なし'}` : '常時公開'],
+      ['現在の受付状態', availability.label || (form.is_active ? '公開中' : '非公開')],
       ['表示順', String(form.sort_order ?? 0)],
       ['追加項目数', `${fieldCount}件（必須 ${requiredFieldCount}件）`],
     ];
@@ -225,9 +247,15 @@ function renderOverview(form) {
       settings.date_required ? '日付必須' : '日付任意',
       settings.allow_file_upload ? '添付あり' : '添付なし',
       settings.file_required ? '添付必須' : '添付任意',
+      settings.public_start_date || settings.public_end_date ? `公開期間: ${settings.public_start_date || '指定なし'} 〜 ${settings.public_end_date || '指定なし'}` : '公開期間制限なし',
       `送信ボタン: ${settings.submit_button_label || '送信する'}`,
     ];
     settingPills.innerHTML = pills.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join('');
+  }
+
+  const periodNote = document.getElementById('overview-period-note');
+  if (periodNote) {
+    periodNote.textContent = form ? (availability.note || '') : '';
   }
 
   const statusRoot = document.getElementById('overview-status-summary');
@@ -276,6 +304,8 @@ function fillEditor(form) {
   editor.elements.file_label.value = form?.settings?.file_label || '添付ファイル';
   editor.elements.allowed_extensions.value = form?.settings?.allowed_extensions || 'pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,zip';
   editor.elements.max_upload_size_mb.value = form?.settings?.max_upload_size_mb ?? 5;
+  editor.elements.public_start_date.value = form?.settings?.public_start_date || '';
+  editor.elements.public_end_date.value = form?.settings?.public_end_date || '';
   editor.elements.submit_button_label.value = form?.settings?.submit_button_label || '送信する';
   editor.elements.completion_message.value = form?.settings?.completion_message || '送信を受け付けました。';
 
@@ -775,6 +805,8 @@ function bindEvents() {
         file_label: form.elements.file_label.value,
         allowed_extensions: form.elements.allowed_extensions.value,
         max_upload_size_mb: Number(form.elements.max_upload_size_mb.value || 5),
+        public_start_date: form.elements.public_start_date.value,
+        public_end_date: form.elements.public_end_date.value,
         submit_button_label: form.elements.submit_button_label.value,
         completion_message: form.elements.completion_message.value,
       },
