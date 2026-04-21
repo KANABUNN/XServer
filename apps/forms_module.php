@@ -290,6 +290,11 @@ CREATE TABLE IF NOT EXISTS managed_form_submissions (
     uploaded_original_name VARCHAR(255) DEFAULT NULL,
     uploaded_stored_name VARCHAR(255) DEFAULT NULL,
     uploaded_relative_path VARCHAR(500) DEFAULT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'new',
+    admin_note TEXT DEFAULT NULL,
+    status_updated_at DATETIME DEFAULT NULL,
+    status_updated_by_user_id BIGINT DEFAULT NULL,
+    status_updated_by_name VARCHAR(190) DEFAULT NULL,
     latest_revision_id BIGINT UNSIGNED DEFAULT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -297,6 +302,7 @@ CREATE TABLE IF NOT EXISTS managed_form_submissions (
     KEY idx_managed_form_submissions_form_updated (form_id, updated_at, id),
     KEY idx_managed_form_submissions_form_email (form_id, normalized_email),
     KEY idx_managed_form_submissions_form_org (form_id, normalized_organization),
+    KEY idx_managed_form_submissions_form_status (form_id, status, updated_at, id),
     CONSTRAINT fk_managed_form_submissions_form FOREIGN KEY (form_id) REFERENCES managed_forms (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SQL);
@@ -323,6 +329,49 @@ CREATE TABLE IF NOT EXISTS managed_form_submission_revisions (
     CONSTRAINT fk_managed_form_submission_revisions_form FOREIGN KEY (form_id) REFERENCES managed_forms (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SQL);
+
+    $pdo->exec(<<<SQL
+CREATE TABLE IF NOT EXISTS managed_form_submission_status_logs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    submission_id BIGINT UNSIGNED NOT NULL,
+    form_id BIGINT UNSIGNED NOT NULL,
+    previous_status VARCHAR(32) DEFAULT NULL,
+    next_status VARCHAR(32) NOT NULL,
+    note TEXT DEFAULT NULL,
+    changed_by_user_id BIGINT DEFAULT NULL,
+    changed_by_name VARCHAR(190) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_managed_form_submission_status_logs_submission (submission_id, id),
+    KEY idx_managed_form_submission_status_logs_form_created (form_id, created_at),
+    CONSTRAINT fk_managed_form_submission_status_logs_submission FOREIGN KEY (submission_id) REFERENCES managed_form_submissions (id) ON DELETE CASCADE,
+    CONSTRAINT fk_managed_form_submission_status_logs_form FOREIGN KEY (form_id) REFERENCES managed_forms (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SQL);
+
+    forms_ensure_column($pdo, 'managed_form_submissions', 'status', "VARCHAR(32) NOT NULL DEFAULT 'new'");
+    forms_ensure_column($pdo, 'managed_form_submissions', 'admin_note', 'TEXT DEFAULT NULL');
+    forms_ensure_column($pdo, 'managed_form_submissions', 'status_updated_at', 'DATETIME DEFAULT NULL');
+    forms_ensure_column($pdo, 'managed_form_submissions', 'status_updated_by_user_id', 'BIGINT DEFAULT NULL');
+    forms_ensure_column($pdo, 'managed_form_submissions', 'status_updated_by_name', 'VARCHAR(190) DEFAULT NULL');
+}
+
+function forms_table_has_column(PDO $pdo, string $table, string $column): bool
+{
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name');
+    $stmt->execute([
+        ':table_name' => $table,
+        ':column_name' => $column,
+    ]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
+function forms_ensure_column(PDO $pdo, string $table, string $column, string $definition): void
+{
+    if (forms_table_has_column($pdo, $table, $column)) {
+        return;
+    }
+    $pdo->exec(sprintf('ALTER TABLE `%s` ADD COLUMN `%s` %s', str_replace('`', '``', $table), str_replace('`', '``', $column), $definition));
 }
 
 function forms_default_settings(): array
@@ -1007,46 +1056,273 @@ function forms_entry_preview(array $payload, array $form): array
     }
     $result = [];
     foreach ($payload as $key => $value) {
+        if (is_array($value)) {
+            $value = implode(', ', array_map(static fn($item) => is_scalar($item) ? (string)$item : forms_encode_json($item), $value));
+        } elseif (is_bool($value)) {
+            $value = $value ? '1' : '0';
+        } elseif (!is_scalar($value) && $value !== null) {
+            $value = forms_encode_json($value);
+        }
         $result[] = [
             'key' => (string)$key,
             'label' => $labels[$key] ?? (string)$key,
-            'value' => (string)$value,
+            'value' => trim((string)$value),
         ];
     }
     return $result;
 }
 
-function forms_fetch_admin_entries(int $formId): array
+function forms_status_definitions(): array
+{
+    return [
+        'new' => ['label' => '未確認', 'class' => 'status-new'],
+        'reviewing' => ['label' => '確認中', 'class' => 'status-reviewing'],
+        'on_hold' => ['label' => '保留', 'class' => 'status-on-hold'],
+        'resolved' => ['label' => '対応済', 'class' => 'status-resolved'],
+        'rejected' => ['label' => '差戻し', 'class' => 'status-rejected'],
+    ];
+}
+
+function forms_normalize_status(?string $status): string
+{
+    $status = trim((string)$status);
+    $definitions = forms_status_definitions();
+    return isset($definitions[$status]) ? $status : 'new';
+}
+
+function forms_status_label(string $status): string
+{
+    $definitions = forms_status_definitions();
+    return $definitions[$status]['label'] ?? '未確認';
+}
+
+function forms_status_class(string $status): string
+{
+    $definitions = forms_status_definitions();
+    return $definitions[$status]['class'] ?? 'status-new';
+}
+
+function forms_validate_filter_date(?string $value): string
+{
+    $value = trim((string)$value);
+    if ($value === '') {
+        return '';
+    }
+    $dt = DateTimeImmutable::createFromFormat('Y-m-d', $value);
+    return ($dt && $dt->format('Y-m-d') === $value) ? $value : '';
+}
+
+function forms_admin_entry_filters(array $source): array
+{
+    $query = trim((string)($source['query'] ?? ''));
+    $status = trim((string)($source['status'] ?? 'all'));
+    $definitions = forms_status_definitions();
+    if ($status !== 'all' && !isset($definitions[$status])) {
+        $status = 'all';
+    }
+
+    $limit = (int)($source['limit'] ?? 100);
+    $allowedLimits = [25, 50, 100, 200, 500];
+    if (!in_array($limit, $allowedLimits, true)) {
+        $limit = 100;
+    }
+
+    return [
+        'query' => $query,
+        'status' => $status,
+        'date_from' => forms_validate_filter_date($source['date_from'] ?? ''),
+        'date_to' => forms_validate_filter_date($source['date_to'] ?? ''),
+        'limit' => $limit,
+    ];
+}
+
+function forms_build_admin_entry_query_parts(int $formId, array $filters): array
+{
+    $where = ['s.form_id = :form_id'];
+    $params = [':form_id' => $formId];
+
+    if (($filters['status'] ?? 'all') !== 'all') {
+        $where[] = "COALESCE(s.status, 'new') = :status";
+        $params[':status'] = forms_normalize_status((string)$filters['status']);
+    }
+
+    $query = trim((string)($filters['query'] ?? ''));
+    if ($query !== '') {
+        $like = '%' . $query . '%';
+        $where[] = "(
+            s.submitter_email LIKE :query_email
+            OR s.organization_name LIKE :query_org
+            OR COALESCE(s.submitted_date, '') LIKE :query_date
+            OR COALESCE(s.payload_json, '') LIKE :query_payload
+            OR COALESCE(s.admin_note, '') LIKE :query_note
+        )";
+        $params[':query_email'] = $like;
+        $params[':query_org'] = $like;
+        $params[':query_date'] = $like;
+        $params[':query_payload'] = $like;
+        $params[':query_note'] = $like;
+    }
+
+    $dateFrom = (string)($filters['date_from'] ?? '');
+    if ($dateFrom !== '') {
+        $where[] = 'DATE(s.updated_at) >= :date_from';
+        $params[':date_from'] = $dateFrom;
+    }
+
+    $dateTo = (string)($filters['date_to'] ?? '');
+    if ($dateTo !== '') {
+        $where[] = 'DATE(s.updated_at) <= :date_to';
+        $params[':date_to'] = $dateTo;
+    }
+
+    return [
+        'where_sql' => implode(' AND ', $where),
+        'params' => $params,
+    ];
+}
+
+function forms_build_status_summary(int $formId): array
+{
+    $definitions = forms_status_definitions();
+    $counts = [];
+    foreach ($definitions as $status => $meta) {
+        $counts[$status] = [
+            'status' => $status,
+            'label' => $meta['label'],
+            'class' => $meta['class'],
+            'count' => 0,
+        ];
+    }
+
+    $stmt = forms_db()->prepare("SELECT COALESCE(status, :default_status_select) AS status_key, COUNT(*) AS entry_count FROM managed_form_submissions WHERE form_id = :form_id GROUP BY COALESCE(status, :default_status_group)");
+    $stmt->execute([
+        ':default_status_select' => 'new',
+        ':default_status_group' => 'new',
+        ':form_id' => $formId,
+    ]);
+    foreach ($stmt->fetchAll() as $row) {
+        $status = forms_normalize_status((string)($row['status_key'] ?? 'new'));
+        if (!isset($counts[$status])) {
+            continue;
+        }
+        $counts[$status]['count'] = (int)($row['entry_count'] ?? 0);
+    }
+
+    return array_values($counts);
+}
+
+function forms_build_admin_entry_record(array $row, array $form): array
+{
+    $payload = json_decode((string)($row['payload_json'] ?? '{}'), true);
+    if (!is_array($payload)) {
+        $payload = [];
+    }
+    $status = forms_normalize_status((string)($row['status'] ?? 'new'));
+
+    return [
+        'id' => (int)$row['id'],
+        'form_id' => (int)$row['form_id'],
+        'submitter_email' => (string)$row['submitter_email'],
+        'organization_name' => (string)$row['organization_name'],
+        'submitted_date' => (string)($row['submitted_date'] ?? ''),
+        'payload' => $payload,
+        'payload_preview' => forms_entry_preview($payload, $form),
+        'uploaded_original_name' => (string)($row['uploaded_original_name'] ?? ''),
+        'latest_revision_id' => (int)($row['latest_revision_id'] ?? 0),
+        'revision_count' => (int)($row['revision_count'] ?? 0),
+        'status' => $status,
+        'status_label' => forms_status_label($status),
+        'status_class' => forms_status_class($status),
+        'admin_note' => (string)($row['admin_note'] ?? ''),
+        'status_updated_at' => (string)($row['status_updated_at'] ?? ''),
+        'status_updated_by_user_id' => (int)($row['status_updated_by_user_id'] ?? 0),
+        'status_updated_by_name' => (string)($row['status_updated_by_name'] ?? ''),
+        'created_at' => (string)$row['created_at'],
+        'updated_at' => (string)$row['updated_at'],
+    ];
+}
+
+function forms_fetch_admin_entries(int $formId, array $rawFilters = [], ?int $limitOverride = null): array
 {
     $form = forms_load_form($formId);
     if (!$form) {
-        return [];
-    }
-    $stmt = forms_db()->prepare('SELECT s.*, (SELECT COUNT(*) FROM managed_form_submission_revisions r WHERE r.submission_id = s.id) AS revision_count FROM managed_form_submissions s WHERE s.form_id = :form_id ORDER BY s.updated_at DESC, s.id DESC LIMIT 100');
-    $stmt->execute([':form_id' => $formId]);
-    $rows = $stmt->fetchAll();
-    $entries = [];
-    foreach ($rows as $row) {
-        $payload = json_decode((string)($row['payload_json'] ?? '{}'), true);
-        if (!is_array($payload)) {
-            $payload = [];
-        }
-        $entries[] = [
-            'id' => (int)$row['id'],
-            'form_id' => (int)$row['form_id'],
-            'submitter_email' => (string)$row['submitter_email'],
-            'organization_name' => (string)$row['organization_name'],
-            'submitted_date' => (string)($row['submitted_date'] ?? ''),
-            'payload' => $payload,
-            'payload_preview' => forms_entry_preview($payload, $form),
-            'uploaded_original_name' => (string)($row['uploaded_original_name'] ?? ''),
-            'latest_revision_id' => (int)($row['latest_revision_id'] ?? 0),
-            'revision_count' => (int)($row['revision_count'] ?? 0),
-            'created_at' => (string)$row['created_at'],
-            'updated_at' => (string)$row['updated_at'],
+        return [
+            'entries' => [],
+            'summary' => [
+                'total_count' => 0,
+                'filtered_count' => 0,
+                'status_counts' => [],
+            ],
+            'filters' => forms_admin_entry_filters($rawFilters),
         ];
     }
-    return $entries;
+
+    $filters = forms_admin_entry_filters($rawFilters);
+    $queryParts = forms_build_admin_entry_query_parts($formId, $filters);
+    $whereSql = $queryParts['where_sql'];
+    $params = $queryParts['params'];
+
+    $countStmt = forms_db()->prepare('SELECT COUNT(*) FROM managed_form_submissions s WHERE ' . $whereSql);
+    $countStmt->execute($params);
+    $filteredCount = (int)$countStmt->fetchColumn();
+
+    $totalStmt = forms_db()->prepare('SELECT COUNT(*) FROM managed_form_submissions WHERE form_id = :form_id');
+    $totalStmt->execute([':form_id' => $formId]);
+    $totalCount = (int)$totalStmt->fetchColumn();
+
+    $limitSql = '';
+    if ($limitOverride === null) {
+        $limitSql = ' LIMIT ' . (int)$filters['limit'];
+    } elseif ($limitOverride > 0) {
+        $limitSql = ' LIMIT ' . (int)$limitOverride;
+    }
+
+    $sql = 'SELECT s.*, (SELECT COUNT(*) FROM managed_form_submission_revisions r WHERE r.submission_id = s.id) AS revision_count FROM managed_form_submissions s WHERE ' . $whereSql . ' ORDER BY s.updated_at DESC, s.id DESC' . $limitSql;
+    $stmt = forms_db()->prepare($sql);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll();
+
+    $entries = [];
+    foreach ($rows as $row) {
+        $entries[] = forms_build_admin_entry_record($row, $form);
+    }
+
+    return [
+        'entries' => $entries,
+        'summary' => [
+            'total_count' => $totalCount,
+            'filtered_count' => $filteredCount,
+            'status_counts' => forms_build_status_summary($formId),
+        ],
+        'filters' => $filters,
+    ];
+}
+
+function forms_fetch_status_logs(int $submissionId): array
+{
+    $stmt = forms_db()->prepare('SELECT * FROM managed_form_submission_status_logs WHERE submission_id = :submission_id ORDER BY created_at DESC, id DESC');
+    $stmt->execute([':submission_id' => $submissionId]);
+    $rows = $stmt->fetchAll();
+    $result = [];
+    foreach ($rows as $row) {
+        $previousStatus = $row['previous_status'] !== null ? forms_normalize_status((string)$row['previous_status']) : null;
+        $nextStatus = forms_normalize_status((string)($row['next_status'] ?? 'new'));
+        $result[] = [
+            'id' => (int)$row['id'],
+            'submission_id' => (int)$row['submission_id'],
+            'form_id' => (int)$row['form_id'],
+            'previous_status' => $previousStatus,
+            'previous_status_label' => $previousStatus !== null ? forms_status_label($previousStatus) : '',
+            'next_status' => $nextStatus,
+            'next_status_label' => forms_status_label($nextStatus),
+            'next_status_class' => forms_status_class($nextStatus),
+            'note' => (string)($row['note'] ?? ''),
+            'changed_by_user_id' => (int)($row['changed_by_user_id'] ?? 0),
+            'changed_by_name' => (string)($row['changed_by_name'] ?? ''),
+            'created_at' => (string)$row['created_at'],
+        ];
+    }
+    return $result;
 }
 
 function forms_fetch_entry_history(int $submissionId): array
@@ -1054,10 +1330,11 @@ function forms_fetch_entry_history(int $submissionId): array
     $stmt = forms_db()->prepare('SELECT r.* FROM managed_form_submission_revisions r WHERE r.submission_id = :submission_id ORDER BY r.revision_number DESC, r.id DESC');
     $stmt->execute([':submission_id' => $submissionId]);
     $rows = $stmt->fetchAll();
-    if (!$rows) {
-        return [];
+    $form = null;
+    if ($rows) {
+        $form = forms_load_form((int)$rows[0]['form_id']);
     }
-    $form = forms_load_form((int)$rows[0]['form_id']);
+
     $history = [];
     foreach ($rows as $row) {
         $payload = json_decode((string)($row['payload_json'] ?? '{}'), true);
@@ -1077,7 +1354,158 @@ function forms_fetch_entry_history(int $submissionId): array
             'created_at' => (string)$row['created_at'],
         ];
     }
-    return $history;
+
+    return [
+        'revisions' => $history,
+        'status_logs' => forms_fetch_status_logs($submissionId),
+    ];
+}
+
+function forms_get_submission(int $submissionId): ?array
+{
+    $stmt = forms_db()->prepare('SELECT * FROM managed_form_submissions WHERE id = :id LIMIT 1');
+    $stmt->execute([':id' => $submissionId]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+function forms_update_submission_status(int $submissionId, string $nextStatus, string $adminNote, array $actor = []): array
+{
+    $submission = forms_get_submission($submissionId);
+    if (!$submission) {
+        throw new InvalidArgumentException('対象の回答が見つかりません。');
+    }
+
+    $nextStatus = forms_normalize_status($nextStatus);
+    $adminNote = trim($adminNote);
+    if (mb_strlen($adminNote, 'UTF-8') > 4000) {
+        throw new InvalidArgumentException('管理メモは4000文字以内で入力してください。');
+    }
+
+    $currentStatus = forms_normalize_status((string)($submission['status'] ?? 'new'));
+    $currentNote = trim((string)($submission['admin_note'] ?? ''));
+    if ($currentStatus === $nextStatus && $currentNote === $adminNote) {
+        $form = forms_load_form((int)$submission['form_id']);
+        return $form ? forms_build_admin_entry_record($submission, $form) : [];
+    }
+
+    $actorId = isset($actor['id']) ? (int)$actor['id'] : null;
+    if ($actorId !== null && $actorId <= 0) {
+        $actorId = null;
+    }
+    $actorName = trim((string)($actor['name'] ?? ''));
+
+    $pdo = forms_db();
+    $pdo->beginTransaction();
+    try {
+        $updateStmt = $pdo->prepare('UPDATE managed_form_submissions SET status = :status, admin_note = :admin_note, status_updated_at = CURRENT_TIMESTAMP, status_updated_by_user_id = :user_id, status_updated_by_name = :user_name WHERE id = :id');
+        $updateStmt->execute([
+            ':status' => $nextStatus,
+            ':admin_note' => $adminNote !== '' ? $adminNote : null,
+            ':user_id' => $actorId,
+            ':user_name' => $actorName !== '' ? $actorName : null,
+            ':id' => $submissionId,
+        ]);
+
+        $logStmt = $pdo->prepare('INSERT INTO managed_form_submission_status_logs (submission_id, form_id, previous_status, next_status, note, changed_by_user_id, changed_by_name) VALUES (:submission_id, :form_id, :previous_status, :next_status, :note, :user_id, :user_name)');
+        $logStmt->execute([
+            ':submission_id' => $submissionId,
+            ':form_id' => (int)$submission['form_id'],
+            ':previous_status' => $currentStatus,
+            ':next_status' => $nextStatus,
+            ':note' => $adminNote !== '' ? $adminNote : null,
+            ':user_id' => $actorId,
+            ':user_name' => $actorName !== '' ? $actorName : null,
+        ]);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    $updated = forms_get_submission($submissionId);
+    $form = forms_load_form((int)$submission['form_id']);
+    if (!$updated || !$form) {
+        return [];
+    }
+
+    $revisionCountStmt = $pdo->prepare('SELECT COUNT(*) FROM managed_form_submission_revisions WHERE submission_id = :submission_id');
+    $revisionCountStmt->execute([':submission_id' => $submissionId]);
+    $updated['revision_count'] = (int)$revisionCountStmt->fetchColumn();
+
+    return forms_build_admin_entry_record($updated, $form);
+}
+
+function forms_csv_headers(array $form): array
+{
+    $headers = [
+        '回答ID',
+        '状態',
+        '状態ラベル',
+        '管理メモ',
+        '団体名',
+        'メールアドレス',
+        '日付',
+        '添付ファイル名',
+        '更新履歴数',
+        '登録日時',
+        '更新日時',
+        '状態更新日時',
+        '状態更新者',
+    ];
+
+    foreach ($form['fields'] as $field) {
+        $headers[] = $field['field_label'];
+    }
+
+    return $headers;
+}
+
+function forms_csv_rows(int $formId, array $rawFilters = []): array
+{
+    $form = forms_load_form($formId);
+    if (!$form) {
+        return ['headers' => [], 'rows' => []];
+    }
+
+    $result = forms_fetch_admin_entries($formId, $rawFilters, 0);
+    $rows = [];
+    foreach ($result['entries'] as $entry) {
+        $row = [
+            (string)$entry['id'],
+            $entry['status'],
+            $entry['status_label'],
+            $entry['admin_note'],
+            $entry['organization_name'],
+            $entry['submitter_email'],
+            $entry['submitted_date'],
+            $entry['uploaded_original_name'],
+            (string)$entry['revision_count'],
+            $entry['created_at'],
+            $entry['updated_at'],
+            $entry['status_updated_at'],
+            $entry['status_updated_by_name'],
+        ];
+
+        $payloadMap = [];
+        foreach ($entry['payload_preview'] as $payloadItem) {
+            $payloadMap[$payloadItem['label']] = $payloadItem['value'];
+        }
+        foreach ($form['fields'] as $field) {
+            $row[] = $payloadMap[$field['field_label']] ?? '';
+        }
+        $rows[] = $row;
+    }
+
+    return [
+        'headers' => forms_csv_headers($form),
+        'rows' => $rows,
+        'form' => $form,
+        'filters' => $result['filters'],
+    ];
 }
 
 function forms_resolve_revision_download(int $revisionId): ?array
