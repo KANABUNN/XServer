@@ -181,6 +181,16 @@ h4 {
     background: var(--panel-soft);
 }
 
+.danger-zone-card {
+    border-color: rgba(180, 35, 24, 0.25);
+    background: linear-gradient(180deg, #fff8f7 0%, #fff2f0 100%);
+}
+
+.danger-zone-card .btn.danger[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 .workspace-header-card {
     display: grid;
     gap: 18px;

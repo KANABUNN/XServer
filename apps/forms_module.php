@@ -386,7 +386,9 @@ function forms_default_settings(): array
         'allowed_extensions' => 'pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,zip',
         'max_upload_size_mb' => 5,
         'public_start_date' => '',
+        'public_start_time' => '',
         'public_end_date' => '',
+        'public_end_time' => '',
         'submit_button_label' => '送信する',
         'completion_message' => '送信を受け付けました。',
     ];
@@ -648,15 +650,31 @@ function forms_save_form(array $formData, array $fields): array
     $settings['allowed_extensions'] = trim((string)($formData['allowed_extensions'] ?? $settings['allowed_extensions'])) ?: $settings['allowed_extensions'];
     $settings['max_upload_size_mb'] = max(1, min(30, (int)($formData['max_upload_size_mb'] ?? $settings['max_upload_size_mb'])));
     $settings['public_start_date'] = forms_validate_filter_date($formData['public_start_date'] ?? $settings['public_start_date'] ?? '');
+    $settings['public_start_time'] = forms_validate_filter_time($formData['public_start_time'] ?? $settings['public_start_time'] ?? '');
     $settings['public_end_date'] = forms_validate_filter_date($formData['public_end_date'] ?? $settings['public_end_date'] ?? '');
+    $settings['public_end_time'] = forms_validate_filter_time($formData['public_end_time'] ?? $settings['public_end_time'] ?? '');
     if (($formData['public_start_date'] ?? '') !== '' && $settings['public_start_date'] === '') {
         throw new InvalidArgumentException('公開開始日の形式が不正です。');
+    }
+    if (($formData['public_start_time'] ?? '') !== '' && $settings['public_start_time'] === '') {
+        throw new InvalidArgumentException('受付開始時刻の形式が不正です。');
     }
     if (($formData['public_end_date'] ?? '') !== '' && $settings['public_end_date'] === '') {
         throw new InvalidArgumentException('公開終了日の形式が不正です。');
     }
-    if ($settings['public_start_date'] !== '' && $settings['public_end_date'] !== '' && $settings['public_start_date'] > $settings['public_end_date']) {
-        throw new InvalidArgumentException('公開期間の開始日は終了日以前にしてください。');
+    if (($formData['public_end_time'] ?? '') !== '' && $settings['public_end_time'] === '') {
+        throw new InvalidArgumentException('受付終了時刻の形式が不正です。');
+    }
+    if ($settings['public_start_time'] !== '' && $settings['public_start_date'] === '') {
+        throw new InvalidArgumentException('受付開始時刻を設定する場合は公開開始日も設定してください。');
+    }
+    if ($settings['public_end_time'] !== '' && $settings['public_end_date'] === '') {
+        throw new InvalidArgumentException('受付終了時刻を設定する場合は公開終了日も設定してください。');
+    }
+    $publicStartAt = forms_public_boundary_datetime($settings['public_start_date'], $settings['public_start_time'], false);
+    $publicEndAt = forms_public_boundary_datetime($settings['public_end_date'], $settings['public_end_time'], true);
+    if ($publicStartAt && $publicEndAt && $publicStartAt > $publicEndAt) {
+        throw new InvalidArgumentException('公開期間の開始日時は終了日時以前にしてください。');
     }
     $settings['submit_button_label'] = trim((string)($formData['submit_button_label'] ?? $settings['submit_button_label'])) ?: '送信する';
     $settings['completion_message'] = trim((string)($formData['completion_message'] ?? $settings['completion_message'])) ?: '送信を受け付けました。';
@@ -724,6 +742,54 @@ function forms_save_form(array $formData, array $fields): array
     }
 
     return forms_load_form($formId) ?? [];
+}
+
+function forms_delete_form(int $formId): void
+{
+    forms_bootstrap();
+    $pdo = forms_db();
+
+    $relativePaths = [];
+    $pathStmt = $pdo->prepare('SELECT uploaded_relative_path FROM managed_form_submissions WHERE form_id = :form_id AND uploaded_relative_path IS NOT NULL AND uploaded_relative_path != ""');
+    $pathStmt->execute([':form_id' => $formId]);
+    foreach ($pathStmt->fetchAll(PDO::FETCH_COLUMN) as $path) {
+        if (is_string($path) && trim($path) !== '') {
+            $relativePaths[] = trim($path);
+        }
+    }
+
+    $revPathStmt = $pdo->prepare('SELECT uploaded_relative_path FROM managed_form_submission_revisions WHERE form_id = :form_id AND uploaded_relative_path IS NOT NULL AND uploaded_relative_path != ""');
+    $revPathStmt->execute([':form_id' => $formId]);
+    foreach ($revPathStmt->fetchAll(PDO::FETCH_COLUMN) as $path) {
+        if (is_string($path) && trim($path) !== '') {
+            $relativePaths[] = trim($path);
+        }
+    }
+
+    $relativePaths = array_values(array_unique($relativePaths));
+
+    $pdo->beginTransaction();
+    try {
+        $deleteStmt = $pdo->prepare('DELETE FROM managed_forms WHERE id = :id');
+        $deleteStmt->execute([':id' => $formId]);
+        if ($deleteStmt->rowCount() < 1) {
+            throw new InvalidArgumentException('削除対象のフォームが見つかりません。');
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    $uploadRoot = forms_upload_root();
+    foreach ($relativePaths as $relativePath) {
+        $fullPath = $uploadRoot . '/' . ltrim($relativePath, '/');
+        if (is_file($fullPath)) {
+            @unlink($fullPath);
+        }
+    }
 }
 
 function forms_public_forms_payload(): array
@@ -1133,9 +1199,65 @@ function forms_validate_filter_date(?string $value): string
     return ($dt && $dt->format('Y-m-d') === $value) ? $value : '';
 }
 
+function forms_validate_filter_time(?string $value): string
+{
+    $value = trim((string)$value);
+    if ($value === '') {
+        return '';
+    }
+    $dt = DateTimeImmutable::createFromFormat('H:i', $value);
+    return ($dt && $dt->format('H:i') === $value) ? $value : '';
+}
+
 function forms_today(): DateTimeImmutable
 {
     return new DateTimeImmutable('now', new DateTimeZone('Asia/Tokyo'));
+}
+
+function forms_public_boundary_datetime(string $date, string $time, bool $isEnd): ?DateTimeImmutable
+{
+    $date = forms_validate_filter_date($date);
+    if ($date === '') {
+        return null;
+    }
+
+    $normalizedTime = forms_validate_filter_time($time);
+    if ($normalizedTime === '') {
+        $timeString = $isEnd ? '23:59:59' : '00:00:00';
+    } else {
+        $timeString = $normalizedTime . ($isEnd ? ':59' : ':00');
+    }
+
+    $dt = DateTimeImmutable::createFromFormat(
+        'Y-m-d H:i:s',
+        $date . ' ' . $timeString,
+        new DateTimeZone('Asia/Tokyo')
+    );
+
+    return $dt ?: null;
+}
+
+function forms_public_period_text(string $startDate, string $startTime, string $endDate, string $endTime): string
+{
+    $parts = [];
+
+    if ($startDate !== '') {
+        $parts[] = $startDate . ($startTime !== '' ? ' ' . $startTime : '');
+    }
+
+    if ($endDate !== '') {
+        $parts[] = $endDate . ($endTime !== '' ? ' ' . $endTime : '');
+    }
+
+    if ($parts === []) {
+        return '';
+    }
+
+    if (count($parts) === 1) {
+        return $startDate !== '' ? ($parts[0] . ' 以降') : ($parts[0] . ' まで');
+    }
+
+    return $parts[0] . ' 〜 ' . $parts[1];
 }
 
 function forms_public_period_context(array $formOrSettings, ?bool $isActive = null): array
@@ -1147,8 +1269,14 @@ function forms_public_period_context(array $formOrSettings, ?bool $isActive = nu
     }
 
     $startDate = forms_validate_filter_date($settings['public_start_date'] ?? '');
+    $startTime = forms_validate_filter_time($settings['public_start_time'] ?? '');
     $endDate = forms_validate_filter_date($settings['public_end_date'] ?? '');
-    $today = forms_today()->format('Y-m-d');
+    $endTime = forms_validate_filter_time($settings['public_end_time'] ?? '');
+    $now = forms_today();
+
+    $startAt = forms_public_boundary_datetime($startDate, $startTime, false);
+    $endAt = forms_public_boundary_datetime($endDate, $endTime, true);
+    $rangeText = forms_public_period_text($startDate, $startTime, $endDate, $endTime);
 
     $isOpen = true;
     $status = 'always_open';
@@ -1160,31 +1288,22 @@ function forms_public_period_context(array $formOrSettings, ?bool $isActive = nu
         $status = 'inactive';
         $label = '非公開';
         $note = 'フォーム自体が非公開です。';
-    } elseif ($startDate !== '' || $endDate !== '') {
-        $rangeText = '';
-        if ($startDate !== '' && $endDate !== '') {
-            $rangeText = $startDate . ' 〜 ' . $endDate;
-        } elseif ($startDate !== '') {
-            $rangeText = $startDate . ' 以降';
-        } else {
-            $rangeText = $endDate . ' まで';
-        }
-
-        if ($startDate !== '' && $today < $startDate) {
+    } elseif ($startAt || $endAt) {
+        if ($startAt && $now < $startAt) {
             $isOpen = false;
             $status = 'scheduled';
             $label = '受付前';
-            $note = '公開開始前です。公開予定: ' . $rangeText;
-        } elseif ($endDate !== '' && $today > $endDate) {
+            $note = '受付開始前です。公開予定: ' . ($rangeText !== '' ? $rangeText : $startDate);
+        } elseif ($endAt && $now > $endAt) {
             $isOpen = false;
             $status = 'closed';
             $label = '受付終了';
-            $note = '公開期間は終了しています。設定期間: ' . $rangeText;
+            $note = '公開期間は終了しています。設定期間: ' . ($rangeText !== '' ? $rangeText : $endDate);
         } else {
             $isOpen = true;
             $status = 'open';
             $label = '公開期間内';
-            $note = '公開期間: ' . $rangeText;
+            $note = '公開期間: ' . ($rangeText !== '' ? $rangeText : '設定済み');
         }
     }
 
@@ -1195,8 +1314,12 @@ function forms_public_period_context(array $formOrSettings, ?bool $isActive = nu
         'label' => $label,
         'note' => $note,
         'start_date' => $startDate,
+        'start_time' => $startTime,
         'end_date' => $endDate,
-        'today' => $today,
+        'end_time' => $endTime,
+        'window_text' => $rangeText,
+        'today' => $now->format('Y-m-d'),
+        'current_at' => $now->format('Y-m-d H:i'),
     ];
 }
 

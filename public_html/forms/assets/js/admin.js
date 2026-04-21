@@ -60,6 +60,31 @@ function availabilityBadge(availability = {}, isActive = true) {
   return `<span class="pill period-pill period-${escapeHtml(status)}">${escapeHtml(availability.label || labelMap[status] || '公開状態')}</span>`;
 }
 
+function formatAvailabilityWindow(availability = {}, settings = {}) {
+  const startDate = availability.start_date || settings.public_start_date || '';
+  const startTime = availability.start_time || settings.public_start_time || '';
+  const endDate = availability.end_date || settings.public_end_date || '';
+  const endTime = availability.end_time || settings.public_end_time || '';
+
+  const startLabel = startDate ? `${startDate}${startTime ? ` ${startTime}` : ''}` : '';
+  const endLabel = endDate ? `${endDate}${endTime ? ` ${endTime}` : ''}` : '';
+
+  if (!startLabel && !endLabel) {
+    return '常時公開';
+  }
+  if (startLabel && endLabel) {
+    return `${startLabel} 〜 ${endLabel}`;
+  }
+  return startLabel ? `${startLabel} 以降` : `${endLabel} まで`;
+}
+
+function syncDeleteButtonState(form = null) {
+  const button = document.getElementById('delete-form-button');
+  if (!button) return;
+  button.disabled = !form || !form.id;
+  button.textContent = form?.id ? 'このフォームを削除' : '保存済みフォームを選択すると削除できます';
+}
+
 function fieldRowDataToHtml(field = {}) {
   const template = document.getElementById('field-row-template');
   const fragment = template.content.cloneNode(true);
@@ -225,7 +250,7 @@ function renderOverview(form) {
       ['フォーム名', form.name],
       ['slug', form.slug],
       ['公開状態', form.is_active ? '公開中' : '非公開'],
-      ['公開期間', availability.start_date || availability.end_date ? `${availability.start_date || '指定なし'} 〜 ${availability.end_date || '指定なし'}` : '常時公開'],
+      ['公開期間', formatAvailabilityWindow(availability, settings)],
       ['現在の受付状態', availability.label || (form.is_active ? '公開中' : '非公開')],
       ['表示順', String(form.sort_order ?? 0)],
       ['追加項目数', `${fieldCount}件（必須 ${requiredFieldCount}件）`],
@@ -247,7 +272,9 @@ function renderOverview(form) {
       settings.date_required ? '日付必須' : '日付任意',
       settings.allow_file_upload ? '添付あり' : '添付なし',
       settings.file_required ? '添付必須' : '添付任意',
-      settings.public_start_date || settings.public_end_date ? `公開期間: ${settings.public_start_date || '指定なし'} 〜 ${settings.public_end_date || '指定なし'}` : '公開期間制限なし',
+      (settings.public_start_date || settings.public_end_date || settings.public_start_time || settings.public_end_time)
+        ? `公開期間: ${formatAvailabilityWindow(availability, settings)}`
+        : '公開期間制限なし',
       `送信ボタン: ${settings.submit_button_label || '送信する'}`,
     ];
     settingPills.innerHTML = pills.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join('');
@@ -305,13 +332,16 @@ function fillEditor(form) {
   editor.elements.allowed_extensions.value = form?.settings?.allowed_extensions || 'pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,zip';
   editor.elements.max_upload_size_mb.value = form?.settings?.max_upload_size_mb ?? 5;
   editor.elements.public_start_date.value = form?.settings?.public_start_date || '';
+  editor.elements.public_start_time.value = form?.settings?.public_start_time || '';
   editor.elements.public_end_date.value = form?.settings?.public_end_date || '';
+  editor.elements.public_end_time.value = form?.settings?.public_end_time || '';
   editor.elements.submit_button_label.value = form?.settings?.submit_button_label || '送信する';
   editor.elements.completion_message.value = form?.settings?.completion_message || '送信を受け付けました。';
 
   const fieldRoot = document.getElementById('field-builder-list');
   fieldRoot.innerHTML = '';
   (form?.fields || []).forEach((field) => fieldRoot.appendChild(fieldRowDataToHtml(field)));
+  syncDeleteButtonState(form);
 }
 
 function renderStatusSummary(root, statusCounts = []) {
@@ -713,6 +743,47 @@ function bindEvents() {
 
   document.getElementById('new-form-button')?.addEventListener('click', startNewFormMode);
 
+  document.getElementById('delete-form-button')?.addEventListener('click', async () => {
+    const form = getActiveForm();
+    const message = document.getElementById('admin-message');
+    if (!form || !form.id) {
+      alert('削除するフォームを選択してください。');
+      return;
+    }
+    const confirmed = window.confirm(`フォーム「${form.name}」を削除します。回答一覧、履歴、状態ログも削除されます。
+この操作は元に戻せません。`);
+    if (!confirmed) return;
+
+    setMessage(message, '削除中です...', 'info');
+    const result = await apiPost('api/admin_forms.php', {
+      action: 'delete',
+      form_id: form.id,
+    });
+    if (!result.ok) {
+      setMessage(message, result.message || '削除に失敗しました。', 'error');
+      return;
+    }
+
+    adminState.forms = result.forms || [];
+    adminState.activeFormId = adminState.forms[0]?.id || 0;
+    renderOverallStats();
+    renderFormList();
+
+    if (adminState.activeFormId > 0) {
+      const nextForm = getActiveForm();
+      renderWorkspaceHeader(nextForm);
+      renderSelectedFormSidebar(nextForm);
+      renderOverview(nextForm);
+      fillEditor(nextForm);
+      switchWorkspaceTab('overview');
+      await loadEntries(adminState.activeFormId, null, false);
+    } else {
+      startNewFormMode();
+    }
+
+    setMessage(message, result.message || 'フォームを削除しました。', 'success');
+  });
+
   document.getElementById('add-field-button')?.addEventListener('click', () => {
     document.getElementById('field-builder-list').appendChild(fieldRowDataToHtml());
   });
@@ -806,7 +877,9 @@ function bindEvents() {
         allowed_extensions: form.elements.allowed_extensions.value,
         max_upload_size_mb: Number(form.elements.max_upload_size_mb.value || 5),
         public_start_date: form.elements.public_start_date.value,
+        public_start_time: form.elements.public_start_time.value,
         public_end_date: form.elements.public_end_date.value,
+        public_end_time: form.elements.public_end_time.value,
         submit_button_label: form.elements.submit_button_label.value,
         completion_message: form.elements.completion_message.value,
       },

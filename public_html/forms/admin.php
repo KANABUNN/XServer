@@ -222,11 +222,21 @@ page_header('フォーム管理', 'forms-admin-page');
                                 <input type="date" name="public_start_date">
                             </label>
                             <label>
+                                <span>受付開始時刻</span>
+                                <input type="time" name="public_start_time" step="60">
+                            </label>
+                        </div>
+                        <div class="two-col">
+                            <label>
                                 <span>公開終了日</span>
                                 <input type="date" name="public_end_date">
                             </label>
+                            <label>
+                                <span>受付終了時刻</span>
+                                <input type="time" name="public_end_time" step="60">
+                            </label>
                         </div>
-                        <p class="small-note">空欄にした側は制限しません。開始日と終了日の両方を入れると、その期間だけ利用者画面に表示し、期間外の直接送信も受け付けません。</p>
+                        <p class="small-note">日付だけを設定した場合、開始日は 00:00 から、終了日は 23:59 まで受け付けます。時刻を指定する場合は対応する開始日または終了日も設定してください。</p>
                     </section>
 
                     <section class="subcard">
@@ -242,6 +252,12 @@ page_header('フォーム管理', 'forms-admin-page');
                             </label>
                         </div>
                         <p class="small-note">利用者画面で表示される案内文です。</p>
+                    </section>
+
+                    <section class="subcard danger-zone-card">
+                        <h3>フォーム削除</h3>
+                        <p class="small-note">フォーム本体、回答一覧、更新履歴、状態ログをまとめて削除します。削除後は元に戻せません。</p>
+                        <button type="button" class="btn danger" id="delete-form-button">このフォームを削除</button>
                     </section>
                 </div>
 
