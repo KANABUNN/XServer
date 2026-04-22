@@ -4,6 +4,30 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
 
+function account_site_table_columns(PDO $pdo, string $tableName): array
+{
+    $stmt = $pdo->query('SHOW COLUMNS FROM `' . str_replace('`', '``', $tableName) . '`');
+    $columns = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        if (!empty($row['Field'])) {
+            $columns[(string)$row['Field']] = true;
+        }
+    }
+    return $columns;
+}
+
+function account_site_table_indexes(PDO $pdo, string $tableName): array
+{
+    $stmt = $pdo->query('SHOW INDEX FROM `' . str_replace('`', '``', $tableName) . '`');
+    $indexes = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        if (!empty($row['Key_name'])) {
+            $indexes[(string)$row['Key_name']] = true;
+        }
+    }
+    return $indexes;
+}
+
 function account_site_install_extra_schema(PDO $pdo): void
 {
     $pdo->exec(
@@ -20,6 +44,46 @@ function account_site_install_extra_schema(PDO $pdo): void
         . 'KEY idx_admin_audit_logs_target (target_account_id)'
         . ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
     );
+
+    $columns = account_site_table_columns($pdo, 'admin_audit_logs');
+
+    if (!isset($columns['actor_account_id'])) {
+        $pdo->exec('ALTER TABLE admin_audit_logs ADD COLUMN actor_account_id BIGINT UNSIGNED DEFAULT NULL AFTER id');
+        $columns['actor_account_id'] = true;
+    }
+    if (!isset($columns['target_account_id'])) {
+        $after = isset($columns['actor_account_id']) ? 'actor_account_id' : 'id';
+        $pdo->exec('ALTER TABLE admin_audit_logs ADD COLUMN target_account_id BIGINT UNSIGNED DEFAULT NULL AFTER ' . $after);
+        $columns['target_account_id'] = true;
+    }
+    if (!isset($columns['action_key'])) {
+        $after = isset($columns['target_account_id']) ? 'target_account_id' : 'id';
+        $pdo->exec('ALTER TABLE admin_audit_logs ADD COLUMN action_key VARCHAR(64) DEFAULT NULL AFTER ' . $after);
+        $columns['action_key'] = true;
+    }
+    if (!isset($columns['detail_json'])) {
+        $after = isset($columns['action_key']) ? 'action_key' : 'id';
+        $pdo->exec('ALTER TABLE admin_audit_logs ADD COLUMN detail_json LONGTEXT DEFAULT NULL AFTER ' . $after);
+        $columns['detail_json'] = true;
+    }
+
+    if (isset($columns['actor_user_id']) && isset($columns['actor_account_id'])) {
+        $pdo->exec('UPDATE admin_audit_logs SET actor_account_id = actor_user_id WHERE actor_account_id IS NULL AND actor_user_id IS NOT NULL');
+    }
+    if (isset($columns['action']) && isset($columns['action_key'])) {
+        $pdo->exec('UPDATE admin_audit_logs SET action_key = action WHERE (action_key IS NULL OR action_key = "") AND action IS NOT NULL');
+    }
+    if (isset($columns['summary_json']) && isset($columns['detail_json'])) {
+        $pdo->exec('UPDATE admin_audit_logs SET detail_json = summary_json WHERE detail_json IS NULL AND summary_json IS NOT NULL');
+    }
+
+    $indexes = account_site_table_indexes($pdo, 'admin_audit_logs');
+    if (!isset($indexes['idx_admin_audit_logs_actor'])) {
+        $pdo->exec('ALTER TABLE admin_audit_logs ADD KEY idx_admin_audit_logs_actor (actor_account_id)');
+    }
+    if (!isset($indexes['idx_admin_audit_logs_target'])) {
+        $pdo->exec('ALTER TABLE admin_audit_logs ADD KEY idx_admin_audit_logs_target (target_account_id)');
+    }
 }
 
 function account_site_audit(PDO $pdo, ?int $actorId, ?int $targetId, string $actionKey, array $detail = []): void
