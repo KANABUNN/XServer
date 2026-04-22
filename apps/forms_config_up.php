@@ -13,6 +13,6 @@ return [
         'dbname' => 'fitsc_forms',
         'charset' => 'utf8mb4',
         'user' => 'fitsc_forms',
-        'pass' => 'BcF~7<RMz2IY',
+        'pass' => '',
     ],
 ];
