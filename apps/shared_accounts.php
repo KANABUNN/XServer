@@ -179,13 +179,14 @@ function shared_accounts_fetch_by_identifier(PDO $pdo, string $identifier, strin
         . 'GROUP_CONCAT(DISTINCT ar.role_key ORDER BY ar.role_key SEPARATOR ",") AS role_keys '
         . 'FROM shared_accounts a '
         . 'INNER JOIN shared_account_app_roles ar ON ar.account_id = a.id AND ar.app_key = :app_key '
-        . 'WHERE a.login_id = :identifier OR a.email = :identifier '
+        . 'WHERE a.login_id = :login_id_identifier OR a.email = :email_identifier '
         . 'GROUP BY a.id '
         . 'LIMIT 1'
     );
     $stmt->execute([
         ':app_key' => $appKey,
-        ':identifier' => $identifier,
+        ':login_id_identifier' => $identifier,
+        ':email_identifier' => $identifier,
     ]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$row) {
