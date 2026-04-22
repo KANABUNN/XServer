@@ -1,10 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const flashes = document.querySelectorAll('.flash.success');
-  flashes.forEach((el) => {
-    setTimeout(() => {
-      el.style.transition = 'opacity 0.25s ease';
-      el.style.opacity = '0';
-      setTimeout(() => el.remove(), 300);
-    }, 5000);
-  });
+  // 成功メッセージの自動削除は行わない。
+  // 操作後にメッセージ領域の高さが急に変わると、ページ位置がずれて見えるため。
 });

@@ -88,7 +88,6 @@ function account_site_install_extra_schema(PDO $pdo): void
 
 function account_site_audit(PDO $pdo, ?int $actorId, ?int $targetId, string $actionKey, array $detail = []): void
 {
-    account_site_install_extra_schema($pdo);
     $stmt = $pdo->prepare('INSERT INTO admin_audit_logs (actor_account_id, target_account_id, action_key, detail_json) VALUES (:actor, :target, :action_key, :detail_json)');
     $stmt->execute([
         ':actor' => $actorId,
@@ -204,7 +203,6 @@ function account_site_count_active_account_admins(PDO $pdo, ?int $excludeAccount
 
 function account_site_recent_audit_logs(PDO $pdo, int $limit = 20): array
 {
-    account_site_install_extra_schema($pdo);
     $limit = max(1, min($limit, 100));
     $stmt = $pdo->query(
         'SELECT l.id, l.actor_account_id, l.target_account_id, l.action_key, l.detail_json, l.created_at, '
@@ -364,52 +362,6 @@ function account_site_save_account(PDO $pdo, array $payload, int $actorId): int
 
         $pdo->commit();
         return $accountId;
-    } catch (Throwable $e) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        throw $e;
-    }
-}
-
-function account_site_delete_account(PDO $pdo, int $accountId, int $actorId): void
-{
-    if ($accountId <= 0) {
-        throw new RuntimeException('削除対象のアカウントが不正です。');
-    }
-
-    $current = account_site_fetch_account($pdo, $accountId);
-    if ($current === null) {
-        throw new RuntimeException('削除対象のアカウントが見つかりません。');
-    }
-
-    if ($actorId > 0 && $accountId === $actorId) {
-        throw new RuntimeException('現在ログイン中の自分自身のアカウントは削除できません。');
-    }
-
-    $currentHasPortalAdmin = in_array('admin', $current['roles_by_app'][account_site_app_key()] ?? [], true);
-    if ($currentHasPortalAdmin && account_site_count_active_account_admins($pdo, $accountId) === 0) {
-        throw new RuntimeException('最後のアカウント管理者は削除できません。');
-    }
-
-    $pdo->beginTransaction();
-    try {
-        account_site_audit($pdo, $actorId > 0 ? $actorId : null, $accountId, 'account.delete', [
-            'login_id' => (string)($current['login_id'] ?? ''),
-            'display_name' => (string)($current['display_name'] ?? ''),
-            'email' => (string)($current['email'] ?? ''),
-            'organization_name' => (string)($current['organization_name'] ?? ''),
-            'is_active' => (int)($current['is_active'] ?? 0),
-            'roles_by_app' => $current['roles_by_app'] ?? [],
-        ]);
-
-        $stmt = $pdo->prepare('DELETE FROM shared_accounts WHERE id = :id');
-        $stmt->execute([':id' => $accountId]);
-        if ($stmt->rowCount() < 1) {
-            throw new RuntimeException('アカウントの削除に失敗しました。');
-        }
-
-        $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
