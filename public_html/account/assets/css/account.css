@@ -243,6 +243,11 @@ input[type="search"] {
     background: #fff;
     border-color: var(--line);
 }
+.button.danger {
+    background: var(--danger);
+    color: #fff;
+}
+.button.danger:hover { filter: brightness(0.96); }
 .button.small { padding: 8px 12px; font-size: 13px; }
 .button.full { width: 100%; }
 
@@ -310,6 +315,7 @@ input[type="search"] {
 .audit-meta span { color: var(--muted); font-size: 13px; }
 .audit-body, .empty, .read-only-box { color: var(--muted); }
 .narrow-form { max-width: 520px; }
+.delete-form { margin-top: 14px; }
 
 @media (max-width: 1200px) {
     .layout-grid {
