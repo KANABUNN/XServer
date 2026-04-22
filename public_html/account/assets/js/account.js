@@ -13,3 +13,13 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => closeFlash(el), 5000);
   });
 });
+
+
+document.querySelectorAll('form[data-confirm]').forEach((form) => {
+  form.addEventListener('submit', (event) => {
+    const message = form.getAttribute('data-confirm') || 'この操作を実行します。よろしいですか？';
+    if (!window.confirm(message)) {
+      event.preventDefault();
+    }
+  });
+});

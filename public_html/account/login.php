@@ -33,6 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>アカウント管理ログイン</title>
     <link rel="stylesheet" href="assets/css/account.css">
+    <link rel="stylesheet" href="assets/css/account-responsive.css">
 </head>
 <body class="account-login-body">
 <div class="account-login-card">

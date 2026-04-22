@@ -35,22 +35,18 @@ body {
     color: var(--text);
 }
 
-body.forms-public-page,
-body.forms-admin-page {
+body,
+body *:not(input):not(textarea):not(select):not(option):not([contenteditable="true"]):not(.allow-select) {
     -webkit-user-select: none;
     user-select: none;
 }
 
-body.forms-public-page input,
-body.forms-public-page textarea,
-body.forms-public-page select,
-body.forms-public-page option,
-body.forms-public-page .allow-select,
-body.forms-admin-page input,
-body.forms-admin-page textarea,
-body.forms-admin-page select,
-body.forms-admin-page option,
-body.forms-admin-page .allow-select {
+input,
+textarea,
+select,
+option,
+.allow-select,
+[contenteditable="true"] {
     -webkit-user-select: text;
     user-select: text;
 }

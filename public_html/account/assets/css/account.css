@@ -14,6 +14,20 @@
 }
 
 * { box-sizing: border-box; }
+body,
+body *:not(input):not(textarea):not(select):not(option):not([contenteditable="true"]):not(.allow-select) {
+    -webkit-user-select: none;
+    user-select: none;
+}
+input,
+textarea,
+select,
+option,
+.allow-select,
+[contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
+}
 body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -404,4 +418,45 @@ input[type="search"] {
         top: 12px;
         width: min(calc(100% - 20px), 980px);
     }
+}
+
+
+.danger-zone {
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px solid rgba(193, 62, 72, 0.24);
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(255, 241, 242, 0.92), rgba(255, 247, 248, 0.96));
+    display: grid;
+    gap: 14px;
+}
+
+.danger-zone h3 {
+    margin: 0 0 8px;
+}
+
+.danger-note {
+    margin: 8px 0 0;
+    color: var(--danger);
+    font-weight: 600;
+}
+
+.danger-form {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.button.danger {
+    background: #fff1f2;
+    border-color: rgba(193, 62, 72, 0.2);
+    color: var(--danger);
+}
+
+.button.danger:hover {
+    background: #ffe4e8;
+}
+
+.button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }

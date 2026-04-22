@@ -40,9 +40,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 account_site_set_flash('success', '自分のパスワードを更新しました。');
                 account_site_redirect('index.php');
             }
+
+            if ($action === 'delete_account') {
+                account_site_require_manage_access();
+                $deleteId = (int)($_POST['id'] ?? 0);
+                account_site_delete_account($pdo, $deleteId, (int)($currentUser['id'] ?? 0));
+                account_site_set_flash('success', 'アカウントを削除しました。');
+                account_site_redirect('index.php');
+            }
         } catch (Throwable $e) {
             $error = $e->getMessage();
-            if ($action === 'save_account') {
+            if ($action === 'save_account' || $action === 'delete_account') {
                 $selectedId = (int)($_POST['id'] ?? 0);
             }
         }
@@ -66,6 +74,9 @@ if ($selectedAccount === null) {
     ];
 }
 
+$selectedIsSelf = (int)($selectedAccount['id'] ?? 0) > 0 && (int)($selectedAccount['id'] ?? 0) === (int)($currentUser['id'] ?? 0);
+$selectedHasAccountAdmin = in_array('admin', $selectedAccount['roles_by_app'][account_site_app_key()] ?? [], true);
+$selectedDeleteRestricted = $selectedIsSelf || ($selectedHasAccountAdmin && (int)($selectedAccount['is_active'] ?? 0) === 1 && account_site_count_active_account_admins($pdo, (int)$selectedAccount['id']) === 0);
 $appDefinitions = account_site_app_definitions();
 $recentLogs = account_site_recent_audit_logs($pdo, 15);
 $stats = [
@@ -81,6 +92,7 @@ $stats = [
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>共通アカウント管理</title>
     <link rel="stylesheet" href="assets/css/account.css">
+    <link rel="stylesheet" href="assets/css/account-responsive.css">
     <script src="assets/js/account.js" defer></script>
 </head>
 <body class="account-app-body">
@@ -259,6 +271,26 @@ $stats = [
                     <?php endif; ?>
                 </div>
             </form>
+
+            <?php if ((int)$selectedAccount['id'] > 0): ?>
+                <div class="danger-zone">
+                    <div>
+                        <h3>アカウント削除</h3>
+                        <p class="muted">削除すると、共通アカウント本体と各アプリのロール設定が削除されます。</p>
+                        <?php if ($selectedIsSelf): ?>
+                            <p class="danger-note">現在ログイン中の自分自身のアカウントは削除できません。</p>
+                        <?php elseif ($selectedDeleteRestricted): ?>
+                            <p class="danger-note">最後のアカウント管理者は削除できません。</p>
+                        <?php endif; ?>
+                    </div>
+                    <form method="post" class="danger-form" data-confirm="このアカウントを削除します。元に戻せません。続行しますか？">
+                        <input type="hidden" name="_csrf" value="<?= account_site_h(account_site_csrf_token()) ?>">
+                        <input type="hidden" name="action" value="delete_account">
+                        <input type="hidden" name="id" value="<?= (int)$selectedAccount['id'] ?>">
+                        <button type="submit" class="button danger" <?= ($selectedIsSelf || $selectedDeleteRestricted) ? 'disabled' : '' ?>>このアカウントを削除する</button>
+                    </form>
+                </div>
+            <?php endif; ?>
         <?php else: ?>
             <div class="read-only-box">現在の権限では編集操作はできません。閲覧のみ可能です。</div>
         <?php endif; ?>

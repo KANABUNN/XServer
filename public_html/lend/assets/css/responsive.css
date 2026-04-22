@@ -1,0 +1,58 @@
+@media (max-width: 1100px) {
+    .topbar {
+        padding: 20px 18px;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .topbar-actions {
+        width: 100%;
+    }
+
+    .page-grid,
+    .admin-grid,
+    .kiosk-layout {
+        padding: 18px;
+    }
+}
+
+@media (max-width: 720px) {
+    .card {
+        padding: 16px;
+        border-radius: 16px;
+    }
+
+    .topbar-actions,
+    .kiosk-action-row,
+    .inline-row,
+    .list-item-header,
+    .list-item-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .btn,
+    .btn.large {
+        width: 100%;
+    }
+
+    .scanner-shell {
+        min-height: 240px;
+    }
+}
+
+@media (max-width: 560px) {
+    .auth-layout,
+    .page-grid,
+    .kiosk-layout {
+        padding: 14px;
+    }
+
+    .auth-card {
+        width: 100%;
+    }
+
+    .list-item {
+        padding: 12px;
+    }
+}
