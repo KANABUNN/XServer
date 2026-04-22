@@ -10,8 +10,8 @@ $pendingReservations = db()->query('
         r.place,
         r.start_at,
         r.end_at,
-        u.name AS user_name,
-        u.organization,
+        u.display_name AS user_name,
+        u.organization_name AS organization,
         GROUP_CONCAT(a.name SEPARATOR " / ") AS asset_names
     FROM reservations r
     INNER JOIN fitsc_account.shared_accounts u ON u.id = r.user_id
@@ -27,7 +27,7 @@ $returnReview = db()->query('
         ct.id,
         r.id AS reservation_id,
         r.title,
-        u.name AS user_name,
+        u.display_name AS user_name,
         a.name AS asset_name,
         a.asset_code,
         a.is_high_value,
@@ -48,7 +48,7 @@ $overdues = db()->query('
         ct.id,
         r.title,
         r.end_at,
-        u.name AS user_name,
+        u.display_name AS user_name,
         a.name AS asset_name,
         ct.checkout_at,
         ct.state
