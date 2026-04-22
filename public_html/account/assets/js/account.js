@@ -1,4 +1,15 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // 成功メッセージの自動削除は行わない。
-  // 操作後にメッセージ領域の高さが急に変わると、ページ位置がずれて見えるため。
+  const closeFlash = (el) => {
+    if (!el || el.classList.contains('is-hiding')) return;
+    el.classList.add('is-hiding');
+    setTimeout(() => el.remove(), 260);
+  };
+
+  document.querySelectorAll('.flash-close').forEach((button) => {
+    button.addEventListener('click', () => closeFlash(button.closest('.flash')));
+  });
+
+  document.querySelectorAll('.flash[data-auto-dismiss="1"]').forEach((el) => {
+    setTimeout(() => closeFlash(el), 5000);
+  });
 });

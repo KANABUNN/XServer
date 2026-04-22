@@ -23,6 +23,57 @@ body {
 
 a { color: inherit; text-decoration: none; }
 
+.flash-stack {
+    position: fixed;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    width: min(calc(100% - 32px), 980px);
+    display: grid;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.flash.toast {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: #fff;
+    box-shadow: 0 16px 36px rgba(22, 40, 74, 0.16);
+    pointer-events: auto;
+    transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+.flash.toast.is-hiding {
+    opacity: 0;
+    transform: translateY(-8px);
+}
+
+.flash-message {
+    flex: 1 1 auto;
+    min-width: 0;
+    line-height: 1.6;
+}
+
+.flash-close {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.flash-close:hover {
+    color: var(--text);
+}
+
 .account-login-body {
     min-height: 100vh;
     display: grid;
@@ -88,12 +139,9 @@ a { color: inherit; text-decoration: none; }
     padding: 0 32px 32px;
 }
 
-.summary-grid,
-.full-width {
-    grid-column: 1 / -1;
-}
-
 .summary-grid {
+    grid-column: 1 / -1;
+
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
@@ -126,7 +174,8 @@ a { color: inherit; text-decoration: none; }
     grid-column: 2 / 3;
     grid-row: 2 / span 3;
     align-self: start;
-    position: static;
+    position: sticky;
+    top: 16px;
 }
 
 .section-head {
@@ -262,7 +311,7 @@ input[type="search"] {
     color: var(--muted);
     font-size: 13px;
 }
-.table-wrap { overflow-x: auto; overflow-y: visible; }
+.table-wrap { overflow: auto; }
 .subline { color: var(--muted); font-size: 12px; margin-top: 4px; }
 
 .badge {
@@ -347,5 +396,12 @@ input[type="search"] {
     }
     .current-user-box {
         align-items: flex-start;
+    }
+}
+
+@media (max-width: 768px) {
+    .flash-stack {
+        top: 12px;
+        width: min(calc(100% - 20px), 980px);
     }
 }

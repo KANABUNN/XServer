@@ -29,14 +29,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 account_site_redirect('index.php?edit=' . $savedId);
             }
 
-            if ($action === 'delete_account') {
-                account_site_require_manage_access();
-                $deleteId = (int)($_POST['id'] ?? 0);
-                account_site_delete_account($pdo, $deleteId, (int)($currentUser['id'] ?? 0));
-                account_site_set_flash('success', 'アカウントを削除しました。');
-                account_site_redirect('index.php');
-            }
-
             if ($action === 'change_password') {
                 account_site_require_view_access();
                 account_site_change_own_password(
@@ -107,19 +99,29 @@ $stats = [
     </div>
 </header>
 
+<?php if ($flash || $error !== ''): ?>
+    <div class="flash-stack" aria-live="polite" aria-atomic="true">
+        <?php if ($flash): ?>
+            <div class="flash toast <?= account_site_h($flash['type']) ?>" data-auto-dismiss="<?= $flash['type'] === 'success' ? '1' : '0' ?>">
+                <div class="flash-message"><?= nl2br(account_site_h($flash['message'])) ?></div>
+                <button type="button" class="flash-close" aria-label="閉じる">×</button>
+            </div>
+        <?php endif; ?>
+        <?php if ($error !== ''): ?>
+            <div class="flash toast error" data-auto-dismiss="0">
+                <div class="flash-message"><?= nl2br(account_site_h($error)) ?></div>
+                <button type="button" class="flash-close" aria-label="閉じる">×</button>
+            </div>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
+
 <main class="layout-grid">
     <section class="summary-grid">
         <article class="panel stat-card"><span>登録アカウント</span><strong><?= number_format($stats['total']) ?></strong></article>
         <article class="panel stat-card"><span>有効アカウント</span><strong><?= number_format($stats['active']) ?></strong></article>
         <article class="panel stat-card"><span>アカウント管理者</span><strong><?= number_format($stats['account_admins']) ?></strong></article>
     </section>
-
-    <?php if ($flash): ?>
-        <div class="flash <?= account_site_h($flash['type']) ?> full-width"><?= nl2br(account_site_h($flash['message'])) ?></div>
-    <?php endif; ?>
-    <?php if ($error !== ''): ?>
-        <div class="flash error full-width"><?= nl2br(account_site_h($error)) ?></div>
-    <?php endif; ?>
 
     <section class="panel list-panel">
         <div class="section-head">
@@ -257,15 +259,6 @@ $stats = [
                     <?php endif; ?>
                 </div>
             </form>
-
-            <?php if ((int)$selectedAccount['id'] > 0): ?>
-                <form method="post" class="delete-form" onsubmit="return confirm('このアカウントを削除しますか？ ロール設定も同時に削除されます。');">
-                    <input type="hidden" name="_csrf" value="<?= account_site_h(account_site_csrf_token()) ?>">
-                    <input type="hidden" name="action" value="delete_account">
-                    <input type="hidden" name="id" value="<?= (int)$selectedAccount['id'] ?>">
-                    <button type="submit" class="button danger">このアカウントを削除する</button>
-                </form>
-            <?php endif; ?>
         <?php else: ?>
             <div class="read-only-box">現在の権限では編集操作はできません。閲覧のみ可能です。</div>
         <?php endif; ?>
