@@ -1248,12 +1248,54 @@ body.forms-public-page {
         align-items: stretch;
         flex-direction: column;
     }
+
+    .public-site-header {
+        position: static;
+        top: auto;
+        padding: 18px 20px;
+        backdrop-filter: none;
+        box-shadow: 0 10px 24px rgba(15, 28, 49, 0.12);
+    }
+
+    .public-site-header__brand {
+        align-items: flex-start;
+    }
+
+    .topbar-actions {
+        width: 100%;
+    }
+
+    .topbar-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
 }
 
 @media (max-width: 720px) {
     .public-site-header,
     .public-app-shell {
         padding-inline: 16px;
+    }
+
+    .public-site-header {
+        gap: 12px;
+        padding-top: 16px;
+        padding-bottom: 16px;
+    }
+
+    .public-site-header .muted {
+        display: none;
+    }
+
+    .public-site-header__brand {
+        gap: 12px;
+    }
+
+    .brand-mark {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        font-size: 1rem;
     }
 
     .public-app-shell {
