@@ -21,4 +21,7 @@ header('Content-Type: application/octet-stream');
 header('Content-Length: ' . filesize($path));
 header("Content-Disposition: attachment; filename*=UTF-8''" . rawurlencode($filename));
 readfile($path);
+if (!empty($download['cleanup_path']) && is_string($download['cleanup_path']) && is_file($download['cleanup_path'])) {
+    @unlink($download['cleanup_path']);
+}
 exit;

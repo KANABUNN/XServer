@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/storage_maintenance.php';
+
 
 function forms_cfg_value(array $source, array $keys, string $default = ''): string
 {
@@ -1747,13 +1749,27 @@ function forms_resolve_revision_download(int $revisionId): ?array
     if (!$row || empty($row['uploaded_relative_path'])) {
         return null;
     }
-    $path = forms_upload_root() . '/' . ltrim((string)$row['uploaded_relative_path'], '/');
-    if (!is_file($path)) {
+
+    $relativePath = ltrim((string)$row['uploaded_relative_path'], '/');
+    $path = forms_upload_root() . '/' . $relativePath;
+    if (is_file($path)) {
+        return [
+            'path' => $path,
+            'filename' => (string)($row['uploaded_original_name'] ?: basename($path)),
+        ];
+    }
+
+    $cfg = forms_runtime_config();
+    $archivedPath = storage_maintenance_forms_extract_archived_upload($cfg, $relativePath);
+    if (!is_string($archivedPath) || !is_file($archivedPath)) {
         return null;
     }
+
     return [
-        'path' => $path,
-        'filename' => (string)($row['uploaded_original_name'] ?: basename($path)),
+        'path' => $archivedPath,
+        'filename' => (string)($row['uploaded_original_name'] ?: basename($relativePath)),
+        'cleanup_path' => $archivedPath,
+        'from_archive' => true,
     ];
 }
 
