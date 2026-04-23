@@ -3,6 +3,7 @@ const publicState = {
   filteredForms: [],
   activeFormId: null,
   searchQuery: '',
+  drawerOpen: false,
 };
 
 function normalizeText(value = '') {
@@ -37,6 +38,50 @@ function clearDraft(formId) {
   } catch (error) {
     // noop
   }
+}
+
+function isMobileDrawerMode() {
+  return window.matchMedia('(max-width: 1100px)').matches;
+}
+
+function syncDrawerState() {
+  const sidebar = document.getElementById('public-sidebar');
+  const backdrop = document.getElementById('public-drawer-backdrop');
+  const openButton = document.getElementById('public-drawer-open');
+  const shouldUseDrawer = isMobileDrawerMode();
+
+  document.body.classList.toggle('public-drawer-enabled', shouldUseDrawer);
+  document.body.classList.toggle('public-drawer-open', shouldUseDrawer && publicState.drawerOpen);
+
+  if (sidebar) {
+    sidebar.setAttribute('aria-hidden', shouldUseDrawer && !publicState.drawerOpen ? 'true' : 'false');
+  }
+
+  if (backdrop) {
+    backdrop.hidden = !(shouldUseDrawer && publicState.drawerOpen);
+  }
+
+  if (openButton) {
+    openButton.setAttribute('aria-expanded', shouldUseDrawer && publicState.drawerOpen ? 'true' : 'false');
+  }
+
+  if (!shouldUseDrawer) {
+    publicState.drawerOpen = false;
+    if (backdrop) {
+      backdrop.hidden = true;
+    }
+  }
+}
+
+function openDrawer() {
+  if (!isMobileDrawerMode()) return;
+  publicState.drawerOpen = true;
+  syncDrawerState();
+}
+
+function closeDrawer() {
+  publicState.drawerOpen = false;
+  syncDrawerState();
 }
 
 function getActiveForm() {
@@ -410,6 +455,9 @@ document.addEventListener('click', (event) => {
     renderSidebar();
     renderHero();
     renderActiveForm();
+    if (isMobileDrawerMode()) {
+      closeDrawer();
+    }
     return;
   }
 });
@@ -422,4 +470,15 @@ document.getElementById('public-form-search')?.addEventListener('input', (event)
   renderActiveForm();
 });
 
+document.getElementById('public-drawer-open')?.addEventListener('click', openDrawer);
+document.getElementById('public-drawer-close')?.addEventListener('click', closeDrawer);
+document.getElementById('public-drawer-backdrop')?.addEventListener('click', closeDrawer);
+window.addEventListener('resize', syncDrawerState);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && publicState.drawerOpen) {
+    closeDrawer();
+  }
+});
+
+syncDrawerState();
 loadPublicForms();
