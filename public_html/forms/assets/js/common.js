@@ -52,6 +52,109 @@ function escapeHtml(value = '') {
     .replaceAll("'", '&#039;');
 }
 
+function ensureFlashStack() {
+  let stack = document.getElementById('flash-message-stack');
+  if (stack) return stack;
+  stack = document.createElement('div');
+  stack.id = 'flash-message-stack';
+  stack.className = 'flash-message-stack';
+  document.body.appendChild(stack);
+  return stack;
+}
+
+function dismissFlashMessage(element) {
+  if (!element) return;
+  element.classList.remove('visible');
+  element.classList.add('leaving');
+  window.setTimeout(() => {
+    element.remove();
+  }, 240);
+}
+
+function showFlashMessage(message, type = 'info', options = {}) {
+  if (!message) return null;
+  const duration = Number.isFinite(options.duration) ? options.duration : 4200;
+  const stack = ensureFlashStack();
+  const item = document.createElement('div');
+  item.className = `flash-message ${type}`;
+
+  const body = document.createElement('div');
+  body.className = 'flash-message__body';
+
+  const title = document.createElement('strong');
+  title.className = 'flash-message__title';
+  title.textContent = options.title || (type === 'success' ? '完了' : type === 'error' ? 'エラー' : 'お知らせ');
+
+  const text = document.createElement('div');
+  text.className = 'flash-message__text';
+  text.textContent = message;
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'flash-message__close';
+  close.setAttribute('aria-label', '閉じる');
+  close.textContent = '×';
+  close.addEventListener('click', () => dismissFlashMessage(item));
+
+  body.appendChild(title);
+  body.appendChild(text);
+  item.appendChild(body);
+  item.appendChild(close);
+  stack.appendChild(item);
+
+  requestAnimationFrame(() => item.classList.add('visible'));
+  if (duration > 0) {
+    window.setTimeout(() => dismissFlashMessage(item), duration);
+  }
+  return item;
+}
+
+function parseDownloadFilename(response, fallbackName = 'download') {
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match && utf8Match[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch (error) {
+      return utf8Match[1];
+    }
+  }
+  const quotedMatch = disposition.match(/filename="([^"]+)"/i);
+  if (quotedMatch && quotedMatch[1]) {
+    return quotedMatch[1];
+  }
+  return fallbackName;
+}
+
+async function downloadBinaryFile(url, fallbackName = 'download') {
+  const response = await fetch(url, {
+    method: 'GET',
+    credentials: 'same-origin',
+  });
+
+  if (!response.ok) {
+    const contentType = response.headers.get('Content-Type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.message || 'ダウンロードに失敗しました。');
+    }
+    const text = await response.text().catch(() => '');
+    throw new Error(text || 'ダウンロードに失敗しました。');
+  }
+
+  const blob = await response.blob();
+  const filename = parseDownloadFilename(response, fallbackName);
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  return filename;
+}
+
 (function wireLoginForm() {
   const form = document.getElementById('login-form');
   if (!form) return;

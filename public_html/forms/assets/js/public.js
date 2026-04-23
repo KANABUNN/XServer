@@ -3,7 +3,6 @@ const publicState = {
   filteredForms: [],
   activeFormId: null,
   searchQuery: '',
-  drawerOpen: false,
 };
 
 function normalizeText(value = '') {
@@ -38,50 +37,6 @@ function clearDraft(formId) {
   } catch (error) {
     // noop
   }
-}
-
-function isMobileDrawerMode() {
-  return window.matchMedia('(max-width: 1100px)').matches;
-}
-
-function syncDrawerState() {
-  const sidebar = document.getElementById('public-sidebar');
-  const backdrop = document.getElementById('public-drawer-backdrop');
-  const openButton = document.getElementById('public-drawer-open');
-  const shouldUseDrawer = isMobileDrawerMode();
-
-  document.body.classList.toggle('public-drawer-enabled', shouldUseDrawer);
-  document.body.classList.toggle('public-drawer-open', shouldUseDrawer && publicState.drawerOpen);
-
-  if (sidebar) {
-    sidebar.setAttribute('aria-hidden', shouldUseDrawer && !publicState.drawerOpen ? 'true' : 'false');
-  }
-
-  if (backdrop) {
-    backdrop.hidden = !(shouldUseDrawer && publicState.drawerOpen);
-  }
-
-  if (openButton) {
-    openButton.setAttribute('aria-expanded', shouldUseDrawer && publicState.drawerOpen ? 'true' : 'false');
-  }
-
-  if (!shouldUseDrawer) {
-    publicState.drawerOpen = false;
-    if (backdrop) {
-      backdrop.hidden = true;
-    }
-  }
-}
-
-function openDrawer() {
-  if (!isMobileDrawerMode()) return;
-  publicState.drawerOpen = true;
-  syncDrawerState();
-}
-
-function closeDrawer() {
-  publicState.drawerOpen = false;
-  syncDrawerState();
 }
 
 function getActiveForm() {
@@ -406,7 +361,8 @@ function renderActiveForm() {
   document.getElementById('draft-clear-button')?.addEventListener('click', () => {
     clearDraft(form.id);
     renderActiveForm();
-    setMessage(message, '入力途中の内容をクリアしました。', 'info');
+    clearMessage(message);
+    showFlashMessage('入力途中の内容をクリアしました。', 'info', { title: '入力を初期化しました' });
   });
 
   submitForm?.addEventListener('submit', async (event) => {
@@ -414,18 +370,27 @@ function renderActiveForm() {
     const formData = new FormData(submitForm);
     const submitButton = submitForm.querySelector('button[type="submit"]');
     submitButton.disabled = true;
-    setMessage(message, '送信中です...', 'info');
+    clearMessage(message);
     try {
       const result = await apiPostForm('api/submit.php', formData);
       if (!result.ok) {
-        setMessage(message, result.message || '送信に失敗しました。', 'error');
+        showFlashMessage(result.message || '送信に失敗しました。', 'error', {
+          title: '送信できませんでした',
+          duration: 6200,
+        });
         return;
       }
       clearDraft(form.id);
-      setMessage(message, result.message || '送信しました。', 'success');
       submitForm.reset();
+      showFlashMessage(result.message || '送信しました。', 'success', {
+        title: result.status === 'updated' ? '更新を受け付けました' : '送信を受け付けました',
+        duration: 5200,
+      });
     } catch (error) {
-      setMessage(message, '通信に失敗しました。', 'error');
+      showFlashMessage('通信に失敗しました。時間をおいて再度お試しください。', 'error', {
+        title: '通信エラー',
+        duration: 6200,
+      });
     } finally {
       submitButton.disabled = false;
     }
@@ -455,9 +420,6 @@ document.addEventListener('click', (event) => {
     renderSidebar();
     renderHero();
     renderActiveForm();
-    if (isMobileDrawerMode()) {
-      closeDrawer();
-    }
     return;
   }
 });
@@ -470,15 +432,4 @@ document.getElementById('public-form-search')?.addEventListener('input', (event)
   renderActiveForm();
 });
 
-document.getElementById('public-drawer-open')?.addEventListener('click', openDrawer);
-document.getElementById('public-drawer-close')?.addEventListener('click', closeDrawer);
-document.getElementById('public-drawer-backdrop')?.addEventListener('click', closeDrawer);
-window.addEventListener('resize', syncDrawerState);
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && publicState.drawerOpen) {
-    closeDrawer();
-  }
-});
-
-syncDrawerState();
 loadPublicForms();

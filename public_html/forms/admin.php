@@ -307,6 +307,7 @@ page_header('フォーム管理', 'forms-admin-page');
                 </div>
                 <div class="inline-actions">
                     <button type="button" class="btn" id="refresh-entries-button">再読込</button>
+                    <button type="button" class="btn" id="download-latest-attachments-button">最新添付ZIP</button>
                     <button type="button" class="btn primary" id="export-csv-button">CSV出力</button>
                 </div>
             </div>
