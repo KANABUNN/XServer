@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/storage_maintenance.php';
+
 
 function forms_cfg_value(array $source, array $keys, string $default = ''): string
 {
@@ -421,6 +423,18 @@ function forms_sanitize_slug(string $value): string
         $value = 'form';
     }
     return $value;
+}
+
+function forms_safe_download_name(string $value, string $fallback = 'file'): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return $fallback;
+    }
+    $value = preg_replace('/[\\\/\:\*\?"<>\|]+/u', '-', $value) ?? '';
+    $value = preg_replace('/\s+/u', ' ', $value) ?? '';
+    $value = trim($value, " .-_\t\n\r\0\x0B");
+    return $value !== '' ? $value : $fallback;
 }
 
 function forms_make_unique_slug(PDO $pdo, string $rawSlug, ?int $ignoreId = null): string
@@ -1445,6 +1459,7 @@ function forms_build_admin_entry_record(array $row, array $form): array
         'payload' => $payload,
         'payload_preview' => forms_entry_preview($payload, $form),
         'uploaded_original_name' => (string)($row['uploaded_original_name'] ?? ''),
+        'uploaded_relative_path' => (string)($row['uploaded_relative_path'] ?? ''),
         'latest_revision_id' => (int)($row['latest_revision_id'] ?? 0),
         'revision_count' => (int)($row['revision_count'] ?? 0),
         'status' => $status,
@@ -1512,6 +1527,7 @@ function forms_fetch_admin_entries(int $formId, array $rawFilters = [], ?int $li
             'status_counts' => forms_build_status_summary($formId),
         ],
         'filters' => $filters,
+        'form' => $form,
     ];
 }
 
@@ -1733,12 +1749,147 @@ function forms_resolve_revision_download(int $revisionId): ?array
     if (!$row || empty($row['uploaded_relative_path'])) {
         return null;
     }
-    $path = forms_upload_root() . '/' . ltrim((string)$row['uploaded_relative_path'], '/');
-    if (!is_file($path)) {
+
+    $relativePath = ltrim((string)$row['uploaded_relative_path'], '/');
+    $path = forms_upload_root() . '/' . $relativePath;
+    if (is_file($path)) {
+        return [
+            'path' => $path,
+            'filename' => (string)($row['uploaded_original_name'] ?: basename($path)),
+        ];
+    }
+
+    $cfg = forms_runtime_config();
+    $archivedPath = storage_maintenance_forms_extract_archived_upload($cfg, $relativePath);
+    if (!is_string($archivedPath) || !is_file($archivedPath)) {
         return null;
     }
+
     return [
-        'path' => $path,
-        'filename' => (string)($row['uploaded_original_name'] ?: basename($path)),
+        'path' => $archivedPath,
+        'filename' => (string)($row['uploaded_original_name'] ?: basename($relativePath)),
+        'cleanup_path' => $archivedPath,
+        'from_archive' => true,
+    ];
+}
+
+
+function forms_collect_latest_submission_attachments(int $formId, array $rawFilters = []): array
+{
+    $result = forms_fetch_admin_entries($formId, $rawFilters, 0);
+    $files = [];
+    foreach ($result['entries'] as $entry) {
+        $relativePath = trim((string)($entry['uploaded_relative_path'] ?? ''));
+        if ($relativePath === '') {
+            continue;
+        }
+        $path = forms_upload_root() . '/' . ltrim($relativePath, '/');
+        if (!is_file($path)) {
+            continue;
+        }
+
+        $entryId = (int)($entry['id'] ?? 0);
+        $org = forms_safe_download_name((string)($entry['organization_name'] ?? ''), 'organization');
+        $email = forms_safe_download_name((string)($entry['submitter_email'] ?? ''), 'email');
+        $original = forms_safe_download_name((string)($entry['uploaded_original_name'] ?: basename($path)), 'attachment');
+        $zipName = sprintf('%03d_%s_%s_%s', $entryId, $org, $email, $original);
+
+        $files[] = [
+            'entry_id' => $entryId,
+            'path' => $path,
+            'filename' => $original,
+            'zip_name' => $zipName,
+            'organization_name' => (string)($entry['organization_name'] ?? ''),
+            'submitter_email' => (string)($entry['submitter_email'] ?? ''),
+            'updated_at' => (string)($entry['updated_at'] ?? ''),
+        ];
+    }
+
+    return [
+        'files' => $files,
+        'form' => $result['form'] ?? forms_load_form($formId),
+        'filters' => $result['filters'] ?? forms_admin_entry_filters($rawFilters),
+        'summary' => $result['summary'] ?? ['total_count' => 0, 'filtered_count' => 0, 'status_counts' => []],
+    ];
+}
+
+function forms_build_latest_attachments_archive(int $formId, array $rawFilters = []): ?array
+{
+    if (!class_exists('ZipArchive')) {
+        throw new RuntimeException('ZipArchive が利用できません。');
+    }
+
+    $bundle = forms_collect_latest_submission_attachments($formId, $rawFilters);
+    $files = $bundle['files'];
+    if ($files === []) {
+        return null;
+    }
+
+    $form = is_array($bundle['form'] ?? null) ? $bundle['form'] : forms_load_form($formId);
+    $slug = forms_safe_download_name((string)($form['slug'] ?? 'forms'), 'forms');
+    $zipFilename = sprintf('%s_latest_attachments_%s.zip', $slug, date('Ymd_His'));
+    $tmpPath = tempnam(sys_get_temp_dir(), 'forms_zip_');
+    if ($tmpPath === false) {
+        throw new RuntimeException('一時ファイルを作成できませんでした。');
+    }
+    @unlink($tmpPath);
+    $zipPath = $tmpPath . '.zip';
+
+    $zip = new ZipArchive();
+    $opened = $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+    if ($opened !== true) {
+        throw new RuntimeException('ZIP ファイルを作成できませんでした。');
+    }
+
+    $usedNames = [];
+    foreach ($files as $file) {
+        $zipName = (string)$file['zip_name'];
+        $path = (string)$file['path'];
+        $finalName = $zipName;
+        $counter = 2;
+        while (isset($usedNames[$finalName])) {
+            $dot = strrpos($zipName, '.');
+            if ($dot !== false) {
+                $base = substr($zipName, 0, $dot);
+                $ext = substr($zipName, $dot);
+            } else {
+                $base = $zipName;
+                $ext = '';
+            }
+            $finalName = $base . '_' . $counter . $ext;
+            $counter++;
+        }
+        $usedNames[$finalName] = true;
+        $zip->addFile($path, $finalName);
+    }
+
+    $manifest = [
+        'フォーム: ' . (string)($form['name'] ?? ''),
+        'slug: ' . (string)($form['slug'] ?? ''),
+        '出力日時: ' . date('Y-m-d H:i:s'),
+        '件数: ' . count($files),
+        '',
+        'entry_id,organization_name,submitter_email,updated_at,zip_name',
+    ];
+    foreach ($files as $file) {
+        $manifest[] = implode(',', [
+            '"' . str_replace('"', '""', (string)$file['entry_id']) . '"',
+            '"' . str_replace('"', '""', (string)$file['organization_name']) . '"',
+            '"' . str_replace('"', '""', (string)$file['submitter_email']) . '"',
+            '"' . str_replace('"', '""', (string)$file['updated_at']) . '"',
+            '"' . str_replace('"', '""', (string)$file['zip_name']) . '"',
+        ]);
+    }
+    $zip->addFromString('manifest.txt', implode("
+", $manifest));
+    $zip->close();
+
+    return [
+        'path' => $zipPath,
+        'filename' => $zipFilename,
+        'count' => count($files),
+        'form' => $form,
+        'filters' => $bundle['filters'],
+        'summary' => $bundle['summary'],
     ];
 }

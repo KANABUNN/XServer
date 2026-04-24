@@ -694,7 +694,7 @@ async function saveCurrentEntryStatus(entryId) {
   });
 
   if (!result.ok) {
-    alert(result.message || '状態更新に失敗しました。');
+    showFlashMessage(result.message || '状態更新に失敗しました。', 'error', { title: '保存できませんでした', duration: 5200 });
     return;
   }
 
@@ -723,6 +723,18 @@ function buildCsvUrl() {
   return `api/export_csv.php?${query}`;
 }
 
+function buildLatestAttachmentsUrl() {
+  if (!adminState.activeFormId) return '';
+  const filters = getEntryFilterValues();
+  const query = buildEntriesQuery(adminState.activeFormId, {
+    query: filters.query,
+    status: filters.status,
+    date_from: filters.date_from,
+    date_to: filters.date_to,
+  });
+  return `api/download_latest_attachments.php?${query}`;
+}
+
 function bindEvents() {
   document.querySelectorAll('[data-workspace-tab]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -747,7 +759,7 @@ function bindEvents() {
     const form = getActiveForm();
     const message = document.getElementById('admin-message');
     if (!form || !form.id) {
-      alert('削除するフォームを選択してください。');
+      showFlashMessage('削除するフォームを選択してください。', 'info', { title: 'フォーム未選択' });
       return;
     }
     const confirmed = window.confirm(`フォーム「${form.name}」を削除します。回答一覧、履歴、状態ログも削除されます。
@@ -782,6 +794,7 @@ function bindEvents() {
     }
 
     setMessage(message, result.message || 'フォームを削除しました。', 'success');
+    showFlashMessage(result.message || 'フォームを削除しました。', 'success', { title: 'フォームを削除しました', duration: 3600 });
   });
 
   document.getElementById('add-field-button')?.addEventListener('click', () => {
@@ -831,10 +844,34 @@ function bindEvents() {
   document.getElementById('export-csv-button')?.addEventListener('click', () => {
     const url = buildCsvUrl();
     if (!url) {
-      alert('フォームを選択してください。');
+      showFlashMessage('フォームを選択してください。', 'info', { title: 'フォーム未選択' });
       return;
     }
     window.location.href = url;
+  });
+
+  document.getElementById('download-latest-attachments-button')?.addEventListener('click', async (event) => {
+    const url = buildLatestAttachmentsUrl();
+    if (!url) {
+      showFlashMessage('フォームを選択してください。', 'info', { title: 'フォーム未選択' });
+      return;
+    }
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const filename = await downloadBinaryFile(url, 'latest_attachments.zip');
+      showFlashMessage(`${filename} のダウンロードを開始しました。`, 'success', {
+        title: '最新添付をまとめて取得',
+        duration: 3800,
+      });
+    } catch (error) {
+      showFlashMessage(error.message || '一括ダウンロードに失敗しました。', 'error', {
+        title: 'ZIPを作成できませんでした',
+        duration: 6200,
+      });
+    } finally {
+      button.disabled = false;
+    }
   });
 
   document.getElementById('entry-list')?.addEventListener('click', async (event) => {
@@ -894,6 +931,7 @@ function bindEvents() {
     }
 
     setMessage(message, result.message || '保存しました。', 'success');
+    showFlashMessage(result.message || '保存しました。', 'success', { title: 'フォーム設定を更新しました', duration: 3200 });
     adminState.forms = result.forms || [];
     adminState.activeFormId = result.form?.id || adminState.activeFormId;
     renderOverallStats();

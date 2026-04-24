@@ -20,7 +20,7 @@ page_header('ログイン', 'auth-page');
         <form id="login-form" class="stack-form">
             <label>
                 <span>ログインIDまたはメールアドレス</span>
-                <input type="text" name="email" required placeholder="user1 または user1@example.jp" autocomplete="username">
+                <input type="text" name="identifier" required placeholder="user または user@example.jp" autocomplete="username">
             </label>
             <label>
                 <span>パスワード</span>

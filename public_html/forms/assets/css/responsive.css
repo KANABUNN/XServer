@@ -1,0 +1,56 @@
+@media (max-width: 1024px) {
+    .topbar {
+        padding: 20px 18px;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .page-shell {
+        padding: 18px;
+    }
+}
+
+@media (max-width: 720px) {
+    .card,
+    .subcard,
+    .mini-info-card,
+    .timeline-item,
+    .field-card,
+    .response-card,
+    .form-nav-item,
+    .list-item,
+    .history-item,
+    .form-block {
+        padding: 14px;
+        border-radius: 14px;
+    }
+
+    .topbar-actions,
+    .section-title-row,
+    .workspace-header-main,
+    .workspace-tab-list,
+    .tab-list,
+    .public-submit-bar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .btn,
+    .workspace-tab-button,
+    .tab-button {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 560px) {
+    .auth-layout,
+    .public-shell,
+    .page-shell {
+        padding: 14px;
+    }
+
+    .card {
+        padding: 14px;
+    }
+}

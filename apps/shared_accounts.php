@@ -29,19 +29,32 @@ function shared_accounts_db_config(array $baseConfig = [], array $fallbackConfig
         $configs[] = $fallback;
     }
 
+    $build = static function (array $db, string $defaultDbName = 'fitsc_account'): array {
+        return [
+            'host' => (string)($db['host'] ?? 'localhost'),
+            'port' => (int)($db['port'] ?? 3306),
+            'dbname' => (string)($db['dbname'] ?? $db['database'] ?? $defaultDbName),
+            'charset' => (string)($db['charset'] ?? 'utf8mb4'),
+            'user' => (string)($db['user'] ?? $db['username'] ?? ''),
+            'pass' => (string)($db['pass'] ?? $db['password'] ?? ''),
+        ];
+    };
+
+    // 1. 明示的な account 用接続を最優先
     foreach ($configs as $config) {
-        $accountDb = $config['account_db'] ?? null;
-        if (is_array($accountDb) && ($accountDb['host'] ?? '') !== '' && ($accountDb['user'] ?? $accountDb['username'] ?? '') !== '') {
-            return [
-                'host' => (string)($accountDb['host'] ?? 'localhost'),
-                'port' => (int)($accountDb['port'] ?? 3306),
-                'dbname' => (string)($accountDb['dbname'] ?? 'fitsc_account'),
-                'charset' => (string)($accountDb['charset'] ?? 'utf8mb4'),
-                'user' => (string)($accountDb['user'] ?? $accountDb['username'] ?? ''),
-                'pass' => (string)($accountDb['pass'] ?? $accountDb['password'] ?? ''),
-            ];
+        $accountConnection = $config['db_connections']['account'] ?? null;
+        if (is_array($accountConnection) && ($accountConnection['host'] ?? '') !== '' && ($accountConnection['user'] ?? $accountConnection['username'] ?? '') !== '') {
+            return $build($accountConnection, 'fitsc_account');
         }
 
+        $accountDb = $config['account_db'] ?? null;
+        if (is_array($accountDb) && ($accountDb['host'] ?? '') !== '' && ($accountDb['user'] ?? $accountDb['username'] ?? '') !== '') {
+            return $build($accountDb, 'fitsc_account');
+        }
+    }
+
+    // 2. 明示設定がないときだけ既定 db を fitsc_account に読み替えて使う
+    foreach ($configs as $config) {
         $db = $config['db'] ?? null;
         if (!is_array($db)) {
             continue;
@@ -53,14 +66,7 @@ function shared_accounts_db_config(array $baseConfig = [], array $fallbackConfig
             continue;
         }
 
-        return [
-            'host' => $host,
-            'port' => (int)($db['port'] ?? 3306),
-            'dbname' => 'fitsc_account',
-            'charset' => (string)($db['charset'] ?? 'utf8mb4'),
-            'user' => $user,
-            'pass' => (string)($db['pass'] ?? $db['password'] ?? ''),
-        ];
+        return $build($db, 'fitsc_account');
     }
 
     throw new RuntimeException('共通アカウントDB接続設定が見つかりません。config.php に account_db を追加するか、既存 MySQL 設定から fitsc_account を参照できるようにしてください。');

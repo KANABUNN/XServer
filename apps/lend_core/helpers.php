@@ -98,6 +98,7 @@ function page_header(string $title, string $bodyClass = ''): void
     <title>{$title} | {$appName}</title>
     <meta name="csrf-token" content="{$csrf}">
     <link rel="stylesheet" href="assets/css/styles.css">
+    <link rel="stylesheet" href="assets/css/responsive.css">
 </head>
 <body class="{$bodyClass}">
 HTML;

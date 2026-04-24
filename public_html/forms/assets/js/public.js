@@ -361,7 +361,8 @@ function renderActiveForm() {
   document.getElementById('draft-clear-button')?.addEventListener('click', () => {
     clearDraft(form.id);
     renderActiveForm();
-    setMessage(message, '入力途中の内容をクリアしました。', 'info');
+    clearMessage(message);
+    showFlashMessage('入力途中の内容をクリアしました。', 'info', { title: '入力を初期化しました' });
   });
 
   submitForm?.addEventListener('submit', async (event) => {
@@ -369,18 +370,27 @@ function renderActiveForm() {
     const formData = new FormData(submitForm);
     const submitButton = submitForm.querySelector('button[type="submit"]');
     submitButton.disabled = true;
-    setMessage(message, '送信中です...', 'info');
+    clearMessage(message);
     try {
       const result = await apiPostForm('api/submit.php', formData);
       if (!result.ok) {
-        setMessage(message, result.message || '送信に失敗しました。', 'error');
+        showFlashMessage(result.message || '送信に失敗しました。', 'error', {
+          title: '送信できませんでした',
+          duration: 6200,
+        });
         return;
       }
       clearDraft(form.id);
-      setMessage(message, result.message || '送信しました。', 'success');
       submitForm.reset();
+      showFlashMessage(result.message || '送信しました。', 'success', {
+        title: result.status === 'updated' ? '更新を受け付けました' : '送信を受け付けました',
+        duration: 5200,
+      });
     } catch (error) {
-      setMessage(message, '通信に失敗しました。', 'error');
+      showFlashMessage('通信に失敗しました。時間をおいて再度お試しください。', 'error', {
+        title: '通信エラー',
+        duration: 6200,
+      });
     } finally {
       submitButton.disabled = false;
     }

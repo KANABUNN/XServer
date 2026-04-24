@@ -13,12 +13,19 @@ page_header('汎用フォーム', 'forms-public-page');
         </div>
     </div>
     <div class="topbar-actions">
+        <button type="button" class="btn ghost public-drawer-toggle" id="public-drawer-open" aria-controls="public-sidebar" aria-expanded="false">フォーム一覧</button>
         <a class="btn ghost" href="login.php">管理者ログイン</a>
     </div>
 </header>
 
+<div class="public-drawer-backdrop" id="public-drawer-backdrop" hidden></div>
+
 <main class="page-shell public-app-shell">
-    <aside class="public-sidebar card glass-card">
+    <aside class="public-sidebar card glass-card" id="public-sidebar" aria-label="提出先フォーム一覧">
+        <div class="public-sidebar-mobile-head">
+            <strong>提出先フォーム</strong>
+            <button type="button" class="btn ghost btn-compact public-drawer-close" id="public-drawer-close" aria-label="フォーム一覧を閉じる">閉じる</button>
+        </div>
         <section class="public-sidebar-section sidebar-hero-block">
             <div>
                 <p class="eyebrow">Navigator</p>
@@ -87,7 +94,7 @@ page_header('汎用フォーム', 'forms-public-page');
                     <div id="public-availability-panel" class="stack-list"></div>
                 </section>
 
-                <section class="card public-info-panel">
+                <section class="card public-info-panel public-summary-card">
                     <h3>フォーム概要</h3>
                     <div id="public-summary-panel" class="stack-list"></div>
                 </section>

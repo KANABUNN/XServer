@@ -35,22 +35,18 @@ body {
     color: var(--text);
 }
 
-body.forms-public-page,
-body.forms-admin-page {
+body,
+body *:not(input):not(textarea):not(select):not(option):not([contenteditable="true"]):not(.allow-select) {
     -webkit-user-select: none;
     user-select: none;
 }
 
-body.forms-public-page input,
-body.forms-public-page textarea,
-body.forms-public-page select,
-body.forms-public-page option,
-body.forms-public-page .allow-select,
-body.forms-admin-page input,
-body.forms-admin-page textarea,
-body.forms-admin-page select,
-body.forms-admin-page option,
-body.forms-admin-page .allow-select {
+input,
+textarea,
+select,
+option,
+.allow-select,
+[contenteditable="true"] {
     -webkit-user-select: text;
     user-select: text;
 }
@@ -1252,12 +1248,54 @@ body.forms-public-page {
         align-items: stretch;
         flex-direction: column;
     }
+
+    .public-site-header {
+        position: static;
+        top: auto;
+        padding: 18px 20px;
+        backdrop-filter: none;
+        box-shadow: 0 10px 24px rgba(15, 28, 49, 0.12);
+    }
+
+    .public-site-header__brand {
+        align-items: flex-start;
+    }
+
+    .topbar-actions {
+        width: 100%;
+    }
+
+    .topbar-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
 }
 
 @media (max-width: 720px) {
     .public-site-header,
     .public-app-shell {
         padding-inline: 16px;
+    }
+
+    .public-site-header {
+        gap: 12px;
+        padding-top: 16px;
+        padding-bottom: 16px;
+    }
+
+    .public-site-header .muted {
+        display: none;
+    }
+
+    .public-site-header__brand {
+        gap: 12px;
+    }
+
+    .brand-mark {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        font-size: 1rem;
     }
 
     .public-app-shell {
@@ -1269,4 +1307,82 @@ body.forms-public-page {
     .public-info-panel {
         padding: 18px;
     }
+}
+
+
+.flash-message-stack {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 120;
+    display: grid;
+    gap: 10px;
+    width: min(92vw, 620px);
+    pointer-events: none;
+}
+
+.flash-message {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: var(--shadow-strong);
+    color: #fff;
+    background: rgba(22, 32, 43, 0.94);
+    transform: translateY(-16px);
+    opacity: 0;
+    transition: transform 0.22s ease, opacity 0.22s ease;
+    pointer-events: auto;
+    backdrop-filter: blur(12px);
+}
+
+.flash-message.visible {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.flash-message.leaving {
+    transform: translateY(-12px);
+    opacity: 0;
+}
+
+.flash-message.success {
+    background: linear-gradient(135deg, rgba(12, 122, 56, 0.96), rgba(8, 96, 44, 0.96));
+}
+
+.flash-message.error {
+    background: linear-gradient(135deg, rgba(180, 35, 24, 0.97), rgba(138, 24, 15, 0.97));
+}
+
+.flash-message.info {
+    background: linear-gradient(135deg, rgba(31, 95, 174, 0.96), rgba(23, 74, 135, 0.96));
+}
+
+.flash-message__body {
+    display: grid;
+    gap: 4px;
+}
+
+.flash-message__title {
+    font-size: 0.92rem;
+}
+
+.flash-message__text {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.flash-message__close {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px;
 }
