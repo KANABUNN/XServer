@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#f4f7fb">
-  <title>400 Bad Request | 総合管理事務局 運営ウェブサイト</title>
+  <title>401 Unauthorized | 総合管理事務局 運営ウェブサイト</title>
   <style>
     :root {
       --bg: #f4f7fb;
@@ -303,23 +303,23 @@
     <section class="error-card">
       <aside class="error-status" aria-label="HTTP status">
         <p class="status-label">HTTP Status</p>
-        <p class="error-code">400</p>
-        <p class="error-en">Bad Request</p>
+        <p class="error-code">401</p>
+        <p class="error-en">Unauthorized</p>
       </aside>
 
       <section class="error-main">
         <p class="site-kicker">総合管理事務局 運営ウェブサイト</p>
-        <h1 id="error-title">リクエストを正しく処理できませんでした</h1>
-        <p class="lead">送信された内容、URL、またはアクセス方法に不正な形式が含まれている可能性があります。</p>
+        <h1 id="error-title">認証が必要です</h1>
+        <p class="lead">このページを表示するには、ログインまたは認証情報の入力が必要です。</p>
 
         <div class="detail-box" aria-label="エラーの詳細">
           <div class="detail-row">
             <strong>想定原因</strong>
-            <span>入力内容が壊れている、URLに不要な文字が含まれている、またはブラウザから送信された情報をサーバーが解釈できなかった可能性があります。</span>
+            <span>認証情報が未入力である、入力内容が正しくない、またはセッションが期限切れになっている可能性があります。</span>
           </div>
           <div class="detail-row">
             <strong>対応方法</strong>
-            <span>URLを確認し、必要に応じてページを開き直してください。フォーム送信中の場合は、入力内容を確認してから再度送信してください。</span>
+            <span>ログイン画面に戻るか、認証情報を確認して再度アクセスしてください。</span>
           </div>
         </div>
 
@@ -328,7 +328,7 @@
           <button class="button button-secondary" type="button" onclick="if (history.length > 1) history.back(); else location.href='/'">前のページへ戻る</button>
         </div>
 
-        <p class="note">管理者へ連絡する場合は、表示された番号 <span class="request-id">400</span> と発生時刻を併せて伝えてください。</p>
+        <p class="note">管理者へ連絡する場合は、表示された番号 <span class="request-id">401</span> と発生時刻を併せて伝えてください。</p>
       </section>
     </section>
   </main>
