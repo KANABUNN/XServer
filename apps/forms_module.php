@@ -954,13 +954,28 @@ function forms_distribution_allowed_extensions(): array
     return ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'zip', 'csv', 'txt'];
 }
 
+function forms_upload_error_message(int $errorCode, string $label = 'ファイル'): string
+{
+    return match ($errorCode) {
+        UPLOAD_ERR_INI_SIZE => $label . 'のサイズがサーバー設定 upload_max_filesize を超えています。',
+        UPLOAD_ERR_FORM_SIZE => $label . 'のサイズがフォーム側の上限を超えています。',
+        UPLOAD_ERR_PARTIAL => $label . 'のアップロードが途中で中断されました。',
+        UPLOAD_ERR_NO_FILE => $label . 'が選択されていません。',
+        UPLOAD_ERR_NO_TMP_DIR => 'サーバー側の一時保存ディレクトリが利用できません。',
+        UPLOAD_ERR_CANT_WRITE => 'サーバー側で' . $label . 'を書き込めませんでした。',
+        UPLOAD_ERR_EXTENSION => 'PHP拡張機能により' . $label . 'のアップロードが停止されました。',
+        default => $label . 'のアップロードに失敗しました。',
+    };
+}
+
 function forms_validate_distribution_file(array $file): void
 {
-    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-        throw new InvalidArgumentException('配布ファイルが選択されていません。');
+    $errorCode = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($errorCode === UPLOAD_ERR_NO_FILE) {
+        throw new InvalidArgumentException(forms_upload_error_message($errorCode, '配布ファイル'));
     }
-    if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
-        throw new RuntimeException('配布ファイルのアップロードに失敗しました。');
+    if ($errorCode !== UPLOAD_ERR_OK) {
+        throw new RuntimeException(forms_upload_error_message($errorCode, '配布ファイル'));
     }
 
     $originalName = (string)($file['name'] ?? '');
@@ -1014,6 +1029,24 @@ function forms_delete_relative_file(?string $relativePath): void
     }
 }
 
+function forms_apply_distribution_settings_from_input(array $settings, array $formData): array
+{
+    if (array_key_exists('distribution_enabled', $formData)) {
+        $settings['distribution_enabled'] = forms_normalize_boolean($formData['distribution_enabled']);
+    }
+    if (array_key_exists('distribution_title', $formData)) {
+        $settings['distribution_title'] = mb_substr(trim((string)($formData['distribution_title'] ?? '')), 0, 150, 'UTF-8');
+    }
+    if (array_key_exists('distribution_body', $formData)) {
+        $settings['distribution_body'] = mb_substr(trim((string)($formData['distribution_body'] ?? '')), 0, 5000, 'UTF-8');
+    }
+    if (array_key_exists('distribution_download_label', $formData)) {
+        $settings['distribution_download_label'] = mb_substr(trim((string)($formData['distribution_download_label'] ?? '資料をダウンロード')), 0, 80, 'UTF-8') ?: '資料をダウンロード';
+    }
+
+    return $settings;
+}
+
 function forms_update_form_settings(int $formId, array $settings): void
 {
     $stmt = forms_db()->prepare('UPDATE managed_forms SET settings_json = :settings_json WHERE id = :id');
@@ -1030,7 +1063,7 @@ function forms_update_form_settings(int $formId, array $settings): void
     }
 }
 
-function forms_save_distribution_file(int $formId, array $file): array
+function forms_save_distribution_file(int $formId, array $file, array $formData = []): array
 {
     forms_bootstrap();
     $form = forms_load_form($formId, false);
@@ -1043,7 +1076,11 @@ function forms_save_distribution_file(int $formId, array $file): array
     $newPath = forms_upload_root() . '/' . $meta['distribution_file_relative_path'];
 
     try {
-        $settings = array_merge($form['settings'], $meta);
+        $settings = forms_apply_distribution_settings_from_input($form['settings'], $formData);
+        $settings = array_merge($settings, $meta);
+        if (!empty($settings['distribution_file_relative_path']) && empty($settings['distribution_title']) && empty($settings['distribution_body'])) {
+            $settings['distribution_title'] = '配布資料';
+        }
         forms_update_form_settings($formId, $settings);
         if ($oldPath !== '' && $oldPath !== $meta['distribution_file_relative_path']) {
             forms_delete_relative_file($oldPath);

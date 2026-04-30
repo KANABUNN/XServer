@@ -5,9 +5,19 @@ forms_bootstrap();
 require_post();
 api_require_admin();
 
+$contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+if ($contentLength > 0 && empty($_POST) && empty($_FILES)) {
+    $postMaxSize = ini_get('post_max_size') ?: '不明';
+    $uploadMaxSize = ini_get('upload_max_filesize') ?: '不明';
+    json_response([
+        'ok' => false,
+        'message' => 'アップロード容量がPHPの上限を超えている可能性があります。post_max_size=' . $postMaxSize . ' / upload_max_filesize=' . $uploadMaxSize . ' を確認してください。',
+    ], 413);
+}
+
 $csrfToken = $_POST['csrf_token'] ?? '';
 if (!verify_csrf($csrfToken)) {
-    json_response(['ok' => false, 'message' => 'CSRF トークンが不正です。'], 419);
+    json_response(['ok' => false, 'message' => 'CSRF トークンが不正です。画面を再読み込みしてから再度お試しください。'], 419);
 }
 
 $action = (string)($_POST['action'] ?? 'upload');
@@ -22,7 +32,7 @@ try {
         if (!is_array($file)) {
             json_response(['ok' => false, 'message' => '配布ファイルを選択してください。'], 422);
         }
-        $form = forms_save_distribution_file($formId, $file);
+        $form = forms_save_distribution_file($formId, $file, $_POST);
         json_response([
             'ok' => true,
             'message' => '配布ファイルを保存しました。',

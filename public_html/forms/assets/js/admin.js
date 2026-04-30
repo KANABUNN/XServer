@@ -817,9 +817,22 @@ async function uploadDistributionFile() {
   }
 
   const button = document.getElementById('upload-distribution-file-button');
+  const editor = document.getElementById('form-editor');
+  const distributionEnabled = editor?.elements?.distribution_enabled;
+
+  // 配布ファイル保存時は、表示設定・案内文・ボタン文言も同時に保存する。
+  // 未チェックのままアップロードした場合は、利用者画面で見えるように自動で有効化する。
+  if (distributionEnabled && !distributionEnabled.checked) {
+    distributionEnabled.checked = true;
+  }
+
   const formData = new FormData();
   formData.set('action', 'upload');
   formData.set('form_id', String(activeForm.id));
+  formData.set('distribution_enabled', distributionEnabled?.checked ? '1' : '0');
+  formData.set('distribution_title', editor?.elements?.distribution_title?.value || '');
+  formData.set('distribution_body', editor?.elements?.distribution_body?.value || '');
+  formData.set('distribution_download_label', editor?.elements?.distribution_download_label?.value || '資料をダウンロード');
   formData.set('distribution_file', fileInput.files[0]);
   button && (button.disabled = true);
   setMessage(message, '配布ファイルを保存中です...', 'info');
@@ -835,8 +848,9 @@ async function uploadDistributionFile() {
     showFlashMessage(result.message || '配布ファイルを保存しました。', 'success', { title: '配布ファイルを更新しました' });
     mergeUpdatedForm(result);
   } catch (error) {
-    setMessage(message, '通信に失敗しました。', 'error');
-    showFlashMessage('通信に失敗しました。時間をおいて再度お試しください。', 'error', { title: '通信エラー' });
+    const errorMessage = error?.message || '通信に失敗しました。';
+    setMessage(message, errorMessage, 'error');
+    showFlashMessage(errorMessage, 'error', { title: '通信エラー' });
   } finally {
     button && (button.disabled = false);
   }
@@ -867,8 +881,9 @@ async function deleteDistributionFile() {
     showFlashMessage(result.message || '配布ファイルを削除しました。', 'success', { title: '配布ファイルを削除しました' });
     mergeUpdatedForm(result);
   } catch (error) {
-    setMessage(message, '通信に失敗しました。', 'error');
-    showFlashMessage('通信に失敗しました。時間をおいて再度お試しください。', 'error', { title: '通信エラー' });
+    const errorMessage = error?.message || '通信に失敗しました。';
+    setMessage(message, errorMessage, 'error');
+    showFlashMessage(errorMessage, 'error', { title: '通信エラー' });
   } finally {
     button && (button.disabled = false);
   }

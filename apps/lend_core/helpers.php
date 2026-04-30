@@ -85,10 +85,34 @@ function reservation_window_allows_return(array $reservation): bool
     return $now <= $windowEnd;
 }
 
+function asset_url(string $path): string
+{
+    $path = trim($path);
+    if ($path === '') {
+        return '';
+    }
+
+    if (preg_match('/^(https?:|\/\/|data:)/i', $path) === 1) {
+        return $path;
+    }
+
+    $pathOnly = preg_split('/[?#]/', $path, 2)[0] ?? $path;
+    $scriptDir = dirname((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
+    $candidate = $scriptDir . '/' . ltrim($pathOnly, '/');
+    if ($pathOnly !== '' && is_file($candidate)) {
+        $separator = str_contains($path, '?') ? '&' : '?';
+        return $path . $separator . 'v=' . filemtime($candidate);
+    }
+
+    return $path;
+}
+
 function page_header(string $title, string $bodyClass = ''): void
 {
     $csrf = csrf_token();
     $appName = h(app_config('app_name', '備品貸出システム'));
+    $stylesUrl = h(asset_url('assets/css/styles.css'));
+    $responsiveUrl = h(asset_url('assets/css/responsive.css'));
     echo <<<HTML
 <!DOCTYPE html>
 <html lang="ja">
@@ -97,8 +121,8 @@ function page_header(string $title, string $bodyClass = ''): void
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{$title} | {$appName}</title>
     <meta name="csrf-token" content="{$csrf}">
-    <link rel="stylesheet" href="assets/css/styles.css">
-    <link rel="stylesheet" href="assets/css/responsive.css">
+    <link rel="stylesheet" href="{$stylesUrl}">
+    <link rel="stylesheet" href="{$responsiveUrl}">
 </head>
 <body class="{$bodyClass}">
 HTML;
@@ -107,7 +131,7 @@ HTML;
 function page_footer(array $scripts = []): void
 {
     foreach ($scripts as $script) {
-        echo '<script src="' . h($script) . '"></script>';
+        echo '<script src="' . h(asset_url($script)) . '"></script>';
     }
     echo '</body></html>';
 }

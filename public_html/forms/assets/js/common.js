@@ -1,11 +1,37 @@
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
+async function readApiJson(response) {
+  const text = await response.text();
+  let data = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch (error) {
+      data = null;
+    }
+  }
+
+  if (!data || typeof data !== 'object') {
+    const fallbackMessage = text
+      ? text.replace(/<[^>]*>/g, '').trim().slice(0, 300)
+      : 'サーバーから空の応答が返されました。';
+    throw new Error(fallbackMessage || 'サーバー応答を解析できませんでした。');
+  }
+
+  if (!response.ok && data.ok !== false) {
+    data.ok = false;
+  }
+
+  return data;
+}
+
 async function apiGet(url) {
   const response = await fetch(url, {
     method: 'GET',
     credentials: 'same-origin',
   });
-  return response.json();
+  return readApiJson(response);
 }
 
 async function apiPost(url, payload = {}) {
@@ -17,7 +43,7 @@ async function apiPost(url, payload = {}) {
     credentials: 'same-origin',
     body: JSON.stringify({ csrf_token: csrfToken, ...payload }),
   });
-  return response.json();
+  return readApiJson(response);
 }
 
 async function apiPostForm(url, formData) {
@@ -27,7 +53,7 @@ async function apiPostForm(url, formData) {
     credentials: 'same-origin',
     body: formData,
   });
-  return response.json();
+  return readApiJson(response);
 }
 
 function setMessage(element, message, type = 'info') {
