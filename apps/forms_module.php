@@ -387,6 +387,15 @@ function forms_default_settings(): array
         'file_label' => '添付ファイル',
         'allowed_extensions' => 'pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,zip',
         'max_upload_size_mb' => 5,
+        'distribution_enabled' => false,
+        'distribution_title' => '',
+        'distribution_body' => '',
+        'distribution_download_label' => '資料をダウンロード',
+        'distribution_file_original_name' => '',
+        'distribution_file_stored_name' => '',
+        'distribution_file_relative_path' => '',
+        'distribution_file_size_bytes' => 0,
+        'distribution_file_uploaded_at' => '',
         'public_start_date' => '',
         'public_start_time' => '',
         'public_end_date' => '',
@@ -655,6 +664,15 @@ function forms_save_form(array $formData, array $fields): array
     }
 
     $settings = forms_default_settings();
+    if ($id > 0) {
+        $existingSettingsStmt = $pdo->prepare('SELECT settings_json FROM managed_forms WHERE id = :id LIMIT 1');
+        $existingSettingsStmt->execute([':id' => $id]);
+        $existingSettingsJson = $existingSettingsStmt->fetchColumn();
+        if (is_string($existingSettingsJson)) {
+            $settings = forms_decode_settings($existingSettingsJson);
+        }
+    }
+
     $settings['enable_date_field'] = forms_normalize_boolean($formData['enable_date_field'] ?? false);
     $settings['date_required'] = forms_normalize_boolean($formData['date_required'] ?? false);
     $settings['date_label'] = trim((string)($formData['date_label'] ?? $settings['date_label'])) ?: '希望日';
@@ -663,6 +681,10 @@ function forms_save_form(array $formData, array $fields): array
     $settings['file_label'] = trim((string)($formData['file_label'] ?? $settings['file_label'])) ?: '添付ファイル';
     $settings['allowed_extensions'] = trim((string)($formData['allowed_extensions'] ?? $settings['allowed_extensions'])) ?: $settings['allowed_extensions'];
     $settings['max_upload_size_mb'] = max(1, min(30, (int)($formData['max_upload_size_mb'] ?? $settings['max_upload_size_mb'])));
+    $settings['distribution_enabled'] = forms_normalize_boolean($formData['distribution_enabled'] ?? false);
+    $settings['distribution_title'] = mb_substr(trim((string)($formData['distribution_title'] ?? '')), 0, 150, 'UTF-8');
+    $settings['distribution_body'] = mb_substr(trim((string)($formData['distribution_body'] ?? '')), 0, 5000, 'UTF-8');
+    $settings['distribution_download_label'] = mb_substr(trim((string)($formData['distribution_download_label'] ?? '資料をダウンロード')), 0, 80, 'UTF-8') ?: '資料をダウンロード';
     $settings['public_start_date'] = forms_validate_filter_date($formData['public_start_date'] ?? $settings['public_start_date'] ?? '');
     $settings['public_start_time'] = forms_validate_filter_time($formData['public_start_time'] ?? $settings['public_start_time'] ?? '');
     $settings['public_end_date'] = forms_validate_filter_date($formData['public_end_date'] ?? $settings['public_end_date'] ?? '');
@@ -764,6 +786,17 @@ function forms_delete_form(int $formId): void
     $pdo = forms_db();
 
     $relativePaths = [];
+    $formSettingsStmt = $pdo->prepare('SELECT settings_json FROM managed_forms WHERE id = :id LIMIT 1');
+    $formSettingsStmt->execute([':id' => $formId]);
+    $formSettingsJson = $formSettingsStmt->fetchColumn();
+    if (is_string($formSettingsJson)) {
+        $formSettings = forms_decode_settings($formSettingsJson);
+        $distributionPath = trim((string)($formSettings['distribution_file_relative_path'] ?? ''));
+        if ($distributionPath !== '') {
+            $relativePaths[] = $distributionPath;
+        }
+    }
+
     $pathStmt = $pdo->prepare('SELECT uploaded_relative_path FROM managed_form_submissions WHERE form_id = :form_id AND uploaded_relative_path IS NOT NULL AND uploaded_relative_path != ""');
     $pathStmt->execute([':form_id' => $formId]);
     foreach ($pathStmt->fetchAll(PDO::FETCH_COLUMN) as $path) {
@@ -914,6 +947,174 @@ function forms_store_uploaded_file(array $file, array $settings): array
         'uploaded_stored_name' => $stored,
         'uploaded_relative_path' => $subdir . '/' . $stored,
     ];
+}
+
+function forms_distribution_allowed_extensions(): array
+{
+    return ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'zip', 'csv', 'txt'];
+}
+
+function forms_validate_distribution_file(array $file): void
+{
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        throw new InvalidArgumentException('配布ファイルが選択されていません。');
+    }
+    if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('配布ファイルのアップロードに失敗しました。');
+    }
+
+    $originalName = (string)($file['name'] ?? '');
+    $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    if ($extension === '' || !in_array($extension, forms_distribution_allowed_extensions(), true)) {
+        throw new InvalidArgumentException('配布ファイルに使用できない拡張子です。');
+    }
+
+    $maxBytes = 30 * 1024 * 1024;
+    if ((int)($file['size'] ?? 0) > $maxBytes) {
+        throw new InvalidArgumentException('配布ファイルのサイズが上限の30MBを超えています。');
+    }
+}
+
+function forms_store_distribution_file(int $formId, array $file): array
+{
+    forms_validate_distribution_file($file);
+    $originalName = (string)($file['name'] ?? '');
+    $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    $subdir = '_form_assets/' . $formId . '/' . date('Y/m');
+    $root = forms_upload_root();
+    $targetDir = $root . '/' . $subdir;
+    if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+        throw new RuntimeException('配布ファイル保存先を作成できません。');
+    }
+
+    $stored = bin2hex(random_bytes(16)) . '.' . $extension;
+    $targetPath = $targetDir . '/' . $stored;
+    if (!move_uploaded_file((string)$file['tmp_name'], $targetPath)) {
+        throw new RuntimeException('配布ファイルの保存に失敗しました。');
+    }
+
+    return [
+        'distribution_file_original_name' => $originalName,
+        'distribution_file_stored_name' => $stored,
+        'distribution_file_relative_path' => $subdir . '/' . $stored,
+        'distribution_file_size_bytes' => (int)($file['size'] ?? 0),
+        'distribution_file_uploaded_at' => now_str(),
+    ];
+}
+
+function forms_delete_relative_file(?string $relativePath): void
+{
+    $relativePath = trim((string)$relativePath);
+    if ($relativePath === '' || str_contains($relativePath, '..')) {
+        return;
+    }
+    $fullPath = forms_upload_root() . '/' . ltrim($relativePath, '/');
+    if (is_file($fullPath)) {
+        @unlink($fullPath);
+    }
+}
+
+function forms_update_form_settings(int $formId, array $settings): void
+{
+    $stmt = forms_db()->prepare('UPDATE managed_forms SET settings_json = :settings_json WHERE id = :id');
+    $stmt->execute([
+        ':settings_json' => forms_encode_json($settings),
+        ':id' => $formId,
+    ]);
+    if ($stmt->rowCount() < 1) {
+        $existsStmt = forms_db()->prepare('SELECT COUNT(*) FROM managed_forms WHERE id = :id');
+        $existsStmt->execute([':id' => $formId]);
+        if ((int)$existsStmt->fetchColumn() < 1) {
+            throw new InvalidArgumentException('対象フォームが見つかりません。');
+        }
+    }
+}
+
+function forms_save_distribution_file(int $formId, array $file): array
+{
+    forms_bootstrap();
+    $form = forms_load_form($formId, false);
+    if (!$form) {
+        throw new InvalidArgumentException('対象フォームが見つかりません。');
+    }
+
+    $oldPath = (string)($form['settings']['distribution_file_relative_path'] ?? '');
+    $meta = forms_store_distribution_file($formId, $file);
+    $newPath = forms_upload_root() . '/' . $meta['distribution_file_relative_path'];
+
+    try {
+        $settings = array_merge($form['settings'], $meta);
+        forms_update_form_settings($formId, $settings);
+        if ($oldPath !== '' && $oldPath !== $meta['distribution_file_relative_path']) {
+            forms_delete_relative_file($oldPath);
+        }
+    } catch (Throwable $e) {
+        if (is_file($newPath)) {
+            @unlink($newPath);
+        }
+        throw $e;
+    }
+
+    return forms_load_form($formId, false) ?? [];
+}
+
+function forms_delete_distribution_file(int $formId): array
+{
+    forms_bootstrap();
+    $form = forms_load_form($formId, false);
+    if (!$form) {
+        throw new InvalidArgumentException('対象フォームが見つかりません。');
+    }
+
+    $settings = $form['settings'];
+    $oldPath = (string)($settings['distribution_file_relative_path'] ?? '');
+    $settings['distribution_file_original_name'] = '';
+    $settings['distribution_file_stored_name'] = '';
+    $settings['distribution_file_relative_path'] = '';
+    $settings['distribution_file_size_bytes'] = 0;
+    $settings['distribution_file_uploaded_at'] = '';
+    forms_update_form_settings($formId, $settings);
+    forms_delete_relative_file($oldPath);
+
+    return forms_load_form($formId, false) ?? [];
+}
+
+function forms_distribution_file_full_path(array $form): string
+{
+    $relativePath = trim((string)($form['settings']['distribution_file_relative_path'] ?? ''));
+    if ($relativePath === '' || str_contains($relativePath, '..')) {
+        throw new InvalidArgumentException('配布ファイルが設定されていません。');
+    }
+    $root = realpath(forms_upload_root());
+    $path = realpath(forms_upload_root() . '/' . ltrim($relativePath, '/'));
+    if ($root === false || $path === false || !str_starts_with($path, $root . DIRECTORY_SEPARATOR) || !is_file($path)) {
+        throw new InvalidArgumentException('配布ファイルが見つかりません。');
+    }
+    return $path;
+}
+
+function forms_output_distribution_file(array $form): void
+{
+    $path = forms_distribution_file_full_path($form);
+    $downloadName = forms_safe_download_name((string)($form['settings']['distribution_file_original_name'] ?? ''), basename($path));
+    $mime = 'application/octet-stream';
+    if (function_exists('finfo_open')) {
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        if ($finfo) {
+            $detected = finfo_file($finfo, $path);
+            if (is_string($detected) && $detected !== '') {
+                $mime = $detected;
+            }
+            finfo_close($finfo);
+        }
+    }
+
+    header('Content-Type: ' . $mime);
+    header('Content-Length: ' . (string)filesize($path));
+    header('Content-Disposition: attachment; filename="' . addcslashes($downloadName, "\\\"") . '"; filename*=UTF-8\'\'' . rawurlencode($downloadName));
+    header('Cache-Control: private, max-age=0, must-revalidate');
+    readfile($path);
+    exit;
 }
 
 function forms_find_existing_submission(int $formId, string $normalizedEmail, string $normalizedOrganization): ?array

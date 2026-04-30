@@ -214,6 +214,37 @@ page_header('フォーム管理', 'forms-admin-page');
                         </label>
                     </section>
 
+                    <section class="subcard distribution-file-card">
+                        <h3>利用者配布ファイル</h3>
+                        <p class="small-note">利用者にダウンロードしてもらう様式・資料と、利用者画面に表示する案内文を設定します。固定文は表示せず、ここで入力した文章だけを表示します。</p>
+                        <div class="toggle-stack">
+                            <label class="switch-card"><input type="checkbox" name="distribution_enabled"><span>利用者画面に配布資料欄を表示</span></label>
+                        </div>
+                        <label>
+                            <span>配布欄タイトル</span>
+                            <input type="text" name="distribution_title" placeholder="例：提出用様式">
+                        </label>
+                        <label>
+                            <span>利用者に表示する案内文</span>
+                            <textarea name="distribution_body" rows="5" placeholder="例：下記の様式を必要に応じて使用してください。"></textarea>
+                        </label>
+                        <label>
+                            <span>ダウンロードボタン表示</span>
+                            <input type="text" name="distribution_download_label" value="資料をダウンロード">
+                        </label>
+                        <div class="distribution-upload-panel">
+                            <div id="distribution-file-status" class="distribution-file-status empty-state">配布ファイルは未設定です。</div>
+                            <label class="form-block">
+                                <span>配布ファイルを選択</span>
+                                <input type="file" id="distribution-file-input">
+                            </label>
+                            <div class="inline-actions">
+                                <button type="button" class="btn" id="upload-distribution-file-button">配布ファイルを保存</button>
+                            </div>
+                            <p class="small-note">保存済みフォームを選択してからアップロードしてください。対応拡張子は PDF / Office / 画像 / ZIP / CSV / TXT、上限は30MBです。</p>
+                        </div>
+                    </section>
+
                     <section class="subcard">
                         <h3>公開期間</h3>
                         <div class="two-col">

@@ -85,6 +85,63 @@ function syncDeleteButtonState(form = null) {
   button.textContent = form?.id ? 'このフォームを削除' : '保存済みフォームを選択すると削除できます';
 }
 
+function formatFileSize(bytes = 0) {
+  const size = Number(bytes || 0);
+  if (!Number.isFinite(size) || size <= 0) return '';
+  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+  if (size >= 1024) return `${Math.ceil(size / 1024)} KB`;
+  return `${size} B`;
+}
+
+function renderDistributionFileStatus(form = null) {
+  const root = document.getElementById('distribution-file-status');
+  if (!root) return;
+  const settings = form?.settings || {};
+  const hasFile = Boolean(settings.distribution_file_relative_path);
+  if (!form || !form.id) {
+    root.className = 'distribution-file-status empty-state';
+    root.innerHTML = '保存済みフォームを選択すると配布ファイルを登録できます。';
+    return;
+  }
+  if (!hasFile) {
+    root.className = 'distribution-file-status empty-state';
+    root.innerHTML = '配布ファイルは未設定です。';
+    return;
+  }
+  const sizeText = formatFileSize(settings.distribution_file_size_bytes);
+  const uploadedAt = settings.distribution_file_uploaded_at ? ` / ${escapeHtml(settings.distribution_file_uploaded_at)}` : '';
+  root.className = 'distribution-file-status file-ready-card';
+  root.innerHTML = `
+    <div class="file-ready-main">
+      <strong>${escapeHtml(settings.distribution_file_original_name || '配布ファイル')}</strong>
+      <div class="small-note">${escapeHtml([sizeText, uploadedAt.replace(/^ \/ /, '')].filter(Boolean).join(' / '))}</div>
+    </div>
+    <div class="inline-actions">
+      <a class="btn btn-small" href="api/admin_download_form_asset.php?form_id=${encodeURIComponent(String(form.id))}" target="_blank" rel="noopener">ダウンロード確認</a>
+      <button type="button" class="btn danger btn-small" id="delete-distribution-file-button">配布ファイルを削除</button>
+    </div>
+  `;
+}
+
+function mergeUpdatedForm(result = {}) {
+  if (Array.isArray(result.forms)) {
+    adminState.forms = result.forms;
+  } else if (result.form?.id) {
+    const index = adminState.forms.findIndex((form) => form.id === result.form.id);
+    if (index >= 0) adminState.forms[index] = result.form;
+  }
+  if (result.form?.id) {
+    adminState.activeFormId = result.form.id;
+  }
+  const activeForm = result.form || getActiveForm();
+  renderOverallStats();
+  renderFormList();
+  renderWorkspaceHeader(activeForm);
+  renderSelectedFormSidebar(activeForm);
+  renderOverview(activeForm);
+  renderDistributionFileStatus(activeForm);
+}
+
 function fieldRowDataToHtml(field = {}) {
   const template = document.getElementById('field-row-template');
   const fragment = template.content.cloneNode(true);
@@ -272,6 +329,8 @@ function renderOverview(form) {
       settings.date_required ? '日付必須' : '日付任意',
       settings.allow_file_upload ? '添付あり' : '添付なし',
       settings.file_required ? '添付必須' : '添付任意',
+      settings.distribution_enabled ? '配布資料表示あり' : '配布資料表示なし',
+      settings.distribution_file_relative_path ? '配布ファイル登録済み' : '配布ファイル未設定',
       (settings.public_start_date || settings.public_end_date || settings.public_start_time || settings.public_end_time)
         ? `公開期間: ${formatAvailabilityWindow(availability, settings)}`
         : '公開期間制限なし',
@@ -331,6 +390,15 @@ function fillEditor(form) {
   editor.elements.file_label.value = form?.settings?.file_label || '添付ファイル';
   editor.elements.allowed_extensions.value = form?.settings?.allowed_extensions || 'pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,zip';
   editor.elements.max_upload_size_mb.value = form?.settings?.max_upload_size_mb ?? 5;
+  if (editor.elements.distribution_enabled) {
+    editor.elements.distribution_enabled.checked = form?.settings?.distribution_enabled ?? false;
+    editor.elements.distribution_title.value = form?.settings?.distribution_title || '';
+    editor.elements.distribution_body.value = form?.settings?.distribution_body || '';
+    editor.elements.distribution_download_label.value = form?.settings?.distribution_download_label || '資料をダウンロード';
+  }
+  renderDistributionFileStatus(form);
+  const distributionFileInput = document.getElementById('distribution-file-input');
+  if (distributionFileInput) distributionFileInput.value = '';
   editor.elements.public_start_date.value = form?.settings?.public_start_date || '';
   editor.elements.public_start_time.value = form?.settings?.public_start_time || '';
   editor.elements.public_end_date.value = form?.settings?.public_end_date || '';
@@ -735,6 +803,77 @@ function buildLatestAttachmentsUrl() {
   return `api/download_latest_attachments.php?${query}`;
 }
 
+async function uploadDistributionFile() {
+  const activeForm = getActiveForm();
+  const message = document.getElementById('admin-message');
+  const fileInput = document.getElementById('distribution-file-input');
+  if (!activeForm?.id) {
+    showFlashMessage('先にフォームを保存してから配布ファイルを登録してください。', 'info', { title: 'フォーム未保存' });
+    return;
+  }
+  if (!fileInput?.files?.length) {
+    showFlashMessage('アップロードする配布ファイルを選択してください。', 'info', { title: 'ファイル未選択' });
+    return;
+  }
+
+  const button = document.getElementById('upload-distribution-file-button');
+  const formData = new FormData();
+  formData.set('action', 'upload');
+  formData.set('form_id', String(activeForm.id));
+  formData.set('distribution_file', fileInput.files[0]);
+  button && (button.disabled = true);
+  setMessage(message, '配布ファイルを保存中です...', 'info');
+  try {
+    const result = await apiPostForm('api/admin_form_asset.php', formData);
+    if (!result.ok) {
+      setMessage(message, result.message || '配布ファイルの保存に失敗しました。', 'error');
+      showFlashMessage(result.message || '配布ファイルの保存に失敗しました。', 'error', { title: '保存できませんでした' });
+      return;
+    }
+    fileInput.value = '';
+    setMessage(message, result.message || '配布ファイルを保存しました。', 'success');
+    showFlashMessage(result.message || '配布ファイルを保存しました。', 'success', { title: '配布ファイルを更新しました' });
+    mergeUpdatedForm(result);
+  } catch (error) {
+    setMessage(message, '通信に失敗しました。', 'error');
+    showFlashMessage('通信に失敗しました。時間をおいて再度お試しください。', 'error', { title: '通信エラー' });
+  } finally {
+    button && (button.disabled = false);
+  }
+}
+
+async function deleteDistributionFile() {
+  const activeForm = getActiveForm();
+  const message = document.getElementById('admin-message');
+  if (!activeForm?.id) return;
+  if (!window.confirm('このフォームの配布ファイルを削除します。よろしいですか。')) {
+    return;
+  }
+
+  const button = document.getElementById('delete-distribution-file-button');
+  const formData = new FormData();
+  formData.set('action', 'delete');
+  formData.set('form_id', String(activeForm.id));
+  button && (button.disabled = true);
+  setMessage(message, '配布ファイルを削除中です...', 'info');
+  try {
+    const result = await apiPostForm('api/admin_form_asset.php', formData);
+    if (!result.ok) {
+      setMessage(message, result.message || '配布ファイルの削除に失敗しました。', 'error');
+      showFlashMessage(result.message || '配布ファイルの削除に失敗しました。', 'error', { title: '削除できませんでした' });
+      return;
+    }
+    setMessage(message, result.message || '配布ファイルを削除しました。', 'success');
+    showFlashMessage(result.message || '配布ファイルを削除しました。', 'success', { title: '配布ファイルを削除しました' });
+    mergeUpdatedForm(result);
+  } catch (error) {
+    setMessage(message, '通信に失敗しました。', 'error');
+    showFlashMessage('通信に失敗しました。時間をおいて再度お試しください。', 'error', { title: '通信エラー' });
+  } finally {
+    button && (button.disabled = false);
+  }
+}
+
 function bindEvents() {
   document.querySelectorAll('[data-workspace-tab]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -892,6 +1031,13 @@ function bindEvents() {
     }
   });
 
+  document.getElementById('upload-distribution-file-button')?.addEventListener('click', uploadDistributionFile);
+  document.getElementById('distribution-file-status')?.addEventListener('click', async (event) => {
+    if (event.target.closest('#delete-distribution-file-button')) {
+      await deleteDistributionFile();
+    }
+  });
+
   document.getElementById('form-editor')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -913,6 +1059,10 @@ function bindEvents() {
         file_label: form.elements.file_label.value,
         allowed_extensions: form.elements.allowed_extensions.value,
         max_upload_size_mb: Number(form.elements.max_upload_size_mb.value || 5),
+        distribution_enabled: form.elements.distribution_enabled?.checked || false,
+        distribution_title: form.elements.distribution_title?.value || '',
+        distribution_body: form.elements.distribution_body?.value || '',
+        distribution_download_label: form.elements.distribution_download_label?.value || '資料をダウンロード',
         public_start_date: form.elements.public_start_date.value,
         public_start_time: form.elements.public_start_time.value,
         public_end_date: form.elements.public_end_date.value,

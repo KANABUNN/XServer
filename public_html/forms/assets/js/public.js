@@ -128,6 +128,7 @@ function renderHero() {
 
   const settings = form.settings || {};
   const availability = form.availability || {};
+  const hasDistribution = Boolean(settings.distribution_enabled && (settings.distribution_title || settings.distribution_body || settings.distribution_file_relative_path));
   const fieldCount = Array.isArray(form.fields) ? form.fields.length : 0;
   const visibleFieldCount = 2 + (settings.enable_date_field ? 1 : 0) + fieldCount + (settings.allow_file_upload ? 1 : 0);
 
@@ -154,11 +155,17 @@ function renderHero() {
       <strong>${settings.allow_file_upload ? '有効' : 'なし'}</strong>
       <p class="small-note">${settings.allow_file_upload ? '必要に応じてファイルを添付できます。' : '添付ファイルは不要です。'}</p>
     </article>
+    <article class="public-highlight-card">
+      <span class="mini-stat-label">配布資料</span>
+      <strong>${hasDistribution ? 'あり' : 'なし'}</strong>
+      <p class="small-note">${hasDistribution ? 'フォームごとの案内資料があります。' : '事前配布資料はありません。'}</p>
+    </article>
   `;
 
   summary.innerHTML = [
     settings.enable_date_field ? '<span class="pill subtle-pill">日付入力あり</span>' : '<span class="pill subtle-pill">日付入力なし</span>',
     settings.allow_file_upload ? '<span class="pill subtle-pill">添付あり</span>' : '<span class="pill subtle-pill">添付なし</span>',
+    hasDistribution ? '<span class="pill subtle-pill">配布資料あり</span>' : '<span class="pill subtle-pill">配布資料なし</span>',
     `<span class="pill subtle-pill">送信ボタン: ${escapeHtml(settings.submit_button_label || '送信する')}</span>`,
   ].join('');
 
@@ -268,6 +275,36 @@ function attachDraftPersistence(formElement, form) {
   formElement.addEventListener('change', persist);
 }
 
+function renderDistributionSection(form) {
+  const settings = form?.settings || {};
+  const enabled = Boolean(settings.distribution_enabled);
+  const hasFile = Boolean(settings.distribution_file_relative_path);
+  const title = settings.distribution_title || '配布資料';
+  const body = String(settings.distribution_body || '').trim();
+  if (!enabled || (!hasFile && !body && !settings.distribution_title)) {
+    return '';
+  }
+  const bodyHtml = body ? `<div class="distribution-body allow-select">${escapeHtml(body).replaceAll('\n', '<br>')}</div>` : '';
+  const downloadButton = hasFile ? `
+    <a class="btn primary" href="api/download_form_asset.php?form_id=${encodeURIComponent(String(form.id))}">
+      ${escapeHtml(settings.distribution_download_label || '資料をダウンロード')}
+    </a>
+    <span class="small-note">${escapeHtml(settings.distribution_file_original_name || '')}</span>
+  ` : '';
+
+  return `
+    <section class="public-form-section distribution-public-section">
+      <div class="section-title-row compact-row">
+        <div>
+          <h3>${escapeHtml(title)}</h3>
+          ${bodyHtml}
+        </div>
+      </div>
+      ${downloadButton ? `<div class="distribution-download-row">${downloadButton}</div>` : ''}
+    </section>
+  `;
+}
+
 function renderActiveForm() {
   const root = document.getElementById('public-form-host');
   const message = document.getElementById('public-message');
@@ -282,6 +319,7 @@ function renderActiveForm() {
   clearMessage(message);
   const settings = form.settings || {};
   const draft = loadDraft(form.id);
+  const distributionSection = renderDistributionSection(form);
   const customFields = (form.fields || []).map((field) => renderCustomField(field, draft)).join('');
   const dateField = settings.enable_date_field ? `
     <label class="form-block public-form-block">
@@ -300,6 +338,7 @@ function renderActiveForm() {
   root.innerHTML = `
     <form id="managed-public-form" class="stack-form public-stack-form">
       <input type="hidden" name="form_id" value="${form.id}">
+      ${distributionSection}
       <section class="public-form-section">
         <div class="section-title-row compact-row">
           <div>

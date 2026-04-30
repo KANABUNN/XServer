@@ -1386,3 +1386,61 @@ body.forms-public-page {
     cursor: pointer;
     padding: 2px;
 }
+
+/* 配布ファイル管理 */
+.distribution-upload-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.distribution-file-status.file-ready-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  border-radius: 16px;
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.file-ready-main {
+  min-width: 0;
+}
+
+.file-ready-main strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.distribution-public-section {
+  border-color: rgba(16, 185, 129, 0.24);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(59, 130, 246, 0.05));
+}
+
+.distribution-body {
+  margin-top: 8px;
+  color: var(--muted, #64748b);
+  line-height: 1.8;
+  white-space: normal;
+}
+
+.distribution-download-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+@media (max-width: 720px) {
+  .distribution-file-status.file-ready-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .distribution-download-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
