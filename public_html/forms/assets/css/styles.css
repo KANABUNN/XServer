@@ -1444,3 +1444,171 @@ body.forms-public-page {
     flex-direction: column;
   }
 }
+
+/* =========================================================================
+   P0 改善パッチ — 必須バッジ / 送信中スピナー / モバイル用ドロワー
+   ========================================================================= */
+
+/* P0-2: 必須／任意バッジ
+   入力欄ラベル末尾の `*` を置き換え、視覚的に要否を即時判別できるようにする。
+   バッジ自体は装飾扱いで aria-hidden、必須読み上げは required 属性に委ねる。 */
+.required-badge,
+.optional-badge {
+  display: inline-block;
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.4;
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-left: 6px;
+  vertical-align: 1px;
+  letter-spacing: 0.02em;
+}
+
+.required-badge {
+  background: rgba(220, 38, 38, 0.10);
+  color: #b91c1c;
+  border: 1px solid rgba(220, 38, 38, 0.22);
+}
+
+.optional-badge {
+  background: rgba(100, 116, 139, 0.10);
+  color: #475569;
+  border: 1px solid rgba(100, 116, 139, 0.20);
+}
+
+
+/* P0-3: 送信中スピナー & aria-busy
+   .btn.is-loading … 送信ボタン用、ラベルを透明化して中央に円形スピナーを描画。
+   .public-form-host[aria-busy="true"] … 送信中はフォーム全体を抑制。 */
+.btn.is-loading {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
+}
+
+.btn.is-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 2px solid rgba(244, 248, 255, 0.92);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: btn-spinner 0.7s linear infinite;
+}
+
+.btn.ghost.is-loading::after {
+  border-color: rgba(33, 56, 84, 0.78);
+  border-top-color: transparent;
+}
+
+@keyframes btn-spinner {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn.is-loading::after {
+    animation-duration: 1.6s;
+  }
+}
+
+.public-form-host[aria-busy="true"] {
+  opacity: 0.65;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+
+/* P0-1: モバイル用ドロワー（フォーム一覧のスライドイン）
+   既存 HTML の以下要素を活用:
+     - #public-drawer-open   … ヘッダー右側のトリガーボタン
+     - #public-sidebar       … サイドバー本体
+     - #public-drawer-backdrop … 半透明バックドロップ
+     - .public-sidebar-mobile-head … サイドバー上部の閉じるボタン領域
+   デスクトップ／タブレットでは 920px 超で完全非表示にする。 */
+.public-drawer-toggle {
+  display: none;
+}
+
+.public-sidebar-mobile-head {
+  display: none;
+}
+
+#public-drawer-backdrop {
+  display: none;
+}
+
+@media (max-width: 920px) {
+  /* トリガーボタンを表示 */
+  .public-drawer-toggle {
+    display: inline-flex;
+  }
+
+  /* サイドバー上部の閉じるボタン行 */
+  .public-sidebar-mobile-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid rgba(195, 209, 224, 0.65);
+  }
+
+  /* サイドバー自体をスライドドロワーに切り替え（既存 max-width:1280px の position:static を上書き） */
+  .public-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(86vw, 360px);
+    max-height: none;
+    margin: 0;
+    border-radius: 0 22px 22px 0;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 60;
+    overflow-y: auto;
+    box-shadow: 0 24px 60px rgba(15, 28, 49, 0.28);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .public-sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  /* 内部のフォームナビゲーションは縦に伸ばす */
+  .public-sidebar .public-form-nav {
+    max-height: none;
+  }
+
+  /* バックドロップ */
+  #public-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 18, 32, 0.45);
+    z-index: 55;
+    backdrop-filter: blur(2px);
+  }
+
+  #public-drawer-backdrop.is-visible {
+    display: block;
+  }
+
+  /* ドロワー展開中は背面スクロールを止める */
+  body.public-drawer-open {
+    overflow: hidden;
+  }
+}
+
+/* prefers-reduced-motion の場合はトランジション短縮 */
+@media (max-width: 920px) and (prefers-reduced-motion: reduce) {
+  .public-sidebar {
+    transition: none;
+  }
+}

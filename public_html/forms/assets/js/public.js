@@ -14,6 +14,13 @@ function statusPillClass(status = '') {
   return `period-pill period-${safe}`;
 }
 
+// P0: 必須/任意バッジ。required属性で読み上げが行われるためバッジは aria-hidden。
+function requiredBadge(isRequired) {
+  return isRequired
+    ? ' <em class="required-badge" aria-hidden="true">必須</em>'
+    : ' <em class="optional-badge" aria-hidden="true">任意</em>';
+}
+
 function saveDraft(formId, values) {
   try {
     localStorage.setItem(`forms-public-draft-${formId}`, JSON.stringify(values));
@@ -207,8 +214,8 @@ function renderCustomField(field, draft = {}) {
   if (field.field_type === 'textarea') {
     return `
       <label class="form-block public-form-block">
-        <span>${escapeHtml(field.field_label)}${field.is_required ? ' *' : ''}</span>
-        <textarea name="${escapeHtml(name)}" rows="4" placeholder="${placeholder}" ${required}>${value}</textarea>
+        <span>${escapeHtml(field.field_label)}${requiredBadge(Boolean(field.is_required))}</span>
+        <textarea name="${escapeHtml(name)}" rows="4" placeholder="${placeholder}" ${required} ${field.is_required ? 'aria-required="true"' : ''}>${value}</textarea>
         ${help}
       </label>
     `;
@@ -219,8 +226,8 @@ function renderCustomField(field, draft = {}) {
     const options = (field.options || []).map((option) => `<option value="${escapeHtml(option)}" ${option === currentValue ? 'selected' : ''}>${escapeHtml(option)}</option>`).join('');
     return `
       <label class="form-block public-form-block">
-        <span>${escapeHtml(field.field_label)}${field.is_required ? ' *' : ''}</span>
-        <select name="${escapeHtml(name)}" ${required}>
+        <span>${escapeHtml(field.field_label)}${requiredBadge(Boolean(field.is_required))}</span>
+        <select name="${escapeHtml(name)}" ${required} ${field.is_required ? 'aria-required="true"' : ''}>
           <option value="">選択してください</option>
           ${options}
         </select>
@@ -234,8 +241,8 @@ function renderCustomField(field, draft = {}) {
     return `
       <div class="public-checkbox-wrap">
         <label class="switch-card public-check-card">
-          <input type="checkbox" name="${escapeHtml(name)}" value="1" ${checked}>
-          <span>${escapeHtml(field.field_label)}${field.is_required ? ' *' : ''}</span>
+          <input type="checkbox" name="${escapeHtml(name)}" value="1" ${checked} ${field.is_required ? 'aria-required="true"' : ''}>
+          <span>${escapeHtml(field.field_label)}${requiredBadge(Boolean(field.is_required))}</span>
         </label>
         ${help}
       </div>
@@ -245,8 +252,8 @@ function renderCustomField(field, draft = {}) {
   const type = field.field_type === 'number' ? 'number' : (field.field_type === 'date' ? 'date' : 'text');
   return `
     <label class="form-block public-form-block">
-      <span>${escapeHtml(field.field_label)}${field.is_required ? ' *' : ''}</span>
-      <input type="${type}" name="${escapeHtml(name)}" value="${value}" placeholder="${placeholder}" ${required}>
+      <span>${escapeHtml(field.field_label)}${requiredBadge(Boolean(field.is_required))}</span>
+      <input type="${type}" name="${escapeHtml(name)}" value="${value}" placeholder="${placeholder}" ${required} ${field.is_required ? 'aria-required="true"' : ''}>
       ${help}
     </label>
   `;
@@ -323,14 +330,14 @@ function renderActiveForm() {
   const customFields = (form.fields || []).map((field) => renderCustomField(field, draft)).join('');
   const dateField = settings.enable_date_field ? `
     <label class="form-block public-form-block">
-      <span>${escapeHtml(settings.date_label || '希望日')}${settings.date_required ? ' *' : ''}</span>
-      <input type="date" name="submitted_date" value="${escapeHtml(draft.submitted_date || '')}" ${settings.date_required ? 'required' : ''}>
+      <span>${escapeHtml(settings.date_label || '希望日')}${requiredBadge(Boolean(settings.date_required))}</span>
+      <input type="date" name="submitted_date" value="${escapeHtml(draft.submitted_date || '')}" ${settings.date_required ? 'required aria-required="true"' : ''}>
     </label>
   ` : '';
   const fileField = settings.allow_file_upload ? `
     <label class="form-block public-form-block">
-      <span>${escapeHtml(settings.file_label || '添付ファイル')}${settings.file_required ? ' *' : ''}</span>
-      <input type="file" name="uploaded_file" ${settings.file_required ? 'required' : ''}>
+      <span>${escapeHtml(settings.file_label || '添付ファイル')}${requiredBadge(Boolean(settings.file_required))}</span>
+      <input type="file" name="uploaded_file" ${settings.file_required ? 'required aria-required="true"' : ''}>
       <div class="small-note allow-select">許可拡張子: ${escapeHtml(settings.allowed_extensions || '')} / 上限 ${escapeHtml(String(settings.max_upload_size_mb || 5))}MB</div>
     </label>
   ` : '';
@@ -349,12 +356,12 @@ function renderActiveForm() {
         </div>
         <div class="public-form-grid two-col">
           <label class="form-block public-form-block">
-            <span>メールアドレス *</span>
-            <input type="email" name="email" value="${escapeHtml(draft.email || '')}" required autocomplete="email">
+            <span>メールアドレス <em class="required-badge" aria-hidden="true">必須</em></span>
+            <input type="email" name="email" value="${escapeHtml(draft.email || '')}" required aria-required="true" autocomplete="email">
           </label>
           <label class="form-block public-form-block">
-            <span>団体名 *</span>
-            <input type="text" name="organization_name" value="${escapeHtml(draft.organization_name || '')}" required autocomplete="organization">
+            <span>団体名 <em class="required-badge" aria-hidden="true">必須</em></span>
+            <input type="text" name="organization_name" value="${escapeHtml(draft.organization_name || '')}" required aria-required="true" autocomplete="organization">
           </label>
         </div>
       </section>
@@ -408,7 +415,11 @@ function renderActiveForm() {
     event.preventDefault();
     const formData = new FormData(submitForm);
     const submitButton = submitForm.querySelector('button[type="submit"]');
+    const formHost = document.getElementById('public-form-host');
     submitButton.disabled = true;
+    submitButton.classList.add('is-loading');
+    submitButton.setAttribute('aria-busy', 'true');
+    formHost?.setAttribute('aria-busy', 'true');
     clearMessage(message);
     try {
       const result = await apiPostForm('api/submit.php', formData);
@@ -432,6 +443,9 @@ function renderActiveForm() {
       });
     } finally {
       submitButton.disabled = false;
+      submitButton.classList.remove('is-loading');
+      submitButton.removeAttribute('aria-busy');
+      formHost?.removeAttribute('aria-busy');
     }
   });
 }
@@ -472,3 +486,60 @@ document.getElementById('public-form-search')?.addEventListener('input', (event)
 });
 
 loadPublicForms();
+
+// P0: モバイル用ドロワー初期化（フォーム一覧のスライドイン）
+(function initPublicDrawer() {
+  const sidebar = document.getElementById('public-sidebar');
+  const backdrop = document.getElementById('public-drawer-backdrop');
+  const openBtn = document.getElementById('public-drawer-open');
+  const closeBtn = document.getElementById('public-drawer-close');
+  if (!sidebar || !backdrop || !openBtn) return;
+
+  const mq = window.matchMedia('(max-width: 920px)');
+
+  function setDrawerOpen(open) {
+    sidebar.classList.toggle('is-open', open);
+    backdrop.classList.toggle('is-visible', open);
+    backdrop.hidden = !open;
+    openBtn.setAttribute('aria-expanded', String(open));
+    document.body.classList.toggle('public-drawer-open', open);
+    if (open) {
+      const focusable = sidebar.querySelector(
+        'input, button, a[href], [tabindex]:not([tabindex="-1"])'
+      );
+      focusable?.focus();
+    } else if (mq.matches) {
+      openBtn.focus();
+    }
+  }
+
+  openBtn.addEventListener('click', () => setDrawerOpen(true));
+  closeBtn?.addEventListener('click', () => setDrawerOpen(false));
+  backdrop.addEventListener('click', () => setDrawerOpen(false));
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && sidebar.classList.contains('is-open')) {
+      setDrawerOpen(false);
+    }
+  });
+
+  // フォーム選択時はモバイル時のみ閉じる
+  document.addEventListener('click', (event) => {
+    const tab = event.target.closest('[data-form-tab]');
+    if (tab && mq.matches) {
+      setDrawerOpen(false);
+    }
+  });
+
+  // ビューポートが広がったら閉じてサイドバーを通常状態に戻す
+  const handleMediaChange = (event) => {
+    if (!event.matches) {
+      setDrawerOpen(false);
+    }
+  };
+  if (typeof mq.addEventListener === 'function') {
+    mq.addEventListener('change', handleMediaChange);
+  } else if (typeof mq.addListener === 'function') {
+    mq.addListener(handleMediaChange);
+  }
+})();
