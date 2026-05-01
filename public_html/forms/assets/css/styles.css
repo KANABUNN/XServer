@@ -1096,7 +1096,7 @@ body.forms-public-page {
 .public-highlight-grid {
     margin-top: 18px;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px;
 }
 
@@ -1114,9 +1114,16 @@ body.forms-public-page {
     font-size: 1.4rem;
 }
 
+.public-highlight-card .highlight-card__sub {
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: var(--muted);
+    margin-left: 4px;
+}
+
 .public-main-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 20px;
     align-items: start;
 }
@@ -1611,4 +1618,127 @@ body.forms-public-page {
   .public-sidebar {
     transition: none;
   }
+}
+
+
+/* =========================================================================
+   P1 改善パッチ — ドラフト復元バー / 自動保存インジケータ / 必須進捗
+   ========================================================================= */
+
+/* P1: ドラフト復元バー
+   フォーム再訪問時、localStorage に保持された入力途中があれば
+   フォーム上部に黄色の通知バーを表示し、出所と破棄手段を明示する。 */
+.draft-restore-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(250, 238, 218, 0.95), rgba(250, 199, 117, 0.20));
+    border: 1px solid rgba(190, 138, 50, 0.38);
+    color: #5b3a09;
+    flex-wrap: wrap;
+}
+
+.draft-restore-bar__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.draft-restore-bar__text strong {
+    font-size: 0.96rem;
+    font-weight: 700;
+}
+
+.draft-restore-bar__text .small-note {
+    color: rgba(91, 58, 9, 0.78);
+}
+
+.draft-restore-bar .btn.ghost {
+    background: rgba(255, 255, 255, 0.85);
+    color: #5b3a09;
+    border: 1px solid rgba(190, 138, 50, 0.5);
+}
+
+.btn-compact {
+    padding-inline: 12px;
+    min-height: 32px;
+    font-size: 0.85rem;
+}
+
+
+/* P1: 送信バー内の状態表示
+   「再送信時は履歴を残しつつ更新」の冗長文を撤去し、
+   左側に必須項目進捗 + 自動保存ステータスの2行を集約する。 */
+.public-submit-bar {
+    align-items: center;
+}
+
+.public-submit-status {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1 1 240px;
+    min-width: 0;
+    color: rgba(244, 248, 255, 0.92);
+}
+
+.public-submit-status__progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #f5b54f;          /* pending: amber */
+    box-shadow: 0 0 0 3px rgba(245, 181, 79, 0.18);
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+    flex-shrink: 0;
+}
+
+.status-dot[data-state="ok"] {
+    background: #6ec97c;          /* ok: green */
+    box-shadow: 0 0 0 3px rgba(110, 201, 124, 0.22);
+}
+
+.public-submit-status__save {
+    font-size: 0.78rem;
+    color: rgba(240, 246, 255, 0.74);
+    transition: color 0.2s ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.public-submit-status__save[data-state="saved"] {
+    color: rgba(180, 240, 200, 0.95);
+}
+
+
+/* モバイル時はステータスを縦に積む（920px以下） */
+@media (max-width: 920px) {
+    .public-submit-bar {
+        align-items: stretch;
+    }
+
+    .public-submit-status {
+        flex: 1 1 auto;
+    }
+
+    .draft-restore-bar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .draft-restore-bar .btn.ghost {
+        align-self: flex-start;
+    }
 }

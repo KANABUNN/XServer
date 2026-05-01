@@ -46,6 +46,14 @@ function clearDraft(formId) {
   }
 }
 
+// P1: ドラフトに有効な値が1つでもあるか判定（空オブジェクト/空文字のみは「無」とみなす）
+function draftHasContent(draft) {
+  if (!draft || typeof draft !== 'object') return false;
+  if (draft.email || draft.organization_name || draft.submitted_date) return true;
+  const custom = draft.custom || {};
+  return Object.values(custom).some((v) => String(v ?? '').trim() !== '');
+}
+
 function getActiveForm() {
   return publicState.forms.find((item) => item.id === publicState.activeFormId) || null;
 }
@@ -115,90 +123,46 @@ function renderHero() {
   const description = document.getElementById('public-hero-description');
   const meta = document.getElementById('public-hero-meta');
   const highlights = document.getElementById('public-hero-highlights');
-  const summary = document.getElementById('public-active-summary');
-  const availabilityPanel = document.getElementById('public-availability-panel');
-  const summaryPanel = document.getElementById('public-summary-panel');
   const form = getActiveForm();
 
-  if (!title || !description || !meta || !highlights || !summary || !availabilityPanel || !summaryPanel) return;
+  if (!title || !description || !meta || !highlights) return;
 
   if (!form) {
     title.textContent = 'フォームを選択してください';
-    description.textContent = '左のサイドバーから提出先を選択すると、ここにフォーム概要と入力欄が表示されます。';
+    description.textContent = 'サイドバーから提出先を選択すると、ここにフォーム概要と入力欄が表示されます。';
     meta.innerHTML = '';
     highlights.innerHTML = '';
-    summary.innerHTML = '';
-    availabilityPanel.innerHTML = '<div class="empty-state">公開中のフォームを選択してください。</div>';
-    summaryPanel.innerHTML = '<div class="empty-state">フォームを選択すると概要を表示します。</div>';
     return;
   }
 
   const settings = form.settings || {};
   const availability = form.availability || {};
-  const hasDistribution = Boolean(settings.distribution_enabled && (settings.distribution_title || settings.distribution_body || settings.distribution_file_relative_path));
   const fieldCount = Array.isArray(form.fields) ? form.fields.length : 0;
   const visibleFieldCount = 2 + (settings.enable_date_field ? 1 : 0) + fieldCount + (settings.allow_file_upload ? 1 : 0);
+  const customRequiredCount = (form.fields || []).filter((f) => f.is_required).length;
+  const requiredTotal = 2
+    + (settings.enable_date_field && settings.date_required ? 1 : 0)
+    + (settings.allow_file_upload && settings.file_required ? 1 : 0)
+    + customRequiredCount;
 
   title.textContent = form.name || '名称未設定';
   description.textContent = form.description || 'このフォームの説明はまだ設定されていません。';
   meta.innerHTML = `
     <span class="${statusPillClass(availability.status || 'open')}">${escapeHtml(availability.label || '受付中')}</span>
-    <span class="pill subtle-pill">${escapeHtml(form.slug || '')}</span>
   `;
 
+  // P1: highlightsは「受付状況」と「必須項目数」の2枚に絞る（旧4枚を撤去）
   highlights.innerHTML = `
     <article class="public-highlight-card">
-      <span class="mini-stat-label">入力項目</span>
-      <strong>${visibleFieldCount}</strong>
-      <p class="small-note">基本項目・追加項目を含む表示項目です。</p>
+      <span class="mini-stat-label">受付状況</span>
+      <strong>${escapeHtml(availability.label || '受付中')}</strong>
+      <p class="small-note allow-select">${escapeHtml(availability.note || '現在このフォームは利用可能です。')}</p>
     </article>
     <article class="public-highlight-card">
-      <span class="mini-stat-label">追加項目</span>
-      <strong>${fieldCount}</strong>
-      <p class="small-note">管理者が追加したカスタム項目数です。</p>
+      <span class="mini-stat-label">必須項目</span>
+      <strong>${requiredTotal} <span class="highlight-card__sub">/ 全 ${visibleFieldCount}</span></strong>
+      <p class="small-note">送信前に入力が必要な項目数の目安です。</p>
     </article>
-    <article class="public-highlight-card">
-      <span class="mini-stat-label">添付設定</span>
-      <strong>${settings.allow_file_upload ? '有効' : 'なし'}</strong>
-      <p class="small-note">${settings.allow_file_upload ? '必要に応じてファイルを添付できます。' : '添付ファイルは不要です。'}</p>
-    </article>
-    <article class="public-highlight-card">
-      <span class="mini-stat-label">配布資料</span>
-      <strong>${hasDistribution ? 'あり' : 'なし'}</strong>
-      <p class="small-note">${hasDistribution ? 'フォームごとの案内資料があります。' : '事前配布資料はありません。'}</p>
-    </article>
-  `;
-
-  summary.innerHTML = [
-    settings.enable_date_field ? '<span class="pill subtle-pill">日付入力あり</span>' : '<span class="pill subtle-pill">日付入力なし</span>',
-    settings.allow_file_upload ? '<span class="pill subtle-pill">添付あり</span>' : '<span class="pill subtle-pill">添付なし</span>',
-    hasDistribution ? '<span class="pill subtle-pill">配布資料あり</span>' : '<span class="pill subtle-pill">配布資料なし</span>',
-    `<span class="pill subtle-pill">送信ボタン: ${escapeHtml(settings.submit_button_label || '送信する')}</span>`,
-  ].join('');
-
-  availabilityPanel.innerHTML = `
-    <div class="mini-info-card">
-      <div class="section-title-row compact-row">
-        <strong>現在の状態</strong>
-        <span class="${statusPillClass(availability.status || 'open')}">${escapeHtml(availability.label || '受付中')}</span>
-      </div>
-      <div class="small-note allow-select">${escapeHtml(availability.note || '現在このフォームは利用可能です。')}</div>
-    </div>
-  `;
-
-  summaryPanel.innerHTML = `
-    <div class="mini-info-card">
-      <strong>フォーム名</strong>
-      <div class="small-note allow-select">${escapeHtml(form.name || '')}</div>
-    </div>
-    <div class="mini-info-card">
-      <strong>説明</strong>
-      <div class="small-note allow-select">${escapeHtml(form.description || '説明は設定されていません。')}</div>
-    </div>
-    <div class="mini-info-card">
-      <strong>追加項目数</strong>
-      <div class="small-note">${fieldCount} 項目</div>
-    </div>
   `;
 }
 
@@ -326,6 +290,7 @@ function renderActiveForm() {
   clearMessage(message);
   const settings = form.settings || {};
   const draft = loadDraft(form.id);
+  const hasDraft = draftHasContent(draft);
   const distributionSection = renderDistributionSection(form);
   const customFields = (form.fields || []).map((field) => renderCustomField(field, draft)).join('');
   const dateField = settings.enable_date_field ? `
@@ -345,6 +310,15 @@ function renderActiveForm() {
   root.innerHTML = `
     <form id="managed-public-form" class="stack-form public-stack-form">
       <input type="hidden" name="form_id" value="${form.id}">
+      ${hasDraft ? `
+      <div class="draft-restore-bar" role="status" aria-live="polite">
+        <div class="draft-restore-bar__text">
+          <strong>前回の入力途中を復元しました</strong>
+          <span class="small-note">内容を確認してから送信してください。</span>
+        </div>
+        <button type="button" class="btn ghost btn-compact" id="draft-discard-button">破棄する</button>
+      </div>
+      ` : ''}
       ${distributionSection}
       <section class="public-form-section">
         <div class="section-title-row compact-row">
@@ -392,7 +366,13 @@ function renderActiveForm() {
       ` : ''}
 
       <div class="public-submit-bar">
-        <div class="small-note allow-select">再送信時は履歴を残しつつ最新内容へ更新します。送信前に入力内容を確認してください。</div>
+        <div class="public-submit-status">
+          <div class="public-submit-status__progress">
+            <span class="status-dot" id="public-required-dot" data-state="pending" aria-hidden="true"></span>
+            <span id="public-required-progress">必須項目を確認中...</span>
+          </div>
+          <div class="public-submit-status__save" id="public-draft-save-status">入力内容は自動で一時保存されます。</div>
+        </div>
         <div class="inline-actions">
           <button type="button" class="btn ghost" id="draft-clear-button">入力内容をクリア</button>
           <button type="submit" class="btn primary btn-large">${escapeHtml(settings.submit_button_label || '送信する')}</button>
@@ -404,11 +384,74 @@ function renderActiveForm() {
   const submitForm = document.getElementById('managed-public-form');
   attachDraftPersistence(submitForm, form);
 
+  // P1: 必須項目進捗の集計対象キー
+  const requiredKeys = ['email', 'organization_name'];
+  if (settings.enable_date_field && settings.date_required) requiredKeys.push('submitted_date');
+  if (settings.allow_file_upload && settings.file_required) requiredKeys.push('uploaded_file');
+  const requiredCustomKeys = (form.fields || [])
+    .filter((f) => f.is_required)
+    .map((f) => f.field_key);
+
+  function updateRequiredProgress() {
+    if (!submitForm) return;
+    const data = new FormData(submitForm);
+    let filled = 0;
+    for (const key of requiredKeys) {
+      if (key === 'uploaded_file') {
+        const fileInput = submitForm.querySelector('input[type="file"][name="uploaded_file"]');
+        if (fileInput && fileInput.files && fileInput.files.length > 0) filled += 1;
+      } else {
+        const v = data.get(key);
+        if (v && String(v).trim() !== '') filled += 1;
+      }
+    }
+    for (const key of requiredCustomKeys) {
+      const v = data.get(`custom[${key}]`);
+      if (v && String(v).trim() !== '') filled += 1;
+    }
+    const total = requiredKeys.length + requiredCustomKeys.length;
+    const text = document.getElementById('public-required-progress');
+    const dot = document.getElementById('public-required-dot');
+    if (text) {
+      text.textContent = total === 0
+        ? '必須項目はありません'
+        : `必須項目 ${filled} / ${total} 入力済み`;
+    }
+    if (dot) {
+      dot.dataset.state = (total > 0 && filled === total) ? 'ok' : 'pending';
+    }
+  }
+
+  // P1: 自動保存インジケータの更新
+  function indicateDraftSaved() {
+    const el = document.getElementById('public-draft-save-status');
+    if (!el) return;
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    el.textContent = `下書きを保存しました ${hh}:${mm}`;
+    el.dataset.state = 'saved';
+  }
+
+  submitForm?.addEventListener('input', updateRequiredProgress);
+  submitForm?.addEventListener('change', updateRequiredProgress);
+  submitForm?.addEventListener('input', indicateDraftSaved);
+  submitForm?.addEventListener('change', indicateDraftSaved);
+  updateRequiredProgress();
+
   document.getElementById('draft-clear-button')?.addEventListener('click', () => {
     clearDraft(form.id);
     renderActiveForm();
     clearMessage(message);
     showFlashMessage('入力途中の内容をクリアしました。', 'info', { title: '入力を初期化しました' });
+  });
+
+  // P1: ドラフト復元バーの「破棄する」ボタン
+  document.getElementById('draft-discard-button')?.addEventListener('click', () => {
+    clearDraft(form.id);
+    renderActiveForm();
+    clearMessage(message);
+    showFlashMessage('復元した入力内容を破棄しました。', 'info', { title: '入力を初期化しました' });
   });
 
   submitForm?.addEventListener('submit', async (event) => {

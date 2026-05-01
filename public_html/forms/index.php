@@ -7,9 +7,8 @@ page_header('汎用フォーム', 'forms-public-page');
     <div class="public-site-header__brand">
         <div class="brand-mark" aria-hidden="true">F</div>
         <div>
-            <p class="eyebrow">Flexible Forms</p>
             <h1>提出フォーム</h1>
-            <p class="muted">左のサイドバーから提出先を選び、右側で内容を確認しながら入力できます。</p>
+            <p class="muted">サイドバーで提出先を選び、右側で内容を入力してください。</p>
         </div>
     </div>
     <div class="topbar-actions">
@@ -28,7 +27,6 @@ page_header('汎用フォーム', 'forms-public-page');
         </div>
         <section class="public-sidebar-section sidebar-hero-block">
             <div>
-                <p class="eyebrow">Navigator</p>
                 <h2>提出先フォーム</h2>
                 <p class="small-note">公開中のフォームだけを一覧表示しています。フォームを切り替えると、右側の入力内容も切り替わります。</p>
             </div>
@@ -66,9 +64,8 @@ page_header('汎用フォーム', 'forms-public-page');
         <section class="card public-hero-card accent-surface">
             <div class="public-hero-card__content">
                 <div>
-                    <p class="eyebrow">Selected Form</p>
                     <h2 id="public-hero-title">フォームを選択してください</h2>
-                    <p id="public-hero-description" class="muted">左のサイドバーから提出先を選択すると、ここに概要と入力欄が表示されます。</p>
+                    <p id="public-hero-description" class="muted">サイドバーから提出先を選択すると、ここに概要と入力欄が表示されます。</p>
                 </div>
                 <div id="public-hero-meta" class="public-hero-meta"></div>
             </div>
@@ -79,26 +76,12 @@ page_header('汎用フォーム', 'forms-public-page');
             <article class="card public-form-panel form-panel-emphasis">
                 <div class="section-title-row">
                     <div>
-                        <p class="eyebrow">Form Workspace</p>
                         <h2>入力フォーム</h2>
                         <p class="small-note">入力に必要な項目だけをわかりやすく表示します。</p>
                     </div>
-                    <div id="public-active-summary" class="meta-line"></div>
                 </div>
                 <div id="public-form-host" class="form-host public-form-host"></div>
             </article>
-
-            <aside class="public-side-panels">
-                <section class="card public-info-panel">
-                    <h3>受付状況</h3>
-                    <div id="public-availability-panel" class="stack-list"></div>
-                </section>
-
-                <section class="card public-info-panel public-summary-card">
-                    <h3>フォーム概要</h3>
-                    <div id="public-summary-panel" class="stack-list"></div>
-                </section>
-            </aside>
         </section>
     </section>
 </main>
