@@ -33,6 +33,78 @@ function isAvailabilityOpen(availability) {
   return status === 'open' || status === 'available' || status === 'active';
 }
 
+// P3: フィールド名 (例: "custom[memo]") を id 属性に使える形へサニタイズする。
+function fieldNameToId(name) {
+  return String(name || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+// P3: フォームDOMからすべての field-error 表示と aria-invalid をクリアする。
+function clearAllFieldErrors(formElement) {
+  if (!formElement) return;
+  formElement.querySelectorAll('[data-field-error]').forEach((el) => {
+    el.textContent = '';
+    el.hidden = true;
+  });
+  formElement.querySelectorAll('[aria-invalid="true"]').forEach((el) => {
+    el.removeAttribute('aria-invalid');
+  });
+}
+
+// P3: errors オブジェクト ({ "email": "...", "custom[memo]": "..." } 形式) を
+// フォーム上の各フィールドに反映する。最初のエラー要素にスクロール&フォーカスを当てる。
+function applyFieldErrors(formElement, errors) {
+  if (!formElement || !errors) return;
+  clearAllFieldErrors(formElement);
+  let firstInvalid = null;
+  for (const [name, message] of Object.entries(errors)) {
+    if (!message) continue;
+    const errEl = formElement.querySelector(`[data-field-error="${CSS.escape(name)}"]`);
+    const input = formElement.querySelector(`[name="${CSS.escape(name)}"]`);
+    if (errEl) {
+      errEl.textContent = message;
+      errEl.hidden = false;
+    }
+    if (input) {
+      input.setAttribute('aria-invalid', 'true');
+      if (!firstInvalid) firstInvalid = input;
+    }
+  }
+  if (firstInvalid) {
+    firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => firstInvalid.focus({ preventScroll: true }), 240);
+  }
+}
+
+// P3: クライアント側で HTML5 制約検証を実行し、日本語のカスタムメッセージに変換する。
+// 戻り値: 全項目妥当なら null、エラーがあれば { name: message } のオブジェクト。
+function collectClientValidationErrors(formElement) {
+  if (!formElement || formElement.checkValidity()) return null;
+  const errors = {};
+  formElement.querySelectorAll(':invalid').forEach((field) => {
+    const name = field.name;
+    if (!name) return;
+    const v = field.validity;
+    if (v.valueMissing) {
+      errors[name] = 'この項目を入力してください。';
+    } else if (v.typeMismatch && field.type === 'email') {
+      errors[name] = 'メールアドレスの形式が正しくありません。';
+    } else if (v.typeMismatch) {
+      errors[name] = '入力形式が正しくありません。';
+    } else if (v.tooShort) {
+      errors[name] = `${field.minLength} 文字以上で入力してください。`;
+    } else if (v.tooLong) {
+      errors[name] = `${field.maxLength} 文字以内で入力してください。`;
+    } else if (v.rangeUnderflow || v.rangeOverflow || v.stepMismatch) {
+      errors[name] = field.validationMessage || '入力値の範囲が正しくありません。';
+    } else if (v.patternMismatch) {
+      errors[name] = '入力形式が正しくありません。';
+    } else {
+      errors[name] = field.validationMessage || '入力内容を確認してください。';
+    }
+  });
+  return Object.keys(errors).length ? errors : null;
+}
+
 function saveDraft(formId, values) {
   try {
     localStorage.setItem(`forms-public-draft-${formId}`, JSON.stringify(values));
@@ -210,18 +282,24 @@ function renderHero() {
 function renderCustomField(field, draft = {}) {
   const name = `custom[${field.field_key}]`;
   const required = field.is_required ? 'required' : '';
-  const help = field.help_text ? `<div class="small-note allow-select">${escapeHtml(field.help_text)}</div>` : '';
+  const help = field.help_text ? `<div class="small-note allow-select" id="help-${fieldNameToId(name)}">${escapeHtml(field.help_text)}</div>` : '';
   const placeholder = escapeHtml(field.placeholder || '');
   const draftValue = draft.custom?.[field.field_key];
   const rawValue = draftValue ?? field.default_value ?? '';
   const value = escapeHtml(rawValue || '');
+  // P3: 各フィールド共通の field-error 要素（aria-describedby で関連付け）
+  const errorEl = `<p class="field-error" data-field-error="${escapeHtml(name)}" id="err-${fieldNameToId(name)}" role="alert" hidden></p>`;
+  const describedBy = field.help_text
+    ? `aria-describedby="help-${fieldNameToId(name)} err-${fieldNameToId(name)}"`
+    : `aria-describedby="err-${fieldNameToId(name)}"`;
 
   if (field.field_type === 'textarea') {
     return `
       <label class="form-block public-form-block">
         <span>${escapeHtml(field.field_label)}${requiredBadge(Boolean(field.is_required))}</span>
-        <textarea name="${escapeHtml(name)}" rows="4" placeholder="${placeholder}" ${required} ${field.is_required ? 'aria-required="true"' : ''}>${value}</textarea>
+        <textarea name="${escapeHtml(name)}" rows="4" placeholder="${placeholder}" ${required} ${field.is_required ? 'aria-required="true"' : ''} ${describedBy}>${value}</textarea>
         ${help}
+        ${errorEl}
       </label>
     `;
   }
@@ -232,11 +310,12 @@ function renderCustomField(field, draft = {}) {
     return `
       <label class="form-block public-form-block">
         <span>${escapeHtml(field.field_label)}${requiredBadge(Boolean(field.is_required))}</span>
-        <select name="${escapeHtml(name)}" ${required} ${field.is_required ? 'aria-required="true"' : ''}>
+        <select name="${escapeHtml(name)}" ${required} ${field.is_required ? 'aria-required="true"' : ''} ${describedBy}>
           <option value="">選択してください</option>
           ${options}
         </select>
         ${help}
+        ${errorEl}
       </label>
     `;
   }
@@ -250,6 +329,7 @@ function renderCustomField(field, draft = {}) {
           <span>${escapeHtml(field.field_label)}${requiredBadge(Boolean(field.is_required))}</span>
         </label>
         ${help}
+        ${errorEl}
       </div>
     `;
   }
@@ -258,8 +338,9 @@ function renderCustomField(field, draft = {}) {
   return `
     <label class="form-block public-form-block">
       <span>${escapeHtml(field.field_label)}${requiredBadge(Boolean(field.is_required))}</span>
-      <input type="${type}" name="${escapeHtml(name)}" value="${value}" placeholder="${placeholder}" ${required} ${field.is_required ? 'aria-required="true"' : ''}>
+      <input type="${type}" name="${escapeHtml(name)}" value="${value}" placeholder="${placeholder}" ${required} ${field.is_required ? 'aria-required="true"' : ''} ${describedBy}>
       ${help}
+      ${errorEl}
     </label>
   `;
 }
@@ -337,14 +418,22 @@ function renderActiveForm() {
   const dateField = settings.enable_date_field ? `
     <label class="form-block public-form-block">
       <span>${escapeHtml(settings.date_label || '希望日')}${requiredBadge(Boolean(settings.date_required))}</span>
-      <input type="date" name="submitted_date" value="${escapeHtml(draft.submitted_date || '')}" ${settings.date_required ? 'required aria-required="true"' : ''}>
+      <input type="date" name="submitted_date" value="${escapeHtml(draft.submitted_date || '')}" ${settings.date_required ? 'required aria-required="true"' : ''} aria-describedby="err-submitted_date">
+      <p class="field-error" data-field-error="submitted_date" id="err-submitted_date" role="alert" hidden></p>
     </label>
   ` : '';
+  // P3: 添付制約を small-note → hint-bar に格上げし、aria-describedby で input と関連付ける
   const fileField = settings.allow_file_upload ? `
     <label class="form-block public-form-block">
       <span>${escapeHtml(settings.file_label || '添付ファイル')}${requiredBadge(Boolean(settings.file_required))}</span>
-      <input type="file" name="uploaded_file" ${settings.file_required ? 'required aria-required="true"' : ''}>
-      <div class="small-note allow-select">許可拡張子: ${escapeHtml(settings.allowed_extensions || '')} / 上限 ${escapeHtml(String(settings.max_upload_size_mb || 5))}MB</div>
+      <div class="hint-bar" id="hint-uploaded_file">
+        <span class="hint-bar__label">添付ルール</span>
+        <span class="hint-bar__item">許可拡張子: <strong>${escapeHtml(settings.allowed_extensions || '指定なし')}</strong></span>
+        <span class="hint-bar__sep" aria-hidden="true">/</span>
+        <span class="hint-bar__item">上限 <strong>${escapeHtml(String(settings.max_upload_size_mb || 5))} MB</strong></span>
+      </div>
+      <input type="file" name="uploaded_file" ${settings.file_required ? 'required aria-required="true"' : ''} aria-describedby="hint-uploaded_file err-uploaded_file">
+      <p class="field-error" data-field-error="uploaded_file" id="err-uploaded_file" role="alert" hidden></p>
     </label>
   ` : '';
 
@@ -372,13 +461,20 @@ function renderActiveForm() {
         <div class="public-form-grid two-col">
           <label class="form-block public-form-block">
             <span>メールアドレス <em class="required-badge" aria-hidden="true">必須</em></span>
-            <input type="email" name="email" value="${escapeHtml(draft.email || '')}" required aria-required="true" autocomplete="email">
+            <input type="email" name="email" value="${escapeHtml(draft.email || '')}" required aria-required="true" autocomplete="email" aria-describedby="hint-resubmit err-email">
+            <p class="field-error" data-field-error="email" id="err-email" role="alert" hidden></p>
           </label>
           <label class="form-block public-form-block">
             <span>団体名 <em class="required-badge" aria-hidden="true">必須</em></span>
-            <input type="text" name="organization_name" value="${escapeHtml(draft.organization_name || '')}" required aria-required="true" autocomplete="organization">
+            <input type="text" name="organization_name" value="${escapeHtml(draft.organization_name || '')}" required aria-required="true" autocomplete="organization" aria-describedby="hint-resubmit err-organization_name">
+            <p class="field-error" data-field-error="organization_name" id="err-organization_name" role="alert" hidden></p>
           </label>
         </div>
+        <!-- P3: 上書き仕様の inline help（メアド+団体名の重複時挙動） -->
+        <p class="inline-help" id="hint-resubmit">
+          <span class="inline-help__icon" aria-hidden="true">i</span>
+          <span><strong>再送信時の挙動：</strong>同じメールアドレスと団体名の組み合わせで過去に申請がある場合、<strong>最新の内容で上書き</strong>されます。過去の申請内容は管理者の履歴として保持されます。</span>
+        </p>
       </section>
 
       ${(dateField || customFields) ? `
@@ -480,6 +576,26 @@ function renderActiveForm() {
   submitForm?.addEventListener('change', indicateDraftSaved);
   updateRequiredProgress();
 
+  // P3: フィールド入力時に該当フィールドのエラー表示を自動クリアする
+  submitForm?.addEventListener('input', (event) => {
+    const target = event.target;
+    if (!target || !target.matches('input, textarea, select')) return;
+    if (target.getAttribute('aria-invalid') === 'true') {
+      target.removeAttribute('aria-invalid');
+      const errEl = submitForm.querySelector(`[data-field-error="${CSS.escape(target.name || '')}"]`);
+      if (errEl) {
+        errEl.textContent = '';
+        errEl.hidden = true;
+      }
+    }
+  });
+
+  // P3: ブラウザ標準のバリデーションバルーンを抑制する
+  // （checkValidity → applyFieldErrors の独自フローに統一する）
+  submitForm?.addEventListener('invalid', (event) => {
+    event.preventDefault();
+  }, true);
+
   document.getElementById('draft-clear-button')?.addEventListener('click', () => {
     clearDraft(form.id);
     renderActiveForm();
@@ -497,6 +613,19 @@ function renderActiveForm() {
 
   submitForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
+
+    // P3: 送信前にクライアント検証を実行し、エラーがあれば inline 表示
+    clearAllFieldErrors(submitForm);
+    const clientErrors = collectClientValidationErrors(submitForm);
+    if (clientErrors) {
+      applyFieldErrors(submitForm, clientErrors);
+      showFlashMessage('入力内容に不備があります。赤いメッセージをご確認ください。', 'error', {
+        title: '入力内容を確認してください',
+        duration: 5200,
+      });
+      return;
+    }
+
     const formData = new FormData(submitForm);
     const submitButton = submitForm.querySelector('button[type="submit"]');
     const formHost = document.getElementById('public-form-host');
@@ -508,6 +637,10 @@ function renderActiveForm() {
     try {
       const result = await apiPostForm('api/submit.php', formData);
       if (!result.ok) {
+        // P3: サーバが errors オブジェクトを返した場合は各フィールドに反映
+        if (result.errors && typeof result.errors === 'object') {
+          applyFieldErrors(submitForm, result.errors);
+        }
         showFlashMessage(result.message || '送信に失敗しました。', 'error', {
           title: '送信できませんでした',
           duration: 6200,
@@ -516,6 +649,7 @@ function renderActiveForm() {
       }
       clearDraft(form.id);
       submitForm.reset();
+      clearAllFieldErrors(submitForm);
       showFlashMessage(result.message || '送信しました。', 'success', {
         title: result.status === 'updated' ? '更新を受け付けました' : '送信を受け付けました',
         duration: 5200,

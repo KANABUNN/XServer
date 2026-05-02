@@ -1836,3 +1836,134 @@ body.forms-public-page {
     outline: 2px solid rgba(33, 56, 84, 0.45);
     outline-offset: 2px;
 }
+
+
+/* =========================================================================
+   P3 改善パッチ — フィールド単位エラー / 添付ヒント格上げ / 上書き仕様 inline help
+   ========================================================================= */
+
+/* P3: フィールド単位エラーメッセージ
+   各 input/select/textarea の直下に表示する赤いメッセージ。
+   role="alert" + 赤系の控えめな配色。aria-invalid と組み合わせる。 */
+.field-error {
+    margin: 6px 0 0;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(220, 38, 38, 0.08);
+    border-left: 3px solid #dc2626;
+    color: #991b1b;
+    font-size: 0.84rem;
+    font-weight: 500;
+    line-height: 1.45;
+}
+
+.field-error[hidden] {
+    display: none;
+}
+
+/* aria-invalid 状態の入力欄を赤枠 + 微妙なグロウで強調 */
+.public-form-block input[aria-invalid="true"],
+.public-form-block textarea[aria-invalid="true"],
+.public-form-block select[aria-invalid="true"] {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+    background-color: rgba(254, 242, 242, 0.5);
+}
+
+.public-form-block input[aria-invalid="true"]:focus,
+.public-form-block textarea[aria-invalid="true"]:focus,
+.public-form-block select[aria-invalid="true"]:focus {
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.25);
+}
+
+
+/* P3: 添付ヒントの格上げ（hint-bar）
+   入力欄の上に常時表示される、青系の枠付きヒント。
+   許可拡張子と上限サイズの2項目を `/` で区切って表示する。 */
+.hint-bar {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    margin: 6px 0 8px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    background: rgba(37, 99, 235, 0.07);
+    border: 1px solid rgba(37, 99, 235, 0.22);
+    color: #1e3a8a;
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.hint-bar__label {
+    font-weight: 700;
+    color: #1e40af;
+    padding: 1px 8px;
+    background: rgba(37, 99, 235, 0.12);
+    border-radius: 999px;
+    font-size: 0.74rem;
+    letter-spacing: 0.02em;
+}
+
+.hint-bar__item strong {
+    font-weight: 600;
+    color: #0f1c33;
+}
+
+.hint-bar__sep {
+    color: rgba(30, 64, 175, 0.45);
+    font-weight: 400;
+    user-select: none;
+}
+
+
+/* P3: 上書き仕様の inline help
+   メアド+団体名の組み合わせで再送信した場合の挙動を、
+   基本情報セクションの直下に薄い青系のブロックとして表示する。 */
+.inline-help {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 14px 0 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(59, 130, 246, 0.06);
+    border: 1px solid rgba(59, 130, 246, 0.20);
+    color: #213854;
+    font-size: 0.85rem;
+    line-height: 1.55;
+}
+
+.inline-help strong {
+    color: #0f1c33;
+    font-weight: 700;
+}
+
+.inline-help__icon {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+    border-radius: 50%;
+    background: #2563eb;
+    color: #fff;
+    display: inline-grid;
+    place-items: center;
+    font-style: italic;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+
+/* モバイル時は hint-bar / inline-help を縦に積みやすくする */
+@media (max-width: 920px) {
+    .hint-bar {
+        display: flex;
+    }
+
+    .hint-bar__sep {
+        display: none;
+    }
+}

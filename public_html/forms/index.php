@@ -54,7 +54,6 @@ page_header('汎用フォーム', 'forms-public-page');
             <h3>入力のポイント</h3>
             <ul class="helper-list allow-select">
                 <li>メールアドレスと団体名は必須です。</li>
-                <li>同一メールアドレスまたは団体名から再送信した場合は、履歴を残しつつ最新内容へ更新します。</li>
                 <li>フォームごとに日付欄や添付欄の有無が異なります。</li>
             </ul>
         </section>
