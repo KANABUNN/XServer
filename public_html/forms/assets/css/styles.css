@@ -1742,3 +1742,97 @@ body.forms-public-page {
         align-self: flex-start;
     }
 }
+
+
+/* =========================================================================
+   P2 改善パッチ — フォーム一覧カード強化
+   ========================================================================= */
+
+/* P2: チップを意味別に色分け
+   サイドバーのフォームカード内チップに、必須数(赤系)、日付(青系)、
+   添付(緑系) の3種を導入する。pill / subtle-pill を上書きするため
+   .nav-chip で固有の余白・font-weight を指定する。 */
+.nav-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.nav-chip__sub {
+    font-weight: 500;
+    opacity: 0.78;
+    font-size: 0.72rem;
+}
+
+/* 必須数: 赤系（必須バッジと色味を揃える） */
+.nav-chip--required {
+    background: rgba(220, 38, 38, 0.10);
+    color: #b91c1c;
+    border-color: rgba(220, 38, 38, 0.22);
+}
+
+/* 日付: 青系 */
+.nav-chip--date {
+    background: rgba(37, 99, 235, 0.10);
+    color: #1e40af;
+    border-color: rgba(37, 99, 235, 0.20);
+}
+
+/* 添付: 緑系 */
+.nav-chip--file {
+    background: rgba(22, 163, 74, 0.10);
+    color: #166534;
+    border-color: rgba(22, 163, 74, 0.22);
+}
+
+/* 選択中のフォームカードに乗ったときも色味は維持しつつ、わずかに濃く */
+.public-form-nav-item.selected .nav-chip--required {
+    background: rgba(220, 38, 38, 0.16);
+}
+.public-form-nav-item.selected .nav-chip--date {
+    background: rgba(37, 99, 235, 0.16);
+}
+.public-form-nav-item.selected .nav-chip--file {
+    background: rgba(22, 163, 74, 0.16);
+}
+
+
+/* P2: 受付停止中フォームの非活性化
+   .is-closed をカード自体に付与し、視覚的に淡く・操作不可に見せる。
+   clickハンドラ側で aria-disabled を見てスキップするので、
+   ここではあくまで視覚と入力デバイスの抑止を担う。 */
+.public-form-nav-item.is-closed {
+    opacity: 0.55;
+    cursor: not-allowed;
+    background: linear-gradient(180deg, rgba(238, 242, 247, 0.78), rgba(232, 238, 246, 0.82));
+}
+
+.public-form-nav-item.is-closed:hover,
+.public-form-nav-item.is-closed:focus-visible {
+    /* hover/focus 時の強調を打ち消す（既存スタイルが浮き上がらせる場合があるため） */
+    transform: none;
+    box-shadow: none;
+}
+
+.public-form-nav-item.is-closed strong {
+    color: rgba(33, 56, 84, 0.78);
+}
+
+/* 停止中カード内のチップは更にトーンダウン */
+.public-form-nav-item.is-closed .nav-chip {
+    filter: grayscale(0.4);
+}
+
+/* キーボードフォーカスは依然見えるようにする */
+.public-form-nav-item.is-closed:focus-visible {
+    outline: 2px solid rgba(33, 56, 84, 0.45);
+    outline-offset: 2px;
+}

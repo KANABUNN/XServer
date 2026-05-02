@@ -21,6 +21,18 @@ function requiredBadge(isRequired) {
     : ' <em class="optional-badge" aria-hidden="true">任意</em>';
 }
 
+// P2: 受付状態が「開いている」とみなせるかを安全に判定する。
+// availability.status は通常 'open' / 'closed' などが入るが、
+// データ仕様の揺れ（is_open フラグだけ来る等）にも防御的に対応する。
+function isAvailabilityOpen(availability) {
+  if (!availability || typeof availability !== 'object') return true;
+  if (availability.is_open === false) return false;
+  if (availability.is_open === true) return true;
+  const status = String(availability.status || '').toLowerCase();
+  if (!status) return true;
+  return status === 'open' || status === 'available' || status === 'active';
+}
+
 function saveDraft(formId, values) {
   try {
     localStorage.setItem(`forms-public-draft-${formId}`, JSON.stringify(values));
@@ -73,7 +85,9 @@ function filterForms() {
 
   const activeExists = publicState.filteredForms.some((form) => form.id === publicState.activeFormId);
   if (!activeExists) {
-    publicState.activeFormId = publicState.filteredForms[0]?.id || null;
+    // P2: 初期表示・絞り込み変更時は、受付中のフォームを優先的にアクティブ化
+    const firstOpen = publicState.filteredForms.find((form) => isAvailabilityOpen(form.availability));
+    publicState.activeFormId = firstOpen ? firstOpen.id : (publicState.filteredForms[0]?.id || null);
   }
 }
 
@@ -94,14 +108,41 @@ function renderSidebar() {
     const availability = form.availability || {};
     const fieldCount = Array.isArray(form.fields) ? form.fields.length : 0;
     const isSelected = form.id === publicState.activeFormId;
-    const chips = [
-      settings.enable_date_field ? '日付' : null,
-      settings.allow_file_upload ? '添付可' : null,
-      `${fieldCount} 項目`,
-    ].filter(Boolean);
+    const isOpen = isAvailabilityOpen(availability);
+
+    // P2: 必須数 = 基本2 + 日付必須 + 添付必須 + カスタム必須
+    const customRequiredCount = (form.fields || []).filter((f) => f.is_required).length;
+    const requiredTotal = 2
+      + (settings.enable_date_field && settings.date_required ? 1 : 0)
+      + (settings.allow_file_upload && settings.file_required ? 1 : 0)
+      + customRequiredCount;
+    const visibleFieldCount = 2
+      + (settings.enable_date_field ? 1 : 0)
+      + fieldCount
+      + (settings.allow_file_upload ? 1 : 0);
+
+    // P2: チップを意味別に分類（色分けはCSS側）
+    const chips = [];
+    chips.push(`<span class="pill nav-chip nav-chip--required">必須 ${requiredTotal} <span class="nav-chip__sub">/ 全 ${visibleFieldCount}</span></span>`);
+    if (settings.enable_date_field) {
+      chips.push('<span class="pill nav-chip nav-chip--date">日付</span>');
+    }
+    if (settings.allow_file_upload) {
+      chips.push('<span class="pill nav-chip nav-chip--file">添付</span>');
+    }
+
+    // P2: 受付停止中は aria-disabled で非活性化（キーボード到達は維持）
+    const disabledAttrs = isOpen
+      ? ''
+      : 'aria-disabled="true" tabindex="-1"';
+    const itemClass = [
+      'public-form-nav-item',
+      isSelected ? 'selected' : '',
+      isOpen ? '' : 'is-closed',
+    ].filter(Boolean).join(' ');
 
     return `
-      <button type="button" class="public-form-nav-item ${isSelected ? 'selected' : ''}" data-form-tab="${form.id}">
+      <button type="button" class="${itemClass}" data-form-tab="${form.id}" ${disabledAttrs}>
         <div class="public-form-nav-item__top">
           <div>
             <strong>${escapeHtml(form.name)}</strong>
@@ -111,7 +152,7 @@ function renderSidebar() {
         </div>
         ${form.description ? `<p class="public-form-nav-item__description">${escapeHtml(form.description)}</p>` : ''}
         <div class="public-form-nav-item__chips">
-          ${chips.map((chip) => `<span class="pill subtle-pill">${escapeHtml(chip)}</span>`).join('')}
+          ${chips.join('')}
         </div>
       </button>
     `;
@@ -502,7 +543,9 @@ async function loadPublicForms() {
     return;
   }
   publicState.forms = result.forms || [];
-  publicState.activeFormId = publicState.forms[0]?.id || null;
+  // P2: 初期は受付中フォームを優先的にアクティブ化（全件停止中の場合のみ先頭にフォールバック）
+  const firstOpen = publicState.forms.find((form) => isAvailabilityOpen(form.availability));
+  publicState.activeFormId = firstOpen ? firstOpen.id : (publicState.forms[0]?.id || null);
   filterForms();
   renderSidebar();
   renderHero();
@@ -512,6 +555,11 @@ async function loadPublicForms() {
 document.addEventListener('click', (event) => {
   const button = event.target.closest('[data-form-tab]');
   if (button) {
+    // P2: 受付停止中フォームは選択不可
+    if (button.getAttribute('aria-disabled') === 'true') {
+      event.preventDefault();
+      return;
+    }
     publicState.activeFormId = Number(button.dataset.formTab);
     renderSidebar();
     renderHero();
@@ -569,7 +617,8 @@ loadPublicForms();
   // フォーム選択時はモバイル時のみ閉じる
   document.addEventListener('click', (event) => {
     const tab = event.target.closest('[data-form-tab]');
-    if (tab && mq.matches) {
+    // P2: 停止中フォーム（aria-disabled）はクリックしてもドロワーを閉じない
+    if (tab && tab.getAttribute('aria-disabled') !== 'true' && mq.matches) {
       setDrawerOpen(false);
     }
   });
