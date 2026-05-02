@@ -204,9 +204,10 @@ function renderSidebar() {
     }
 
     // P2: 受付停止中は aria-disabled で非活性化（キーボード到達は維持）
-    const disabledAttrs = isOpen
-      ? ''
-      : 'aria-disabled="true" tabindex="-1"';
+    // P4: tablist パターンに沿って role="tab"、選択中のみ tabindex="0"
+    const isDisabled = !isOpen;
+    const tabIndex = isSelected && !isDisabled ? '0' : '-1';
+    const ariaDisabledAttr = isDisabled ? 'aria-disabled="true"' : '';
     const itemClass = [
       'public-form-nav-item',
       isSelected ? 'selected' : '',
@@ -214,7 +215,14 @@ function renderSidebar() {
     ].filter(Boolean).join(' ');
 
     return `
-      <button type="button" class="${itemClass}" data-form-tab="${form.id}" ${disabledAttrs}>
+      <button type="button" class="${itemClass}"
+              role="tab"
+              id="tab-${form.id}"
+              aria-selected="${isSelected ? 'true' : 'false'}"
+              aria-controls="public-form-host"
+              tabindex="${tabIndex}"
+              ${ariaDisabledAttr}
+              data-form-tab="${form.id}">
         <div class="public-form-nav-item__top">
           <div>
             <strong>${escapeHtml(form.name)}</strong>
@@ -292,12 +300,14 @@ function renderCustomField(field, draft = {}) {
   const describedBy = field.help_text
     ? `aria-describedby="help-${fieldNameToId(name)} err-${fieldNameToId(name)}"`
     : `aria-describedby="err-${fieldNameToId(name)}"`;
+  // P4: ラベル/入力の明示的な for/id 紐付け
+  const inputId = `input-${fieldNameToId(name)}`;
 
   if (field.field_type === 'textarea') {
     return `
-      <label class="form-block public-form-block">
+      <label class="form-block public-form-block" for="${inputId}">
         <span>${escapeHtml(field.field_label)}${requiredBadge(Boolean(field.is_required))}</span>
-        <textarea name="${escapeHtml(name)}" rows="4" placeholder="${placeholder}" ${required} ${field.is_required ? 'aria-required="true"' : ''} ${describedBy}>${value}</textarea>
+        <textarea id="${inputId}" name="${escapeHtml(name)}" rows="4" placeholder="${placeholder}" ${required} ${field.is_required ? 'aria-required="true"' : ''} ${describedBy}>${value}</textarea>
         ${help}
         ${errorEl}
       </label>
@@ -308,9 +318,9 @@ function renderCustomField(field, draft = {}) {
     const currentValue = String(rawValue || '');
     const options = (field.options || []).map((option) => `<option value="${escapeHtml(option)}" ${option === currentValue ? 'selected' : ''}>${escapeHtml(option)}</option>`).join('');
     return `
-      <label class="form-block public-form-block">
+      <label class="form-block public-form-block" for="${inputId}">
         <span>${escapeHtml(field.field_label)}${requiredBadge(Boolean(field.is_required))}</span>
-        <select name="${escapeHtml(name)}" ${required} ${field.is_required ? 'aria-required="true"' : ''} ${describedBy}>
+        <select id="${inputId}" name="${escapeHtml(name)}" ${required} ${field.is_required ? 'aria-required="true"' : ''} ${describedBy}>
           <option value="">選択してください</option>
           ${options}
         </select>
@@ -324,8 +334,8 @@ function renderCustomField(field, draft = {}) {
     const checked = String(rawValue) === '1' ? 'checked' : '';
     return `
       <div class="public-checkbox-wrap">
-        <label class="switch-card public-check-card">
-          <input type="checkbox" name="${escapeHtml(name)}" value="1" ${checked} ${field.is_required ? 'aria-required="true"' : ''}>
+        <label class="switch-card public-check-card" for="${inputId}">
+          <input id="${inputId}" type="checkbox" name="${escapeHtml(name)}" value="1" ${checked} ${field.is_required ? 'aria-required="true"' : ''}>
           <span>${escapeHtml(field.field_label)}${requiredBadge(Boolean(field.is_required))}</span>
         </label>
         ${help}
@@ -336,9 +346,9 @@ function renderCustomField(field, draft = {}) {
 
   const type = field.field_type === 'number' ? 'number' : (field.field_type === 'date' ? 'date' : 'text');
   return `
-    <label class="form-block public-form-block">
+    <label class="form-block public-form-block" for="${inputId}">
       <span>${escapeHtml(field.field_label)}${requiredBadge(Boolean(field.is_required))}</span>
-      <input type="${type}" name="${escapeHtml(name)}" value="${value}" placeholder="${placeholder}" ${required} ${field.is_required ? 'aria-required="true"' : ''} ${describedBy}>
+      <input id="${inputId}" type="${type}" name="${escapeHtml(name)}" value="${value}" placeholder="${placeholder}" ${required} ${field.is_required ? 'aria-required="true"' : ''} ${describedBy}>
       ${help}
       ${errorEl}
     </label>
@@ -404,6 +414,13 @@ function renderActiveForm() {
   if (!root) return;
 
   const form = getActiveForm();
+  // P4: tabpanel の aria-labelledby を現在のタブIDに紐付ける
+  if (form) {
+    root.setAttribute('aria-labelledby', `tab-${form.id}`);
+  } else {
+    root.removeAttribute('aria-labelledby');
+  }
+
   if (!form) {
     root.innerHTML = '<div class="empty-state">現在、公開中のフォームはありません。左側の一覧もあわせて確認してください。</div>';
     return;
@@ -416,15 +433,15 @@ function renderActiveForm() {
   const distributionSection = renderDistributionSection(form);
   const customFields = (form.fields || []).map((field) => renderCustomField(field, draft)).join('');
   const dateField = settings.enable_date_field ? `
-    <label class="form-block public-form-block">
+    <label class="form-block public-form-block" for="input-submitted_date">
       <span>${escapeHtml(settings.date_label || '希望日')}${requiredBadge(Boolean(settings.date_required))}</span>
-      <input type="date" name="submitted_date" value="${escapeHtml(draft.submitted_date || '')}" ${settings.date_required ? 'required aria-required="true"' : ''} aria-describedby="err-submitted_date">
+      <input id="input-submitted_date" type="date" name="submitted_date" value="${escapeHtml(draft.submitted_date || '')}" ${settings.date_required ? 'required aria-required="true"' : ''} aria-describedby="err-submitted_date">
       <p class="field-error" data-field-error="submitted_date" id="err-submitted_date" role="alert" hidden></p>
     </label>
   ` : '';
   // P3: 添付制約を small-note → hint-bar に格上げし、aria-describedby で input と関連付ける
   const fileField = settings.allow_file_upload ? `
-    <label class="form-block public-form-block">
+    <label class="form-block public-form-block" for="input-uploaded_file">
       <span>${escapeHtml(settings.file_label || '添付ファイル')}${requiredBadge(Boolean(settings.file_required))}</span>
       <div class="hint-bar" id="hint-uploaded_file">
         <span class="hint-bar__label">添付ルール</span>
@@ -432,7 +449,7 @@ function renderActiveForm() {
         <span class="hint-bar__sep" aria-hidden="true">/</span>
         <span class="hint-bar__item">上限 <strong>${escapeHtml(String(settings.max_upload_size_mb || 5))} MB</strong></span>
       </div>
-      <input type="file" name="uploaded_file" ${settings.file_required ? 'required aria-required="true"' : ''} aria-describedby="hint-uploaded_file err-uploaded_file">
+      <input id="input-uploaded_file" type="file" name="uploaded_file" ${settings.file_required ? 'required aria-required="true"' : ''} aria-describedby="hint-uploaded_file err-uploaded_file">
       <p class="field-error" data-field-error="uploaded_file" id="err-uploaded_file" role="alert" hidden></p>
     </label>
   ` : '';
@@ -459,14 +476,14 @@ function renderActiveForm() {
           <span class="pill subtle-pill">必須 2 項目</span>
         </div>
         <div class="public-form-grid two-col">
-          <label class="form-block public-form-block">
+          <label class="form-block public-form-block" for="input-email">
             <span>メールアドレス <em class="required-badge" aria-hidden="true">必須</em></span>
-            <input type="email" name="email" value="${escapeHtml(draft.email || '')}" required aria-required="true" autocomplete="email" aria-describedby="hint-resubmit err-email">
+            <input id="input-email" type="email" name="email" value="${escapeHtml(draft.email || '')}" required aria-required="true" autocomplete="email" aria-describedby="hint-resubmit err-email">
             <p class="field-error" data-field-error="email" id="err-email" role="alert" hidden></p>
           </label>
-          <label class="form-block public-form-block">
+          <label class="form-block public-form-block" for="input-organization_name">
             <span>団体名 <em class="required-badge" aria-hidden="true">必須</em></span>
-            <input type="text" name="organization_name" value="${escapeHtml(draft.organization_name || '')}" required aria-required="true" autocomplete="organization" aria-describedby="hint-resubmit err-organization_name">
+            <input id="input-organization_name" type="text" name="organization_name" value="${escapeHtml(draft.organization_name || '')}" required aria-required="true" autocomplete="organization" aria-describedby="hint-resubmit err-organization_name">
             <p class="field-error" data-field-error="organization_name" id="err-organization_name" role="alert" hidden></p>
           </label>
         </div>
@@ -700,6 +717,43 @@ document.addEventListener('click', (event) => {
     renderActiveForm();
     return;
   }
+});
+
+// P4: tablist の矢印キーナビゲーション (manual activation pattern)
+// 矢印キーでフォーカスのみ移動、Enter/Space で選択を確定する。
+document.addEventListener('keydown', (event) => {
+  const nav = document.getElementById('public-form-nav');
+  if (!nav) return;
+  const activeTab = event.target.closest('[role="tab"]');
+  if (!activeTab || !nav.contains(activeTab)) return;
+
+  const tabs = Array.from(nav.querySelectorAll('[role="tab"]'));
+  if (!tabs.length) return;
+  const currentIndex = tabs.indexOf(activeTab);
+  let nextIndex = currentIndex;
+
+  switch (event.key) {
+    case 'ArrowDown':
+    case 'ArrowRight':
+      nextIndex = (currentIndex + 1) % tabs.length;
+      break;
+    case 'ArrowUp':
+    case 'ArrowLeft':
+      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      break;
+    case 'Home':
+      nextIndex = 0;
+      break;
+    case 'End':
+      nextIndex = tabs.length - 1;
+      break;
+    default:
+      return;
+  }
+  event.preventDefault();
+  // 移動先タブをフォーカス可能にしてからフォーカスを移す（roving tabindex）
+  tabs.forEach((t, i) => t.setAttribute('tabindex', i === nextIndex ? '0' : '-1'));
+  tabs[nextIndex].focus();
 });
 
 document.getElementById('public-form-search')?.addEventListener('input', (event) => {

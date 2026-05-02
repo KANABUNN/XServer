@@ -47,7 +47,7 @@ page_header('汎用フォーム', 'forms-public-page');
 
         <section class="public-sidebar-section">
             <div id="public-message" class="alert hidden"></div>
-            <div id="public-form-nav" class="public-form-nav"></div>
+            <div id="public-form-nav" class="public-form-nav" role="tablist" aria-orientation="vertical" aria-label="提出先フォーム"></div>
         </section>
 
         <section class="public-sidebar-section helper-panel">
@@ -79,7 +79,7 @@ page_header('汎用フォーム', 'forms-public-page');
                         <p class="small-note">入力に必要な項目だけをわかりやすく表示します。</p>
                     </div>
                 </div>
-                <div id="public-form-host" class="form-host public-form-host"></div>
+                <div id="public-form-host" class="form-host public-form-host" role="tabpanel" tabindex="0"></div>
             </article>
         </section>
     </section>

@@ -1967,3 +1967,67 @@ body.forms-public-page {
         display: none;
     }
 }
+
+
+/* =========================================================================
+   P4 改善パッチ — アクセシビリティ仕上げ
+   フォーカスリング統一 / scroll-margin-top / tabリスト
+   ========================================================================= */
+
+/* P4: フォーカスリングの統一
+   既存の :focus は border-color と box-shadow を使っているが、
+   それ以外の要素（button / a / [role="tab"] 等）に統一されたアウトラインを付与。
+   :focus-visible なのでマウスクリック時には出ず、キーボード操作時のみ表示される。
+   ヒント色（青）をベースに、aria-invalid 時は赤（既存ルールが優先）。 */
+:where(button, a, [role="tab"], [tabindex], summary):focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.55);
+    outline-offset: 2px;
+    border-radius: 8px;
+}
+
+/* 入力欄も :focus-visible で統一トーンに（既存の box-shadow ベースは維持しつつ補強） */
+:where(input, textarea, select):focus-visible {
+    outline: 2px solid rgba(37, 99, 235, 0.45);
+    outline-offset: 1px;
+}
+
+
+/* P4: scroll-margin-top の統一
+   .public-site-header が position: sticky / top: 0 で常時画面上部にあるため、
+   scrollIntoView やキーボードフォーカス移動時にフィールドがヘッダー下に
+   隠れないよう、十分な scroll-margin-top を確保する。 */
+:where(input, textarea, select, button, a, [role="tab"], .public-form-section, .public-form-block):where(*) {
+    scroll-margin-top: 100px;
+}
+
+/* tabpanel 自体のフォーカス時もヘッダーで隠れないように */
+.public-form-host {
+    scroll-margin-top: 100px;
+}
+
+.public-form-host:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.45);
+    outline-offset: 4px;
+    border-radius: 14px;
+}
+
+
+/* P4: tablist 内タブのフォーカス可視化
+   tablist 構造で各タブに roving tabindex を使うため、選択中以外は
+   tabindex="-1" になっているが、矢印キーで移動すると一時的にフォーカスが当たる。
+   既存の .public-form-nav-item.selected と区別したフォーカススタイルを追加。 */
+.public-form-nav-item:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.55);
+    outline-offset: 2px;
+}
+
+/* aria-disabled なタブにフォーカスが当たった場合は、それと分かる落ち着いた枠 */
+.public-form-nav-item.is-closed:focus-visible {
+    outline-color: rgba(33, 56, 84, 0.55);
+}
+
+
+/* P4: required-badge / optional-badge の SR 配慮
+   バッジは aria-hidden="true" で読み上げから除外しているので、
+   表示位置を視覚的に少し詰めても SR への影響はない。
+   今回は触らないが、参考としてコメントを残す。 */
