@@ -25,6 +25,20 @@
   const formErrorSummary = document.getElementById('formErrorSummary');
   const stepEls = Array.from(document.querySelectorAll('[data-step]'));
 
+  // 改善 (E1): 削除確認ダイアログ要素
+  const confirmDialog = document.getElementById('confirmDialog');
+  const confirmDialogTitle = document.getElementById('confirmDialogTitle');
+  const confirmDialogMessage = document.getElementById('confirmDialogMessage');
+  const confirmDialogOkBtn = document.getElementById('confirmDialogOk');
+  const confirmDialogCancelBtn = document.getElementById('confirmDialogCancel');
+
+  // 改善 (E3): カードヒントの自動消去タイマー管理
+  const cardHintTimers = {};
+
+  // 改善 (F3): マニュアル PDF の元 <object> マークアップを記憶しておき、
+  // モバイル ↔ デスクトップで切り替える際に復元できるようにする
+  const manualEmbedOriginalHtml = '<object data="manuals/booking_user_manual.pdf#view=FitH" type="application/pdf" class="manual-pdf-frame"><p>PDF を表示できない場合は、<a href="manuals/booking_user_manual.pdf" target="_blank" rel="noopener">こちらから開いてください</a>。</p></object>';
+
   function setSubmitButtonState(isSubmitting) {
     if (!submitBtn) return;
     submitBtn.disabled = isSubmitting;
@@ -214,6 +228,72 @@
   }
 
   // ===========================================================
+  // 改善 (E3): 一時的ヒントメッセージ (3秒で自動消去)
+  // ===========================================================
+
+  function showCardHint(dateKey, msg) {
+    const card = dateConfigList.querySelector(`[data-date-card="${CSS.escape(dateKey)}"]`);
+    if (!card) return;
+    let hint = card.querySelector('[data-card-hint]');
+    if (!hint) {
+      hint = document.createElement('p');
+      hint.className = 'field-hint';
+      hint.setAttribute('data-card-hint', '');
+      hint.setAttribute('role', 'status');
+      card.appendChild(hint);
+    }
+    hint.textContent = msg;
+    hint.hidden = false;
+    if (cardHintTimers[dateKey]) clearTimeout(cardHintTimers[dateKey]);
+    cardHintTimers[dateKey] = setTimeout(() => {
+      if (hint && hint.isConnected) {
+        hint.hidden = true;
+        hint.textContent = '';
+      }
+      delete cardHintTimers[dateKey];
+    }, 3000);
+  }
+
+  // ===========================================================
+  // 改善 (E1): <dialog> ベースの確認ダイアログ (alert/confirm 廃止)
+  // ===========================================================
+
+  function showConfirm({ title = '確認', message = '', okText = '削除する', cancelText = 'キャンセル' } = {}) {
+    return new Promise((resolve) => {
+      // <dialog> 非対応環境では window.confirm にフォールバック
+      if (!confirmDialog || typeof confirmDialog.showModal !== 'function'
+          || !confirmDialogOkBtn || !confirmDialogCancelBtn
+          || !confirmDialogTitle || !confirmDialogMessage) {
+        resolve(window.confirm(message));
+        return;
+      }
+
+      confirmDialogTitle.textContent = title;
+      confirmDialogMessage.textContent = message;
+      confirmDialogOkBtn.textContent = okText;
+      confirmDialogCancelBtn.textContent = cancelText;
+
+      let resolved = false;
+      const safeResolve = (value) => {
+        if (resolved) return;
+        resolved = true;
+        confirmDialogOkBtn.removeEventListener('click', handleOk);
+        confirmDialogCancelBtn.removeEventListener('click', handleCancel);
+        confirmDialog.removeEventListener('close', handleCloseEvent);
+        resolve(value);
+      };
+      const handleOk = () => { safeResolve(true); confirmDialog.close(); };
+      const handleCancel = () => { safeResolve(false); confirmDialog.close(); };
+      const handleCloseEvent = () => { safeResolve(false); };
+
+      confirmDialogOkBtn.addEventListener('click', handleOk);
+      confirmDialogCancelBtn.addEventListener('click', handleCancel);
+      confirmDialog.addEventListener('close', handleCloseEvent);
+      confirmDialog.showModal();
+    });
+  }
+
+  // ===========================================================
   // 改善 (A): ステップ進捗バー
   // ===========================================================
 
@@ -361,7 +441,7 @@
     detailPanel.classList.remove('is-hidden');
     detailPanelWasHidden = false;
 
-    dateConfigList.innerHTML = dates.map((dateKey) => {
+    dateConfigList.innerHTML = dates.map((dateKey, index) => {
       const detail = ensureDetail(dateKey);
       const rooms = getAvailableRooms(dateKey);
       const roomOptions = buildRoomOptions(detail, rooms);
@@ -373,30 +453,31 @@
         <article class="date-config-card" data-date-card="${dateKey}">
           <div class="date-config-head">
             <div>
-              <h3>${escapeHtml(formatDateLabel(dateKey))}</h3>
+              <h3><span class="date-card-num" aria-hidden="true">${index + 1}</span><span class="date-card-text">${escapeHtml(formatDateLabel(dateKey))}</span></h3>
               ${roomBadge}
             </div>
-            <button type="button" class="remove-date-btn" data-remove-date="${dateKey}">この日を外す</button>
+            <button type="button" class="remove-date-btn" data-remove-date="${dateKey}" aria-label="${escapeHtml(formatDateLabel(dateKey))} の選択を外す">この日を外す</button>
           </div>
 
           <div class="date-config-grid">
             <label class="form-group">
-              <span>部屋 <span class="required">*</span></span>
+              <span>部屋<span class="required-badge" aria-hidden="true">必須</span></span>
               <select class="detail-room-select" data-date="${dateKey}">${roomOptions}</select>
             </label>
 
             <label class="form-group">
-              <span>利用開始時刻 <span class="required">*</span></span>
+              <span>利用開始時刻<span class="required-badge" aria-hidden="true">必須</span></span>
               <select class="detail-start-select" data-date="${dateKey}">${startOptions}</select>
             </label>
 
             <label class="form-group">
-              <span>利用終了時刻 <span class="required">*</span></span>
+              <span>利用終了時刻<span class="required-badge" aria-hidden="true">必須</span></span>
               <select class="detail-end-select" data-date="${dateKey}">${endOptions}</select>
             </label>
           </div>
 
           <p class="field-error" data-card-error role="alert" hidden></p>
+          <p class="field-hint" data-card-hint role="status" hidden></p>
         </article>
       `;
     }).join('');
@@ -418,11 +499,17 @@
         const dateKey = select.dataset.date;
         if (!dateKey) return;
         const detail = ensureDetail(dateKey);
+        // 改善 (E3): 終了時刻が自動調整された場合に通知するため、変更前の値を控える
+        const oldEnd = detail.usage_end_time;
         detail.usage_start_time = select.value;
         normalizeEndTime(detail);
+        const newEnd = detail.usage_end_time;
         clearCardError(dateKey);
         clearFormErrorSummary();
         renderDetailCards();
+        if (oldEnd !== newEnd && newEnd) {
+          showCardHint(dateKey, `終了時刻を ${newEnd} に自動調整しました。`);
+        }
       });
     });
 
@@ -439,9 +526,17 @@
     });
 
     dateConfigList.querySelectorAll('.remove-date-btn').forEach((button) => {
-      button.addEventListener('click', () => {
+      button.addEventListener('click', async () => {
         const dateKey = button.dataset.removeDate;
         if (!dateKey) return;
+        // 改善 (E1): 誤クリック防止のため <dialog> ベースの確認を表示
+        const ok = await showConfirm({
+          title: '日付の選択を外しますか?',
+          message: `${formatDateLabel(dateKey)} の予約設定がリセットされます。本当に外してよろしいですか?`,
+          okText: '外す',
+          cancelText: 'キャンセル',
+        });
+        if (!ok) return;
         const index = selectedDates.indexOf(dateKey);
         if (index >= 0) selectedDates.splice(index, 1);
         delete detailMap[dateKey];
@@ -507,11 +602,32 @@
 
       button.disabled = !selectable;
       button.dataset.date = dateKey;
+
+      // 改善 (D1): 「多:○ / 橙:○」記号表記をバッジに置き換え
+      // 改善 (F4): スクリーンリーダー向けに aria-label / aria-pressed を付与
+      const noteText = !inRange ? '対象外' : (fullBooked ? '満室' : (selected ? '選択中' : (partial ? '一部空き' : '選択可')));
+      const tamokuOpen = !dayStatus.tamoku;
+      const orangeOpen = !dayStatus.orange;
+      const tamokuStateLabel = tamokuOpen ? '空き' : '予約あり';
+      const orangeStateLabel = orangeOpen ? '空き' : '予約あり';
+
       button.innerHTML = `
         <span class="calendar-day-number">${day}</span>
-        <span class="calendar-day-note">${!inRange ? '対象外' : (fullBooked ? '満室' : (selected ? '選択中' : (partial ? '一部空き' : '選択可')))}</span>
-        <span class="calendar-room-state">多:${dayStatus.tamoku ? '×' : '○'} / 橙:${dayStatus.orange ? '×' : '○'}</span>
+        <span class="calendar-day-note">${noteText}</span>
+        <span class="calendar-room-chips" aria-hidden="true">
+          <span class="room-chip ${tamokuOpen ? 'is-open' : 'is-taken'}">多目的</span>
+          <span class="room-chip ${orangeOpen ? 'is-open' : 'is-taken'}">オレンジ</span>
+        </span>
       `;
+
+      const ariaLabel = inRange
+        ? `${formatDateLabel(dateKey)} ${noteText}。多目的室${tamokuStateLabel}、オレンジの部屋${orangeStateLabel}。`
+        : `${formatDateLabel(dateKey)} ${noteText}`;
+      button.setAttribute('aria-label', ariaLabel);
+      if (selectable) {
+        button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+      }
+
       button.addEventListener('click', () => {
         const idx = selectedDates.indexOf(dateKey);
         if (idx >= 0) {
@@ -530,8 +646,22 @@
     }
   }
 
+  // 改善 (D2): 月遷移中のシマー付きスケルトン表示
+  function renderSkeleton() {
+    calendarGrid.innerHTML = '';
+    renderWeekdayHeader();
+    // 6週分(42セル)を生成すれば、どの月でも収まる
+    for (let i = 0; i < 42; i++) {
+      const el = document.createElement('div');
+      el.className = 'calendar-day is-skeleton';
+      el.setAttribute('aria-hidden', 'true');
+      calendarGrid.appendChild(el);
+    }
+  }
+
   async function loadMonth(date) {
     calendarStatusText.textContent = '予約状況を取得しています。';
+    renderSkeleton(); // 改善 (D2): fetch 前にスケルトンを表示
     try {
       const response = await fetch(`get_calendar_status.php?year=${date.getFullYear()}&month=${date.getMonth() + 1}`, {
         credentials: 'same-origin',
@@ -670,9 +800,24 @@
   });
 
   openManualDialogBtn?.addEventListener('click', () => {
-    if (typeof manualDialog?.showModal === 'function') {
-      manualDialog.showModal();
+    if (typeof manualDialog?.showModal !== 'function') return;
+    // 改善 (F3): iOS Safari など <object type="application/pdf"> を表示できない
+    // モバイル端末では、プレビューをやめて「新しいタブで開く」CTA に置き換える
+    const wrap = manualDialog.querySelector('.manual-embed-wrap');
+    if (wrap) {
+      const isMobile = window.matchMedia('(max-width: 640px)').matches;
+      if (isMobile) {
+        wrap.innerHTML = `
+          <div class="manual-mobile-fallback">
+            <p>マニュアル(PDF)は新しいタブで開きます。</p>
+            <a href="manuals/booking_user_manual.pdf" target="_blank" rel="noopener" class="manual-mobile-open-btn">マニュアルを開く</a>
+          </div>
+        `;
+      } else if (!wrap.querySelector('object')) {
+        wrap.innerHTML = manualEmbedOriginalHtml;
+      }
     }
+    manualDialog.showModal();
   });
 
   agreeFromDialogBtn?.addEventListener('click', () => {

@@ -53,7 +53,9 @@ try {
     error_log('[reservation:' . $id . '] ' . $e->getFile() . ':' . $e->getLine());
     error_log('[reservation:' . $id . '] POST=' . json_encode($_POST, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
+    // 改善 (G2): mistake.html?eid=... 形式でエラーIDを引き継ぐ。
+    // 利用者が問い合わせる際に管理者がログを追跡できるようにするため。
     $basePath = reservation_current_base_path();
-    header('Location: ' . ($basePath !== '' ? $basePath : '') . '/mistake.html', true, 303);
+    header('Location: ' . ($basePath !== '' ? $basePath : '') . '/mistake.html?eid=' . rawurlencode($id), true, 303);
     exit;
 }

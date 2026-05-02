@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>貸し部屋予約</title>
+  <title>貸し部屋予約 - 福岡工業大学</title>
   <link rel="icon" href="icon.png">
   <link rel="stylesheet" href="css/style.css?v=20260415a">
   <link rel="stylesheet" href="css/style_responsive.css?v=20260415a">
-  <link rel="stylesheet" href="css/style_improvements.css?v=20260502a">
+  <link rel="stylesheet" href="css/style_improvements.css?v=20260502b">
 </head>
 <body>
   <div class="container">
@@ -37,7 +37,7 @@
 
         <div class="form-grid user-grid">
           <div class="form-group">
-            <label for="email">メールアドレス <span class="required">*</span></label>
+            <label for="email">メールアドレス<span class="required-badge" aria-hidden="true">必須</span></label>
             <input
               type="email"
               name="email"
@@ -51,7 +51,7 @@
           </div>
 
           <div class="form-group">
-            <label for="organization_name">団体名 <span class="required">*</span></label>
+            <label for="organization_name">団体名<span class="required-badge" aria-hidden="true">必須</span></label>
             <input
               type="text"
               name="organization_name"
@@ -119,7 +119,7 @@
           <label class="consent-tile" for="agreeTerms">
             <input type="checkbox" id="agreeTerms" name="agree_terms" value="1" required>
             <span class="consent-mark" aria-hidden="true"></span>
-            <span class="consent-text">利用規約に同意します <span class="required">*</span></span>
+            <span class="consent-text">利用規約に同意します<span class="required-badge" aria-hidden="true">必須</span></span>
           </label>
         </div>
       </section>
@@ -175,6 +175,21 @@
     </form>
   </dialog>
 
-  <script src="js/calendar.js?v=20260502a" defer></script>
+  <dialog id="confirmDialog" class="terms-dialog confirm-dialog" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage">
+    <div class="terms-dialog-card">
+      <div class="terms-dialog-head">
+        <h2 id="confirmDialogTitle">確認</h2>
+      </div>
+      <div class="terms-dialog-body confirm-dialog-body">
+        <p id="confirmDialogMessage"></p>
+      </div>
+      <div class="terms-dialog-actions">
+        <button type="button" class="terms-link-btn" id="confirmDialogCancel">キャンセル</button>
+        <button type="button" class="confirm-dialog-ok-btn" id="confirmDialogOk">削除する</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="js/calendar.js?v=20260502b" defer></script>
 </body>
 </html>

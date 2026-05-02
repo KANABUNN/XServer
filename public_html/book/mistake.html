@@ -3,21 +3,55 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>送信エラー</title>
+  <title>送信エラー - 貸し部屋予約 - 福岡工業大学</title>
   <link rel="icon" href="icon.png">
   <link rel="stylesheet" href="css/style.css?v=20260406a">
   <link rel="stylesheet" href="css/style_responsive.css?v=20260406a">
-  <link rel="stylesheet" href="css/style_improvements.css?v=20260502a">
+  <link rel="stylesheet" href="css/style_improvements.css?v=20260502b">
 </head>
 <body>
   <div class="container">
     <div class="hero">
       <h1>予約を処理できませんでした</h1>
-      <p class="subtitle">入力内容を確認のうえ、もう一度お試しください。問題が続く場合は総合管理事務局へ連絡してください。</p>
+      <p class="subtitle">入力内容を確認のうえ、もう一度お試しください。問題が続く場合は総合管理事務局へご連絡ください。</p>
     </div>
+
+    <div class="mistake-error-id" id="mistakeErrorId" hidden>
+      <strong>エラーID</strong>
+      <code id="mistakeErrorIdValue"></code>
+      <p>お問い合わせの際に、上のエラーIDを担当者へお伝えいただくと原因の特定が早くなります。</p>
+    </div>
+
+    <div class="mistake-contact">
+      <p><strong>お問い合わせ先</strong></p>
+      <p>総合管理事務局</p>
+      <p>連絡先は学内案内に記載されている連絡方法をご利用ください。</p>
+    </div>
+
     <div class="result-actions">
       <a href="./" class="result-back-btn">入力画面へ戻る</a>
     </div>
   </div>
+
+  <script>
+    // URL 末尾の ?eid=... があればエラーIDブロックを表示する。
+    // submit.php 側の catch 節で生成した bin2hex(random_bytes(6)) = 12桁の hex を想定。
+    (function () {
+      try {
+        var params = new URLSearchParams(window.location.search);
+        var eid = (params.get('eid') || '').trim();
+        if (eid && /^[a-f0-9]{4,32}$/i.test(eid)) {
+          var wrap = document.getElementById('mistakeErrorId');
+          var val = document.getElementById('mistakeErrorIdValue');
+          if (wrap && val) {
+            val.textContent = eid;
+            wrap.hidden = false;
+          }
+        }
+      } catch (e) {
+        // URLSearchParams 非対応など何かあっても致命傷ではない
+      }
+    })();
+  </script>
 </body>
 </html>

@@ -78,11 +78,11 @@ $inputUrl = ($basePath !== '' ? $basePath : '') . '/';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><?php echo h($title); ?></title>
+  <title><?php echo h($title); ?> - 貸し部屋予約 - 福岡工業大学</title>
   <link rel="icon" href="icon.png">
   <link rel="stylesheet" href="css/style.css?v=20260407e">
   <link rel="stylesheet" href="css/style_responsive.css?v=20260407e">
-  <link rel="stylesheet" href="css/style_improvements.css?v=20260502a">
+  <link rel="stylesheet" href="css/style_improvements.css?v=20260502b">
 </head>
 <body>
   <div class="container">

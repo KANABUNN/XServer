@@ -1,9 +1,17 @@
 /* =========================================================================
-   高優先度 UI 改善パッチ (v=20260502a)
-   - A: ステップ進捗バー (.step-progress)
-   - B: インラインエラー表示 (.field-error / .form-error-summary)
-   - C: 結果ページのパスコード強調 (.passcode-card) と再申込みCTA (.result-actions)
+   貸し部屋予約 UI 改善パッチ (v=20260502b)
    既存 style.css を上書きする形で動作させるため、本ファイルを後ろから読み込む。
+
+   高優先度:
+   - A: ステップ進捗バー        (.step-progress)
+   - B: インラインエラー表示    (.field-error / .form-error-summary)
+   - C: パスコード強調 / 再申込みCTA (.passcode-card / .result-actions)
+
+   中・低優先度:
+   - D: カレンダー表示改善      (.calendar-room-chips / .calendar-day.is-skeleton)
+   - E: 日付カード UX           (.date-card-num / .field-hint / .confirm-dialog)
+   - F: a11y / モバイル仕上げ   (.required-badge / .manual-mobile-fallback)
+   - G: mistake.html 強化       (.mistake-error-id / .mistake-contact)
    ========================================================================= */
 
 
@@ -57,7 +65,6 @@
   line-height: 1.4;
 }
 
-/* 入力中ステップ (青) */
 .step.is-active {
   border-color: #2563eb;
   background: #eff6ff;
@@ -73,7 +80,6 @@
   color: #1e3a8a;
 }
 
-/* 完了ステップ (緑) */
 .step.is-done {
   border-color: #86efac;
   background: #f0fdf4;
@@ -104,10 +110,8 @@
 
 
 /* -------------------------------------------------------------------------
-   B: インラインエラー表示
+   B: インラインエラー / ヒント表示
    ------------------------------------------------------------------------- */
-
-/* 各日付カード内のエラーメッセージ */
 .field-error {
   margin: 12px 0 0;
   padding: 8px 12px;
@@ -126,13 +130,11 @@
   display: none;
 }
 
-/* エラー状態のカードに赤い縁取り */
 .date-config-card.has-error {
   border-color: #fca5a5;
   background: #fffafa;
 }
 
-/* aria-invalid な input/select は赤枠で強調 */
 .form-group input[aria-invalid="true"],
 .form-group select[aria-invalid="true"] {
   border-color: #dc2626 !important;
@@ -140,7 +142,6 @@
   background-color: rgba(254, 242, 242, 0.5);
 }
 
-/* フォーム全体のエラーサマリ (送信ボタン直前に表示) */
 .form-error-summary {
   margin: 0 0 4px;
   padding: 12px 16px;
@@ -163,6 +164,37 @@
   display: block;
   margin-bottom: 2px;
   font-size: 14px;
+}
+
+/* E3: 自動調整通知などの一時的ヒント (青系・自動消去) */
+.field-hint {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.06);
+  border-left: 3px solid #2563eb;
+  color: #1e40af;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.6;
+  user-select: text;
+  -webkit-user-select: text;
+  animation: field-hint-fadein 0.2s ease;
+}
+
+.field-hint[hidden] {
+  display: none;
+}
+
+@keyframes field-hint-fadein {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .field-hint {
+    animation: none;
+  }
 }
 
 
@@ -306,4 +338,279 @@
 
 .result-secondary-link:hover {
   text-decoration: underline;
+}
+
+
+/* -------------------------------------------------------------------------
+   D1: カレンダーセル — 部屋空き状況のバッジ化
+   旧: <span class="calendar-room-state">多:×/橙:○</span>
+   新: 緑/赤の塗りバッジで一目で判別
+   ------------------------------------------------------------------------- */
+.calendar-room-chips {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.room-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.room-chip.is-open {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #065f46;
+}
+
+.room-chip.is-taken {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+/* 選択不可の日付では文字をくすませる */
+.calendar-day.is-disabled .room-chip {
+  opacity: 0.55;
+}
+
+
+/* -------------------------------------------------------------------------
+   D2: スケルトンローダー
+   月遷移時に空のグリッドではなくシマー付きの灰色セルを表示
+   ------------------------------------------------------------------------- */
+.calendar-day.is-skeleton {
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
+  border-color: #e2e8f0;
+  animation: calendar-skeleton-shimmer 1.4s ease-in-out infinite;
+  cursor: default;
+  pointer-events: none;
+}
+
+@keyframes calendar-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendar-day.is-skeleton {
+    animation: none;
+  }
+}
+
+
+/* -------------------------------------------------------------------------
+   E2: 日付カード — 番号バッジで「何日目」が一目で分かるように
+   ------------------------------------------------------------------------- */
+.date-config-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.date-card-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+
+/* -------------------------------------------------------------------------
+   E1: 削除確認ダイアログ
+   showConfirm() ヘルパが <dialog id="confirmDialog"> を使って表示する
+   ------------------------------------------------------------------------- */
+.confirm-dialog {
+  width: min(420px, calc(100vw - 24px));
+}
+
+.confirm-dialog .terms-dialog-card {
+  max-height: none;
+}
+
+.confirm-dialog-body {
+  padding: 22px 22px 8px;
+  background: #ffffff;
+  max-height: none;
+  overflow: visible;
+}
+
+.confirm-dialog-body p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #1f2937;
+  word-break: break-word;
+}
+
+.confirm-dialog .terms-dialog-actions {
+  background: #f9fafb;
+}
+
+.confirm-dialog-ok-btn {
+  border: none;
+  border-radius: 12px;
+  padding: 10px 18px;
+  background: #dc2626;
+  color: #ffffff;
+  font-family: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+.confirm-dialog-ok-btn:hover {
+  transform: translateY(-1px);
+  opacity: 0.95;
+}
+
+
+/* -------------------------------------------------------------------------
+   F2: 必須バッジ
+   既存の <span class="required">*</span> の代わりに
+   <span class="required-badge" aria-hidden="true">必須</span> を使用
+   ------------------------------------------------------------------------- */
+.required-badge {
+  display: inline-block;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-left: 6px;
+  vertical-align: 2px;
+  letter-spacing: 0.02em;
+  background: rgba(220, 38, 38, 0.10);
+  color: #b91c1c;
+  border: 1px solid rgba(220, 38, 38, 0.22);
+}
+
+
+/* -------------------------------------------------------------------------
+   F3: モバイル時のマニュアル PDF フォールバック
+   <object> はiOS Safariで表示されないことが多いため、
+   モバイル幅では「新しいタブで開く」CTAに置き換える
+   ------------------------------------------------------------------------- */
+.manual-mobile-fallback {
+  padding: 36px 22px;
+  text-align: center;
+  display: grid;
+  gap: 18px;
+  background: #ffffff;
+}
+
+.manual-mobile-fallback p {
+  margin: 0;
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.7;
+}
+
+.manual-mobile-open-btn {
+  display: inline-block;
+  justify-self: center;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 15px;
+  border-radius: 12px;
+  text-decoration: none;
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.20);
+  transition: transform 0.15s;
+}
+
+.manual-mobile-open-btn:hover {
+  transform: translateY(-1px);
+}
+
+
+/* -------------------------------------------------------------------------
+   G: mistake.html — エラーID 表示と問い合わせ先ブロック
+   ------------------------------------------------------------------------- */
+.mistake-error-id {
+  margin: 18px 0 0;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f9fafb;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.mistake-error-id,
+.mistake-error-id * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.mistake-error-id strong {
+  display: block;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.mistake-error-id code {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.mistake-error-id p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.mistake-contact {
+  margin: 16px 0 0;
+  padding: 14px 18px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #eff6ff;
+}
+
+.mistake-contact p {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: #1e40af;
+  line-height: 1.7;
+}
+
+.mistake-contact p:last-child {
+  margin-bottom: 0;
+}
+
+.mistake-contact strong {
+  font-size: 14px;
+  color: #1e3a8a;
 }
