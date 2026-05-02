@@ -7,6 +7,7 @@
   <link rel="icon" href="icon.png">
   <link rel="stylesheet" href="css/style.css?v=20260415a">
   <link rel="stylesheet" href="css/style_responsive.css?v=20260415a">
+  <link rel="stylesheet" href="css/style_improvements.css?v=20260502a">
 </head>
 <body>
   <div class="container">
@@ -17,6 +18,15 @@
         <button type="button" class="terms-link-btn hero-action-btn" id="openManualDialog">利用マニュアルを見る</button>
       </div>
     </header>
+
+    <nav class="step-progress" aria-label="入力ステップ">
+      <ol class="step-list">
+        <li class="step is-active" data-step="1"><span class="step-num">1</span><span class="step-label">利用者情報</span></li>
+        <li class="step" data-step="2"><span class="step-num">2</span><span class="step-label">日付選択</span></li>
+        <li class="step" data-step="3"><span class="step-num">3</span><span class="step-label">時刻・部屋</span></li>
+        <li class="step" data-step="4"><span class="step-num">4</span><span class="step-label">規約同意</span></li>
+      </ol>
+    </nav>
 
     <form action="submit.php" method="post" class="form" id="reservationForm">
       <section class="panel">
@@ -37,6 +47,7 @@
               title="@bene.fit.ac.jp のメールアドレスのみ使用できます"
               required
             >
+            <p class="field-error" data-field-error="email" hidden></p>
           </div>
 
           <div class="form-group">
@@ -46,9 +57,10 @@
               name="organization_name"
               id="organization_name"
               maxlength="150"
-              placeholder="例：総合管理事務局"
+              placeholder="例:総合管理事務局"
               required
             >
+            <p class="field-error" data-field-error="organization_name" hidden></p>
           </div>
         </div>
       </section>
@@ -112,6 +124,8 @@
         </div>
       </section>
 
+      <div class="form-error-summary" id="formErrorSummary" role="alert" aria-live="assertive" hidden></div>
+
       <button type="submit" class="submit-btn">予約する</button>
     </form>
 
@@ -161,6 +175,6 @@
     </form>
   </dialog>
 
-  <script src="js/calendar.js?v=20260407e" defer></script>
+  <script src="js/calendar.js?v=20260502a" defer></script>
 </body>
 </html>

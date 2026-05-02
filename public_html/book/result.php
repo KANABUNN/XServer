@@ -45,7 +45,6 @@ function h(?string $value): string
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
-
 function result_base_path(): string
 {
     $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
@@ -55,6 +54,24 @@ function result_base_path(): string
     }
     return rtrim($dir, '/');
 }
+
+/**
+ * 改善 (C): YYYY-MM-DD を「2026年5月2日(土)」形式に整形する。
+ * パスコードカード内で日付を読みやすく表示する用途。
+ */
+function result_format_jp_date(string $iso): string
+{
+    $dt = DateTime::createFromFormat('Y-m-d', $iso);
+    if (!$dt) {
+        return $iso;
+    }
+    $weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    $w = $weekdays[(int)$dt->format('w')];
+    return $dt->format('Y年n月j日') . '(' . $w . ')';
+}
+
+$basePath = result_base_path();
+$inputUrl = ($basePath !== '' ? $basePath : '') . '/';
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -65,6 +82,7 @@ function result_base_path(): string
   <link rel="icon" href="icon.png">
   <link rel="stylesheet" href="css/style.css?v=20260407e">
   <link rel="stylesheet" href="css/style_responsive.css?v=20260407e">
+  <link rel="stylesheet" href="css/style_improvements.css?v=20260502a">
 </head>
 <body>
   <div class="container">
@@ -85,6 +103,26 @@ function result_base_path(): string
         </ul>
 
         <?php $dateRows = is_array($row['date_rows'] ?? null) ? $row['date_rows'] : []; ?>
+
+        <?php if ($status === 'confirmed' && $dateRows !== []): ?>
+          <!-- 改善 (C): パスコード強調カード -->
+          <div class="passcode-card" role="region" aria-label="入室用パスコード">
+            <p class="passcode-label">入室用パスコード</p>
+            <ul class="passcode-list">
+              <?php foreach ($dateRows as $dateRow): ?>
+                <li class="passcode-row">
+                  <div class="passcode-meta">
+                    <strong><?php echo h(result_format_jp_date((string)($dateRow['use_date'] ?? ''))); ?></strong>
+                    <?php echo h((string)($dateRow['room_label'] ?? '')); ?> / <?php echo h((string)($dateRow['usage_time'] ?? '')); ?>
+                  </div>
+                  <span class="passcode-code"><?php echo h((string)($dateRow['access_code'] ?? '')); ?></span>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+            <p class="passcode-note">※ 利用開始時刻の10分前から終了時刻の10分後まで有効です。第三者には共有しないでください。</p>
+          </div>
+        <?php endif; ?>
+
         <?php if ($dateRows !== []): ?>
           <div class="selected-date-list-wrap">
             <strong>日付ごとの予約内容</strong>
@@ -106,9 +144,17 @@ function result_base_path(): string
       </section>
     <?php endif; ?>
 
-    <div class="button-group">
-      <a href="<?php echo h((result_base_path() !== "" ? result_base_path() : "")."/"); ?>" class="terms-link-btn">入力画面へ戻る</a>
-    </div>
+    <?php if ($status === 'rejected' || $status === 'error'): ?>
+      <!-- 改善 (C): 却下/エラー時は「再度申し込む」を主CTAに昇格 -->
+      <div class="result-actions">
+        <a href="<?php echo h($inputUrl); ?>" class="result-back-btn">再度申し込む</a>
+        <a href="<?php echo h($inputUrl); ?>" class="result-secondary-link">入力画面へ戻るのみ</a>
+      </div>
+    <?php else: ?>
+      <div class="button-group">
+        <a href="<?php echo h($inputUrl); ?>" class="terms-link-btn">入力画面へ戻る</a>
+      </div>
+    <?php endif; ?>
   </div>
 </body>
 </html>

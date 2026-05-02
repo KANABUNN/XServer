@@ -1,0 +1,309 @@
+/* =========================================================================
+   高優先度 UI 改善パッチ (v=20260502a)
+   - A: ステップ進捗バー (.step-progress)
+   - B: インラインエラー表示 (.field-error / .form-error-summary)
+   - C: 結果ページのパスコード強調 (.passcode-card) と再申込みCTA (.result-actions)
+   既存 style.css を上書きする形で動作させるため、本ファイルを後ろから読み込む。
+   ========================================================================= */
+
+
+/* -------------------------------------------------------------------------
+   A: ステップ進捗バー
+   ------------------------------------------------------------------------- */
+.step-progress {
+  margin: 0 0 24px;
+}
+
+.step-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #ffffff;
+  text-align: center;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #6b7280;
+  font-weight: 800;
+  font-size: 14px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.step-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+/* 入力中ステップ (青) */
+.step.is-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
+}
+
+.step.is-active .step-num {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.step.is-active .step-label {
+  color: #1e3a8a;
+}
+
+/* 完了ステップ (緑) */
+.step.is-done {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.step.is-done .step-num {
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.step.is-done .step-label {
+  color: #166534;
+}
+
+@media (max-width: 640px) {
+  .step-label {
+    font-size: 11px;
+  }
+  .step {
+    padding: 8px 4px 6px;
+  }
+  .step-num {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+}
+
+
+/* -------------------------------------------------------------------------
+   B: インラインエラー表示
+   ------------------------------------------------------------------------- */
+
+/* 各日付カード内のエラーメッセージ */
+.field-error {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(220, 38, 38, 0.08);
+  border-left: 3px solid #dc2626;
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.6;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.field-error[hidden] {
+  display: none;
+}
+
+/* エラー状態のカードに赤い縁取り */
+.date-config-card.has-error {
+  border-color: #fca5a5;
+  background: #fffafa;
+}
+
+/* aria-invalid な input/select は赤枠で強調 */
+.form-group input[aria-invalid="true"],
+.form-group select[aria-invalid="true"] {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.10) !important;
+  background-color: rgba(254, 242, 242, 0.5);
+}
+
+/* フォーム全体のエラーサマリ (送信ボタン直前に表示) */
+.form-error-summary {
+  margin: 0 0 4px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.6;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.form-error-summary[hidden] {
+  display: none;
+}
+
+.form-error-summary strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 14px;
+}
+
+
+/* -------------------------------------------------------------------------
+   C: 結果ページのパスコード強調
+   ------------------------------------------------------------------------- */
+.passcode-card {
+  margin-top: 20px;
+  padding: 22px;
+  border: 2px solid #2563eb;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #eff6ff 0%, #ffffff 70%);
+}
+
+.passcode-card,
+.passcode-card * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.passcode-label {
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1e3a8a;
+  letter-spacing: 0.08em;
+}
+
+.passcode-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.passcode-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 14px 16px;
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+}
+
+.passcode-meta {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.passcode-meta strong {
+  display: block;
+  color: #1f2937;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.passcode-code {
+  font-family: 'Courier New', Consolas, 'Menlo', monospace;
+  font-size: 26px;
+  font-weight: 800;
+  color: #1e3a8a;
+  letter-spacing: 0.18em;
+  user-select: all;
+  -webkit-user-select: all;
+  background: #eff6ff;
+  padding: 6px 16px;
+  border-radius: 8px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.passcode-note {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.7;
+}
+
+@media (max-width: 640px) {
+  .passcode-card {
+    padding: 18px;
+  }
+  .passcode-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .passcode-code {
+    font-size: 22px;
+    align-self: stretch;
+    text-align: center;
+  }
+}
+
+
+/* -------------------------------------------------------------------------
+   C: 結果アクション (再申込みCTA)
+   ------------------------------------------------------------------------- */
+.result-actions {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.result-back-btn {
+  display: block;
+  width: 100%;
+  padding: 16px 22px;
+  text-align: center;
+  text-decoration: none;
+  border-radius: 12px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #ffffff;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  box-shadow: 0 12px 26px rgba(79, 70, 229, 0.24);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.result-back-btn:hover {
+  transform: translateY(-1px);
+}
+
+.result-secondary-link {
+  display: block;
+  text-align: center;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #64748b;
+  text-decoration: none;
+}
+
+.result-secondary-link:hover {
+  text-decoration: underline;
+}
