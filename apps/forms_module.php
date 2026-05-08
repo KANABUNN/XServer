@@ -440,7 +440,7 @@ function forms_safe_download_name(string $value, string $fallback = 'file'): str
     if ($value === '') {
         return $fallback;
     }
-    $value = preg_replace('/[\\\/\:\*\?"<>\|]+/u', '-', $value) ?? '';
+    $value = preg_replace('~[\\\\/:*?"<>|]+~u', '-', $value) ?? '';
     $value = preg_replace('/\s+/u', ' ', $value) ?? '';
     $value = trim($value, " .-_\t\n\r\0\x0B");
     return $value !== '' ? $value : $fallback;
