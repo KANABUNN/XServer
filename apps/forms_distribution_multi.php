@@ -9,12 +9,12 @@ declare(strict_types=1);
  * 既存の単一ファイルキー distribution_file_* も互換用に維持する。
  */
 
-function forms_distribution_allowed_extensions(): array
+function forms_distmulti_allowed_extensions(): array
 {
     return ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'zip', 'csv', 'txt'];
 }
 
-function forms_distribution_safe_download_name(string $value, string $fallback = 'file'): string
+function forms_distmulti_safe_download_name(string $value, string $fallback = 'file'): string
 {
     if (function_exists('forms_safe_download_name')) {
         return forms_safe_download_name($value, $fallback);
@@ -30,12 +30,12 @@ function forms_distribution_safe_download_name(string $value, string $fallback =
     return $value !== '' ? $value : $fallback;
 }
 
-function forms_distribution_file_id(string $relativePath, string $storedName = ''): string
+function forms_distmulti_file_id(string $relativePath, string $storedName = ''): string
 {
     return substr(hash('sha256', $relativePath . '|' . $storedName), 0, 16);
 }
 
-function forms_distribution_clean_relative_path(string $path): string
+function forms_distmulti_clean_relative_path(string $path): string
 {
     $path = str_replace('\\', '/', trim($path));
     $path = preg_replace('#/+#', '/', $path) ?? $path;
@@ -48,7 +48,7 @@ function forms_distribution_clean_relative_path(string $path): string
     return $path;
 }
 
-function forms_distribution_normalize_file_item(array $item): ?array
+function forms_distmulti_normalize_file_item(array $item): ?array
 {
     $relativePath = trim((string)($item['relative_path'] ?? $item['distribution_file_relative_path'] ?? ''));
     if ($relativePath === '') {
@@ -56,16 +56,16 @@ function forms_distribution_normalize_file_item(array $item): ?array
     }
 
     try {
-        $relativePath = forms_distribution_clean_relative_path($relativePath);
+        $relativePath = forms_distmulti_clean_relative_path($relativePath);
     } catch (Throwable $e) {
         return null;
     }
 
-    $storedName = forms_distribution_safe_download_name((string)($item['stored_name'] ?? $item['distribution_file_stored_name'] ?? basename($relativePath)), basename($relativePath));
-    $originalName = forms_distribution_safe_download_name((string)($item['original_name'] ?? $item['distribution_file_original_name'] ?? $storedName), $storedName);
+    $storedName = forms_distmulti_safe_download_name((string)($item['stored_name'] ?? $item['distribution_file_stored_name'] ?? basename($relativePath)), basename($relativePath));
+    $originalName = forms_distmulti_safe_download_name((string)($item['original_name'] ?? $item['distribution_file_original_name'] ?? $storedName), $storedName);
     $id = preg_replace('/[^a-zA-Z0-9_-]+/', '', (string)($item['id'] ?? '')) ?? '';
     if ($id === '') {
-        $id = forms_distribution_file_id($relativePath, $storedName);
+        $id = forms_distmulti_file_id($relativePath, $storedName);
     }
 
     return [
@@ -78,7 +78,7 @@ function forms_distribution_normalize_file_item(array $item): ?array
     ];
 }
 
-function forms_distribution_files_from_settings(array $settings): array
+function forms_distmulti_files_from_settings(array $settings): array
 {
     $files = [];
 
@@ -87,7 +87,7 @@ function forms_distribution_files_from_settings(array $settings): array
             if (!is_array($item)) {
                 continue;
             }
-            $normalized = forms_distribution_normalize_file_item($item);
+            $normalized = forms_distmulti_normalize_file_item($item);
             if ($normalized !== null) {
                 $files[$normalized['id']] = $normalized;
             }
@@ -96,7 +96,7 @@ function forms_distribution_files_from_settings(array $settings): array
 
     // 旧形式の単一ファイルを自動的に配列形式へ読み替える。
     if (!$files && trim((string)($settings['distribution_file_relative_path'] ?? '')) !== '') {
-        $legacy = forms_distribution_normalize_file_item([
+        $legacy = forms_distmulti_normalize_file_item([
             'original_name' => $settings['distribution_file_original_name'] ?? '',
             'stored_name' => $settings['distribution_file_stored_name'] ?? '',
             'relative_path' => $settings['distribution_file_relative_path'] ?? '',
@@ -111,13 +111,13 @@ function forms_distribution_files_from_settings(array $settings): array
     return array_values($files);
 }
 
-function forms_distribution_files_from_form(array $form): array
+function forms_distmulti_files_from_form(array $form): array
 {
     $settings = is_array($form['settings'] ?? null) ? $form['settings'] : [];
-    return forms_distribution_files_from_settings($settings);
+    return forms_distmulti_files_from_settings($settings);
 }
 
-function forms_distribution_storage_dir(int $formId): string
+function forms_distmulti_storage_dir(int $formId): string
 {
     $dir = __DIR__ . '/forms_uploads/distribution/' . $formId;
     if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
@@ -126,15 +126,15 @@ function forms_distribution_storage_dir(int $formId): string
     return $dir;
 }
 
-function forms_distribution_relative_path(int $formId, string $storedName): string
+function forms_distmulti_relative_path(int $formId, string $storedName): string
 {
     return 'forms_uploads/distribution/' . $formId . '/' . $storedName;
 }
 
-function forms_distribution_resolve_path(string $relativePath): ?string
+function forms_distmulti_resolve_path(string $relativePath): ?string
 {
     try {
-        $relativePath = forms_distribution_clean_relative_path($relativePath);
+        $relativePath = forms_distmulti_clean_relative_path($relativePath);
     } catch (Throwable $e) {
         return null;
     }
@@ -156,7 +156,7 @@ function forms_distribution_resolve_path(string $relativePath): ?string
     return null;
 }
 
-function forms_distribution_select_file(array $files, ?string $fileId): ?array
+function forms_distmulti_select_file(array $files, ?string $fileId): ?array
 {
     if ($files === []) {
         return null;
@@ -173,7 +173,7 @@ function forms_distribution_select_file(array $files, ?string $fileId): ?array
     return null;
 }
 
-function forms_distribution_mime_type(string $path): string
+function forms_distmulti_mime_type(string $path): string
 {
     $mime = 'application/octet-stream';
     if (function_exists('finfo_open')) {
@@ -189,9 +189,9 @@ function forms_distribution_mime_type(string $path): string
     return $mime;
 }
 
-function forms_distribution_send_file_headers(string $downloadName, string $path): void
+function forms_distmulti_send_file_headers(string $downloadName, string $path): void
 {
-    $downloadName = forms_distribution_safe_download_name($downloadName, basename($path));
+    $downloadName = forms_distmulti_safe_download_name($downloadName, basename($path));
     $asciiFallback = preg_replace('/[^A-Za-z0-9._-]+/', '_', $downloadName) ?? 'file';
     $asciiFallback = trim($asciiFallback, '._-');
     if ($asciiFallback === '') {
@@ -204,34 +204,34 @@ function forms_distribution_send_file_headers(string $downloadName, string $path
         }
     }
 
-    header('Content-Type: ' . forms_distribution_mime_type($path));
+    header('Content-Type: ' . forms_distmulti_mime_type($path));
     header('Content-Length: ' . (string)filesize($path));
     header('X-Content-Type-Options: nosniff');
     header('Content-Disposition: attachment; filename="' . addcslashes($asciiFallback, "\\\"") . '"; filename*=UTF-8\'\'' . rawurlencode($downloadName));
 }
 
-function forms_output_distribution_file_by_id(array $form, ?string $fileId = null): void
+function forms_distmulti_output_file_by_id(array $form, ?string $fileId = null): void
 {
-    $files = forms_distribution_files_from_form($form);
-    $file = forms_distribution_select_file($files, $fileId);
+    $files = forms_distmulti_files_from_form($form);
+    $file = forms_distmulti_select_file($files, $fileId);
     if ($file === null) {
         throw new RuntimeException('配布ファイルが見つかりません。');
     }
 
-    $path = forms_distribution_resolve_path((string)$file['relative_path']);
+    $path = forms_distmulti_resolve_path((string)$file['relative_path']);
     if ($path === null) {
         throw new RuntimeException('配布ファイルの実体が見つかりません。');
     }
 
-    forms_distribution_send_file_headers((string)$file['original_name'], $path);
+    forms_distmulti_send_file_headers((string)$file['original_name'], $path);
     readfile($path);
     exit;
 }
 
-function forms_distribution_sync_legacy_settings(array $settings, array $files): array
+function forms_distmulti_sync_legacy_settings(array $settings, array $files): array
 {
     $files = array_values(array_filter(array_map(static function ($item) {
-        return is_array($item) ? forms_distribution_normalize_file_item($item) : null;
+        return is_array($item) ? forms_distmulti_normalize_file_item($item) : null;
     }, $files)));
 
     $settings['distribution_files'] = $files;
@@ -254,9 +254,9 @@ function forms_distribution_sync_legacy_settings(array $settings, array $files):
     return $settings;
 }
 
-function forms_distribution_update_form_settings(int $formId, array $settings, array $files): array
+function forms_distmulti_update_form_settings(int $formId, array $settings, array $files): array
 {
-    $settings = forms_distribution_sync_legacy_settings($settings, $files);
+    $settings = forms_distmulti_sync_legacy_settings($settings, $files);
 
     $stmt = forms_db()->prepare('UPDATE managed_forms SET settings_json = :settings_json WHERE id = :id');
     $stmt->execute([
@@ -271,7 +271,7 @@ function forms_distribution_update_form_settings(int $formId, array $settings, a
     return $updated;
 }
 
-function forms_distribution_normalize_uploads(array $input): array
+function forms_distmulti_normalize_uploads(array $input): array
 {
     $items = [];
     if (isset($input['name']) && is_array($input['name'])) {
@@ -301,7 +301,7 @@ function forms_distribution_normalize_uploads(array $input): array
     return [];
 }
 
-function forms_distribution_append_uploaded_files(int $formId, array $fileInput): array
+function forms_distmulti_append_uploaded_files(int $formId, array $fileInput): array
 {
     $form = forms_load_form($formId, false);
     if (!$form) {
@@ -309,9 +309,9 @@ function forms_distribution_append_uploaded_files(int $formId, array $fileInput)
     }
 
     $settings = is_array($form['settings'] ?? null) ? $form['settings'] : [];
-    $existing = forms_distribution_files_from_form($form);
-    $uploads = forms_distribution_normalize_uploads($fileInput);
-    $allowed = forms_distribution_allowed_extensions();
+    $existing = forms_distmulti_files_from_form($form);
+    $uploads = forms_distmulti_normalize_uploads($fileInput);
+    $allowed = forms_distmulti_allowed_extensions();
     $maxBytes = 30 * 1024 * 1024;
     $added = [];
 
@@ -324,7 +324,7 @@ function forms_distribution_append_uploaded_files(int $formId, array $fileInput)
             throw new RuntimeException('配布ファイルのアップロードに失敗しました。');
         }
 
-        $originalName = forms_distribution_safe_download_name((string)($upload['name'] ?? ''), 'distribution-file');
+        $originalName = forms_distmulti_safe_download_name((string)($upload['name'] ?? ''), 'distribution-file');
         $size = (int)($upload['size'] ?? 0);
         if ($size <= 0 || $size > $maxBytes) {
             throw new RuntimeException($originalName . ' のサイズが上限 30MB を超えています。');
@@ -340,7 +340,7 @@ function forms_distribution_append_uploaded_files(int $formId, array $fileInput)
             throw new RuntimeException($originalName . ' の一時ファイルを確認できません。');
         }
 
-        $dir = forms_distribution_storage_dir($formId);
+        $dir = forms_distmulti_storage_dir($formId);
         $storedName = date('YmdHis') . '_' . bin2hex(random_bytes(8)) . '.' . $extension;
         $dest = $dir . '/' . $storedName;
         if (!move_uploaded_file($tmpName, $dest)) {
@@ -348,9 +348,9 @@ function forms_distribution_append_uploaded_files(int $formId, array $fileInput)
         }
         @chmod($dest, 0664);
 
-        $relativePath = forms_distribution_relative_path($formId, $storedName);
+        $relativePath = forms_distmulti_relative_path($formId, $storedName);
         $added[] = [
-            'id' => forms_distribution_file_id($relativePath, $storedName),
+            'id' => forms_distmulti_file_id($relativePath, $storedName),
             'original_name' => $originalName,
             'stored_name' => $storedName,
             'relative_path' => $relativePath,
@@ -364,16 +364,16 @@ function forms_distribution_append_uploaded_files(int $formId, array $fileInput)
     }
 
     $files = array_merge($existing, $added);
-    $updated = forms_distribution_update_form_settings($formId, $settings, $files);
+    $updated = forms_distmulti_update_form_settings($formId, $settings, $files);
 
     return [
         'form' => $updated,
-        'files' => forms_distribution_files_from_form($updated),
+        'files' => forms_distmulti_files_from_form($updated),
         'added_files' => $added,
     ];
 }
 
-function forms_distribution_delete_file(int $formId, string $fileId): array
+function forms_distmulti_delete_file(int $formId, string $fileId): array
 {
     $form = forms_load_form($formId, false);
     if (!$form) {
@@ -381,7 +381,7 @@ function forms_distribution_delete_file(int $formId, string $fileId): array
     }
 
     $settings = is_array($form['settings'] ?? null) ? $form['settings'] : [];
-    $files = forms_distribution_files_from_form($form);
+    $files = forms_distmulti_files_from_form($form);
     $fileId = trim($fileId);
     if ($fileId === '') {
         throw new InvalidArgumentException('削除対象の配布ファイルが指定されていません。');
@@ -395,7 +395,7 @@ function forms_distribution_delete_file(int $formId, string $fileId): array
             $kept[] = $file;
             continue;
         }
-        $path = forms_distribution_resolve_path((string)$file['relative_path']);
+        $path = forms_distmulti_resolve_path((string)$file['relative_path']);
         if ($path !== null && is_file($path)) {
             @unlink($path);
         }
@@ -406,11 +406,11 @@ function forms_distribution_delete_file(int $formId, string $fileId): array
         throw new RuntimeException('削除対象の配布ファイルが見つかりません。');
     }
 
-    $updated = forms_distribution_update_form_settings($formId, $settings, $kept);
+    $updated = forms_distmulti_update_form_settings($formId, $settings, $kept);
 
     return [
         'form' => $updated,
-        'files' => forms_distribution_files_from_form($updated),
+        'files' => forms_distmulti_files_from_form($updated),
         'deleted_count' => $deletedCount,
     ];
 }

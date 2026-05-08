@@ -14,14 +14,14 @@ if ($formId < 1) {
 }
 
 $form = forms_load_form($formId, false);
-if (!$form || forms_distribution_files_from_form($form) === []) {
+if (!$form || forms_distmulti_files_from_form($form) === []) {
     http_response_code(404);
     echo '配布ファイルが設定されていません。';
     exit;
 }
 
 try {
-    forms_output_distribution_file_by_id($form, $fileId !== '' ? $fileId : null);
+    forms_distmulti_output_file_by_id($form, $fileId !== '' ? $fileId : null);
 } catch (Throwable $e) {
     http_response_code(404);
     echo '配布ファイルが見つかりません。';

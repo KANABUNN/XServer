@@ -19,7 +19,7 @@ if ($formId < 1 || $fileId === '') {
 }
 
 try {
-    $result = forms_distribution_delete_file($formId, $fileId);
+    $result = forms_distmulti_delete_file($formId, $fileId);
     json_response([
         'ok' => true,
         'message' => $result['deleted_count'] . '件の配布ファイルを削除しました。',

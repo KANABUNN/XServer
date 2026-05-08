@@ -147,7 +147,7 @@
       return;
     }
 
-    const button = document.getElementById('upload-distribution-files-button');
+    const button = document.getElementById('upload-distribution-files-button') || document.getElementById('upload-distribution-file-button');
     const data = new FormData();
     data.append('csrf_token', csrfToken());
     data.append('form_id', String(form.id));
@@ -193,7 +193,14 @@
   window.renderDistributionFileStatus = renderDistributionFileStatusMulti;
 
   function bind() {
-    document.getElementById('upload-distribution-files-button')?.addEventListener('click', uploadDistributionFiles);
+    const input = document.getElementById('distribution-file-input');
+    if (input) input.setAttribute('multiple', 'multiple');
+    const uploadButton = document.getElementById('upload-distribution-files-button') || document.getElementById('upload-distribution-file-button');
+    uploadButton?.setAttribute('type', 'button');
+    uploadButton?.addEventListener('click', (event) => {
+      event.preventDefault();
+      uploadDistributionFiles();
+    });
     document.addEventListener('click', (event) => {
       const button = event.target.closest('[data-delete-distribution-file]');
       if (!button) return;

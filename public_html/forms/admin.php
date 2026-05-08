@@ -234,16 +234,16 @@ page_header('フォーム管理', 'forms-admin-page');
                         </label>
                         <div class="distribution-upload-panel">
                             <div id="distribution-file-status" class="distribution-file-status empty-state">配布ファイルは未設定です。</div>
-                            <label class="form-block">
+                             <label class="form-block">
                                 <span>配布ファイルを選択</span>
-                                <input type="file" id="distribution-file-input">
-                            </label>
-                            <div class="inline-actions">
-                                <button type="button" class="btn" id="upload-distribution-file-button">配布ファイルを保存</button>
-                            </div>
-                            <p class="small-note">保存済みフォームを選択してからアップロードしてください。対応拡張子は PDF / Office / 画像 / ZIP / CSV / TXT、上限は30MBです。</p>
-                        </div>
-                    </section>
+                                <input type="file" id="distribution-file-input" multiple>
+                             </label>
+                             <div class="inline-actions">
+                                <button type="button" class="btn" id="upload-distribution-files-button">配布ファイルを保存</button>
+                             </div>
+                            <p class="small-note">保存済みフォームを選択してからアップロードしてください。複数ファイルを一括選択できます。対応拡張子は PDF / Office / 画像 / ZIP / CSV / TXT、上限は1ファイル30MBです。</p>
+                         </div>
+                     </section>
 
                     <section class="subcard">
                         <h3>公開期間</h3>
@@ -431,4 +431,4 @@ page_header('フォーム管理', 'forms-admin-page');
     </article>
 </template>
 
-<?php page_footer(['assets/js/common.js', 'assets/js/admin.js']); ?>
+<?php page_footer(['assets/js/common.js', 'assets/js/admin.js', 'assets/js/distribution_multi_admin.js']); ?>

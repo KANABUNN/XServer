@@ -85,4 +85,4 @@ page_header('汎用フォーム', 'forms-public-page');
     </section>
 </main>
 
-<?php page_footer(['assets/js/common.js', 'assets/js/public.js']); ?>
+<?php page_footer(['assets/js/common.js', 'assets/js/public.js', 'assets/js/distribution_multi_public.js']); ?>

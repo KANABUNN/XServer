@@ -19,14 +19,14 @@ if (!$form || !forms_is_publicly_available($form)) {
 }
 
 $settings = $form['settings'] ?? [];
-if (empty($settings['distribution_enabled']) || forms_distribution_files_from_form($form) === []) {
+if (empty($settings['distribution_enabled']) || forms_distmulti_files_from_form($form) === []) {
     http_response_code(404);
     echo '配布ファイルが設定されていません。';
     exit;
 }
 
 try {
-    forms_output_distribution_file_by_id($form, $fileId !== '' ? $fileId : null);
+    forms_distmulti_output_file_by_id($form, $fileId !== '' ? $fileId : null);
 } catch (Throwable $e) {
     http_response_code(404);
     echo '配布ファイルが見つかりません。';
