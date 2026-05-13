@@ -76,7 +76,6 @@ page_header('汎用フォーム', 'forms-public-page');
                 <div class="section-title-row">
                     <div>
                         <h2>入力フォーム</h2>
-                        <p class="small-note">入力に必要な項目だけをわかりやすく表示します。</p>
                     </div>
                 </div>
                 <div id="public-form-host" class="form-host public-form-host" role="tabpanel" tabindex="0"></div>
