@@ -76,6 +76,7 @@ page_header('汎用フォーム', 'forms-public-page');
                 <div class="section-title-row">
                     <div>
                         <h2>入力フォーム</h2>
+                        <p class="small-note">以下がフォームの内容です。指定された項目に記入してください。</p>
                     </div>
                 </div>
                 <div id="public-form-host" class="form-host public-form-host" role="tabpanel" tabindex="0"></div>
