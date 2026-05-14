@@ -512,7 +512,7 @@ function renderActiveForm() {
         <div class="section-title-row compact-row">
           <div>
             <h3>添付ファイル</h3>
-            <p class="small-note">必要な場合のみ添付してください。</p>
+            <p class="small-note">指定されたファイルを添付してください。</p>
           </div>
         </div>
         ${fileField}
