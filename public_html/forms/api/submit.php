@@ -6,6 +6,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['ok' => false, 'message' => 'POST のみ許可されています。'], 405);
 }
 
+// post_max_size を超過すると PHP は $_POST / $_FILES を空にするため、
+// CSRF エラーに落とさず容量超過として返す。
 $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
 if ($contentLength > 0 && empty($_POST) && empty($_FILES)) {
     json_response([
@@ -17,7 +19,7 @@ if ($contentLength > 0 && empty($_POST) && empty($_FILES)) {
 try {
     rate_limit_or_throw(
         get_client_ip(),
-        __DIR__ . '/../../../apps/rate_limit.json',
+        __DIR__ . '/../../../apps/rate_limit_forms_submit.json',
         5,
         300
     );
