@@ -1160,13 +1160,9 @@ function forms_find_existing_submission(int $formId, string $normalizedEmail, st
         'SELECT *
          FROM managed_form_submissions
          WHERE form_id = :form_id
-           AND (normalized_email = :match_email OR normalized_organization = :match_org)
-         ORDER BY CASE
-             WHEN normalized_email = :rank_email_both AND normalized_organization = :rank_org_both THEN 0
-             WHEN normalized_email = :rank_email_only THEN 1
-             ELSE 2
-         END,
-         updated_at DESC,
+           AND normalized_email = :match_email
+           AND normalized_organization = :match_org
+         ORDER BY updated_at DESC,
          id DESC
          LIMIT 1'
     );
@@ -1174,9 +1170,6 @@ function forms_find_existing_submission(int $formId, string $normalizedEmail, st
         ':form_id' => $formId,
         ':match_email' => $normalizedEmail,
         ':match_org' => $normalizedOrganization,
-        ':rank_email_both' => $normalizedEmail,
-        ':rank_org_both' => $normalizedOrganization,
-        ':rank_email_only' => $normalizedEmail,
     ]);
     $row = $stmt->fetch();
     return $row ?: null;
@@ -1186,14 +1179,25 @@ function forms_validate_submission(array $form, array $post, array $files): arra
 {
     $settings = $form['settings'];
     $errors = [];
+    $errorMessages = [];
+    $addError = static function (string $fieldName, string $message) use (&$errors, &$errorMessages): void {
+        if (!isset($errors[$fieldName])) {
+            $errors[$fieldName] = $message;
+        }
+        $errorMessages[] = $message;
+    };
 
     $email = trim((string)($post['email'] ?? ''));
     $organization = trim((string)($post['organization_name'] ?? ''));
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = 'メールアドレスを正しく入力してください。';
+        $addError('email', 'メールアドレスを正しく入力してください。');
+    } elseif (mb_strlen($email, 'UTF-8') > 200) {
+        $addError('email', 'メールアドレスは200文字以内で入力してください。');
     }
     if ($organization === '') {
-        $errors[] = '団体名を入力してください。';
+        $addError('organization_name', '団体名を入力してください。');
+    } elseif (mb_strlen($organization, 'UTF-8') > 200) {
+        $addError('organization_name', '団体名は200文字以内で入力してください。');
     }
 
     $submittedDate = null;
@@ -1201,12 +1205,12 @@ function forms_validate_submission(array $form, array $post, array $files): arra
         $submittedDateRaw = trim((string)($post['submitted_date'] ?? ''));
         if ($submittedDateRaw === '') {
             if (!empty($settings['date_required'])) {
-                $errors[] = '日付を入力してください。';
+                $addError('submitted_date', '日付を入力してください。');
             }
         } else {
             $dt = DateTimeImmutable::createFromFormat('Y-m-d', $submittedDateRaw);
             if (!$dt || $dt->format('Y-m-d') !== $submittedDateRaw) {
-                $errors[] = '日付の形式が不正です。';
+                $addError('submitted_date', '日付の形式が不正です。');
             } else {
                 $submittedDate = $submittedDateRaw;
             }
@@ -1214,12 +1218,14 @@ function forms_validate_submission(array $form, array $post, array $files): arra
     }
 
     $payload = [];
+    $customPost = is_array($post['custom'] ?? null) ? $post['custom'] : [];
     foreach ($form['fields'] as $field) {
         if (!$field['is_enabled']) {
             continue;
         }
         $key = $field['field_key'];
-        $value = $post['custom'][$key] ?? null;
+        $fieldName = 'custom[' . $key . ']';
+        $value = $customPost[$key] ?? null;
         switch ($field['field_type']) {
             case 'checkbox':
                 $normalized = forms_normalize_boolean($value) ? '1' : '';
@@ -1227,14 +1233,14 @@ function forms_validate_submission(array $form, array $post, array $files): arra
             case 'number':
                 $raw = trim((string)$value);
                 if ($raw !== '' && !is_numeric($raw)) {
-                    $errors[] = $field['field_label'] . 'は数値で入力してください。';
+                    $addError($fieldName, $field['field_label'] . 'は数値で入力してください。');
                 }
                 $normalized = $raw;
                 break;
             case 'select':
                 $normalized = trim((string)$value);
                 if ($normalized !== '' && $field['options'] && !in_array($normalized, $field['options'], true)) {
-                    $errors[] = $field['field_label'] . 'の選択肢が不正です。';
+                    $addError($fieldName, $field['field_label'] . 'の選択肢が不正です。');
                 }
                 break;
             case 'date':
@@ -1242,7 +1248,7 @@ function forms_validate_submission(array $form, array $post, array $files): arra
                 if ($normalized !== '') {
                     $dt = DateTimeImmutable::createFromFormat('Y-m-d', $normalized);
                     if (!$dt || $dt->format('Y-m-d') !== $normalized) {
-                        $errors[] = $field['field_label'] . 'の日付形式が不正です。';
+                        $addError($fieldName, $field['field_label'] . 'の日付形式が不正です。');
                     }
                 }
                 break;
@@ -1251,7 +1257,7 @@ function forms_validate_submission(array $form, array $post, array $files): arra
                 break;
         }
         if ($field['is_required'] && $normalized === '') {
-            $errors[] = $field['field_label'] . 'を入力してください。';
+            $addError($fieldName, $field['field_label'] . 'を入力してください。');
         }
         $payload[$key] = $normalized;
     }
@@ -1264,15 +1270,16 @@ function forms_validate_submission(array $form, array $post, array $files): arra
                 forms_validate_uploaded_file($file, $settings);
                 $uploadFile = $file;
             } catch (Throwable $e) {
-                $errors[] = $e->getMessage();
+                $addError('uploaded_file', $e->getMessage());
             }
         } elseif (!empty($settings['file_required'])) {
-            $errors[] = '添付ファイルを選択してください。';
+            $addError('uploaded_file', '添付ファイルを選択してください。');
         }
     }
 
     return [
         'errors' => $errors,
+        'error_messages' => $errorMessages,
         'data' => [
             'email' => $email,
             'normalized_email' => forms_normalize_email($email),
