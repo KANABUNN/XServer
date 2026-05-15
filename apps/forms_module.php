@@ -904,11 +904,12 @@ function forms_upload_root(): string
 
 function forms_validate_uploaded_file(array $file, array $settings): void
 {
-    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-        throw new InvalidArgumentException('添付ファイルが見つかりません。');
+    $errorCode = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($errorCode === UPLOAD_ERR_NO_FILE) {
+        throw new InvalidArgumentException(forms_upload_error_message($errorCode, '添付ファイル'));
     }
-    if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
-        throw new RuntimeException('添付ファイルのアップロードに失敗しました。');
+    if ($errorCode !== UPLOAD_ERR_OK) {
+        throw new RuntimeException(forms_upload_error_message($errorCode, '添付ファイル'));
     }
 
     $originalName = (string)($file['name'] ?? '');
@@ -921,6 +922,13 @@ function forms_validate_uploaded_file(array $file, array $settings): void
     $maxBytes = (int)($settings['max_upload_size_mb'] ?? 5) * 1024 * 1024;
     if ((int)($file['size'] ?? 0) > $maxBytes) {
         throw new InvalidArgumentException('添付ファイルのサイズが上限を超えています。');
+    }
+
+    $tmpPath = (string)($file['tmp_name'] ?? '');
+    $detectedMime = forms_detect_uploaded_mime($tmpPath);
+    $allowedMimes = forms_allowed_mimes_for_extension($extension);
+    if ($detectedMime !== null && $allowedMimes !== [] && !in_array($detectedMime, $allowedMimes, true)) {
+        throw new InvalidArgumentException('添付ファイルの種類が拡張子と一致しません。ファイル形式を確認してください。');
     }
 }
 
@@ -1154,18 +1162,21 @@ function forms_output_distribution_file(array $form): void
     exit;
 }
 
-function forms_find_existing_submission(int $formId, string $normalizedEmail, string $normalizedOrganization): ?array
+function forms_find_existing_submission(int $formId, string $normalizedEmail, string $normalizedOrganization, bool $forUpdate = false): ?array
 {
-    $stmt = forms_db()->prepare(
-        'SELECT *
+    $sql = 'SELECT *
          FROM managed_form_submissions
          WHERE form_id = :form_id
            AND normalized_email = :match_email
            AND normalized_organization = :match_org
          ORDER BY updated_at DESC,
          id DESC
-         LIMIT 1'
-    );
+         LIMIT 1';
+    if ($forUpdate) {
+        $sql .= ' FOR UPDATE';
+    }
+
+    $stmt = forms_db()->prepare($sql);
     $stmt->execute([
         ':form_id' => $formId,
         ':match_email' => $normalizedEmail,
@@ -1232,8 +1243,17 @@ function forms_validate_submission(array $form, array $post, array $files): arra
                 break;
             case 'number':
                 $raw = trim((string)$value);
-                if ($raw !== '' && !is_numeric($raw)) {
-                    $addError($fieldName, $field['field_label'] . 'は数値で入力してください。');
+                if ($raw !== '') {
+                    if (mb_strlen($raw, 'UTF-8') > 64) {
+                        $addError($fieldName, $field['field_label'] . 'は64文字以内の数値で入力してください。');
+                    } elseif (!preg_match('/^[+-]?(?:\d+|\d+\.\d+|\.\d+)$/', $raw)) {
+                        $addError($fieldName, $field['field_label'] . 'は通常の10進数で入力してください。');
+                    } else {
+                        $floatValue = (float)$raw;
+                        if (!is_finite($floatValue) || abs($floatValue) > 999999999999.9999) {
+                            $addError($fieldName, $field['field_label'] . 'の数値が大きすぎます。');
+                        }
+                    }
                 }
                 $normalized = $raw;
                 break;
@@ -1298,7 +1318,17 @@ function forms_save_submission(array $form, array $normalized): array
     $newUploadPath = null;
     $pdo->beginTransaction();
     try {
-        $existing = forms_find_existing_submission((int)$form['id'], $normalized['normalized_email'], $normalized['normalized_organization']);
+        $currentForm = forms_lock_form_for_submission((int)$form['id']);
+        if (!$currentForm) {
+            throw new InvalidArgumentException('対象フォームが見つかりません。');
+        }
+        if (!forms_is_publicly_available($currentForm)) {
+            $availability = forms_public_period_context($currentForm);
+            throw new DomainException($availability['note'] ?: '現在このフォームは受付できません。');
+        }
+        $form = $currentForm;
+
+        $existing = forms_find_existing_submission((int)$form['id'], $normalized['normalized_email'], $normalized['normalized_organization'], true);
         $uploadMeta = null;
         if (is_array($normalized['upload_file'] ?? null)) {
             $uploadMeta = forms_store_uploaded_file($normalized['upload_file'], $form['settings']);
@@ -2137,4 +2167,92 @@ function forms_build_latest_attachments_archive(int $formId, array $rawFilters =
         'filters' => $bundle['filters'],
         'summary' => $bundle['summary'],
     ];
+}
+
+function forms_detect_uploaded_mime(string $tmpPath): ?string
+{
+    if ($tmpPath === '' || !is_file($tmpPath) || !function_exists('finfo_open')) {
+        return null;
+    }
+
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    if (!$finfo) {
+        return null;
+    }
+
+    $detected = finfo_file($finfo, $tmpPath);
+    finfo_close($finfo);
+
+    if (!is_string($detected) || trim($detected) === '') {
+        return null;
+    }
+
+    return strtolower(trim($detected));
+}
+
+function forms_allowed_mimes_for_extension(string $extension): array
+{
+    return match (strtolower($extension)) {
+        'pdf' => ['application/pdf'],
+        'jpg', 'jpeg' => ['image/jpeg'],
+        'png' => ['image/png'],
+        'zip' => [
+            'application/zip',
+            'application/x-zip',
+            'application/x-zip-compressed',
+            'application/octet-stream',
+            'multipart/x-zip',
+        ],
+        'doc' => [
+            'application/msword',
+            'application/vnd.ms-word',
+            'application/octet-stream',
+        ],
+        'docx' => [
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/zip',
+            'application/octet-stream',
+        ],
+        'xls' => [
+            'application/vnd.ms-excel',
+            'application/msexcel',
+            'application/octet-stream',
+        ],
+        'xlsx' => [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/zip',
+            'application/octet-stream',
+        ],
+        'ppt' => [
+            'application/vnd.ms-powerpoint',
+            'application/mspowerpoint',
+            'application/octet-stream',
+        ],
+        'pptx' => [
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'application/zip',
+            'application/octet-stream',
+        ],
+        default => [],
+    };
+}
+
+function forms_lock_form_for_submission(int $formId): ?array
+{
+    $pdo = forms_db();
+    $stmt = $pdo->prepare('SELECT * FROM managed_forms WHERE id = :id AND is_active = 1 LIMIT 1 FOR UPDATE');
+    $stmt->execute([':id' => $formId]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        return null;
+    }
+
+    $form = forms_build_form_record($row);
+    $fieldStmt = $pdo->prepare('SELECT * FROM managed_form_fields WHERE form_id = :form_id ORDER BY sort_order ASC, id ASC');
+    $fieldStmt->execute([':form_id' => $formId]);
+    foreach ($fieldStmt->fetchAll() as $field) {
+        $form['fields'][] = forms_build_field_record($field);
+    }
+
+    return $form;
 }

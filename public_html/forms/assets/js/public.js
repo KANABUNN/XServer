@@ -355,24 +355,27 @@ function renderCustomField(field, draft = {}) {
   `;
 }
 
+function persistCurrentPublicDraft(formElement, form) {
+  if (!formElement || !form) return;
+  const data = new FormData(formElement);
+  const draft = {
+    email: data.get('email') || '',
+    organization_name: data.get('organization_name') || '',
+    submitted_date: data.get('submitted_date') || '',
+    custom: {},
+  };
+  for (const [key, value] of data.entries()) {
+    const match = /^custom\[(.+)\]$/.exec(key);
+    if (match) {
+      draft.custom[match[1]] = value;
+    }
+  }
+  saveDraft(form.id, draft);
+}
+
 function attachDraftPersistence(formElement, form) {
   if (!formElement || !form) return;
-  const persist = () => {
-    const data = new FormData(formElement);
-    const draft = {
-      email: data.get('email') || '',
-      organization_name: data.get('organization_name') || '',
-      submitted_date: data.get('submitted_date') || '',
-      custom: {},
-    };
-    for (const [key, value] of data.entries()) {
-      const match = /^custom\[(.+)\]$/.exec(key);
-      if (match) {
-        draft.custom[match[1]] = value;
-      }
-    }
-    saveDraft(form.id, draft);
-  };
+  const persist = () => persistCurrentPublicDraft(formElement, form);
 
   formElement.addEventListener('input', persist);
   formElement.addEventListener('change', persist);
@@ -644,6 +647,7 @@ function renderActiveForm() {
     }
 
     const formData = new FormData(submitForm);
+    persistCurrentPublicDraft(submitForm, form);
     const submitButton = submitForm.querySelector('button[type="submit"]');
     const formHost = document.getElementById('public-form-host');
     submitButton.disabled = true;
@@ -654,6 +658,18 @@ function renderActiveForm() {
     try {
       const result = await apiPostForm('api/submit.php', formData);
       if (!result.ok) {
+        if (result.csrf_expired || result.reload_required) {
+          persistCurrentPublicDraft(submitForm, form);
+          showFlashMessage(result.message || 'セッションが切れました。ページを再読み込みしてください。', 'error', {
+            title: '再読み込みが必要です',
+            duration: 0,
+          });
+          const shouldReload = window.confirm('セッションが切れた可能性があります。入力内容は下書きに保存されています。ページを再読み込みしますか？');
+          if (shouldReload) {
+            window.location.reload();
+          }
+          return;
+        }
         // P3: サーバが errors オブジェクトを返した場合は各フィールドに反映
         if (result.errors && typeof result.errors === 'object') {
           applyFieldErrors(submitForm, result.errors);

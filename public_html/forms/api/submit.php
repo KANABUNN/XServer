@@ -32,7 +32,12 @@ try {
 }
 
 if (!verify_csrf($_POST['csrf_token'] ?? '')) {
-    json_response(['ok' => false, 'message' => 'CSRF トークンが不正です。ページを再読み込みしてから再送信してください。'], 419);
+    json_response([
+        'ok' => false,
+        'message' => 'セッションの有効期限が切れた可能性があります。入力内容は下書きに残したまま、ページを再読み込みしてから再送信してください。',
+        'csrf_expired' => true,
+        'reload_required' => true,
+    ], 419);
 }
 
 try {
@@ -60,9 +65,17 @@ try {
 
     try {
         $saved = forms_save_submission($form, $validation['data']);
+    } catch (InvalidArgumentException $e) {
+        error_log('[forms submit save invalid] ' . (string)$e);
+        $message = $e->getMessage() ?: '対象フォームが見つかりません。';
+        $status = str_contains($message, '見つかりません') ? 404 : 422;
+        json_response(['ok' => false, 'message' => $message], $status);
+    } catch (DomainException $e) {
+        error_log('[forms submit save closed] ' . (string)$e);
+        json_response(['ok' => false, 'message' => $e->getMessage() ?: '現在このフォームは受付できません。'], 403);
     } catch (Throwable $e) {
         error_log('[forms submit save] ' . (string)$e);
-        json_response(['ok' => false, 'message' => '送信の保存に失敗しました。'], 500);
+        json_response(['ok' => false, 'message' => '送信の保存に失敗しました。時間をおいて再試行してください。'], 500);
     }
 
     json_response([
