@@ -8,7 +8,7 @@ page_header('汎用フォーム', 'forms-public-page');
         <div class="brand-mark" aria-hidden="true">F</div>
         <div>
             <h1>提出フォーム</h1>
-            <p class="muted">サイドバーで提出先を選び、右側で内容を入力してください。</p>
+            <p class="muted">フォーム一覧から提出先を選び、右側で内容を確認・入力してください。</p>
         </div>
     </div>
     <div class="topbar-actions">
@@ -28,11 +28,11 @@ page_header('汎用フォーム', 'forms-public-page');
         <section class="public-sidebar-section sidebar-hero-block">
             <div>
                 <h2>提出先フォーム</h2>
-                <p class="small-note">公開中のフォームだけを一覧表示しています。フォームを切り替えると、右側の入力内容も切り替わります。</p>
+                <p class="small-note">受付中・提出期間前・受付終了のフォームを一覧表示しています。フォームを切り替えると、右側の内容も切り替わります。</p>
             </div>
             <div class="public-sidebar-stats">
                 <article class="mini-stat-card accent-card">
-                    <span class="mini-stat-label">公開中</span>
+                    <span class="mini-stat-label">表示中</span>
                     <strong id="public-form-count">0</strong>
                 </article>
             </div>
