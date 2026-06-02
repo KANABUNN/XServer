@@ -2,6 +2,30 @@
 require_once __DIR__ . '/../../../apps/forms_core/bootstrap.php';
 require_once __DIR__ . '/../../../apps/response_limit.php';
 
+function forms_period_unavailable_public_message(array $availability): string
+{
+    $status = strtolower((string)($availability['status'] ?? ''));
+    if ($status === 'scheduled') {
+        return 'このフォームは提出期間前です。';
+    }
+    if ($status === 'closed') {
+        return "このフォームの受け付けは終了しました。\n提出物がある際はメールにて連絡してください。\nsogokanri@bene.fit.ac.jp";
+    }
+    return (string)($availability['note'] ?? '現在このフォームは受付できません。');
+}
+
+function forms_period_unavailable_message_from_exception(Throwable $e): string
+{
+    $message = $e->getMessage();
+    if (str_contains($message, '受付開始前')) {
+        return 'このフォームは提出期間前です。';
+    }
+    if (str_contains($message, '公開期間は終了') || str_contains($message, '受付終了')) {
+        return "このフォームの受け付けは終了しました。\n提出物がある際はメールにて連絡してください。\nsogokanri@bene.fit.ac.jp";
+    }
+    return $message !== '' ? $message : '現在このフォームは受付できません。';
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['ok' => false, 'message' => 'POST のみ許可されています。'], 405);
 }
@@ -50,7 +74,7 @@ try {
     }
     if (!forms_is_publicly_available($form)) {
         $availability = forms_public_period_context($form);
-        json_response(['ok' => false, 'message' => $availability['note'] ?: '現在このフォームは受付できません。'], 403);
+        json_response(['ok' => false, 'message' => forms_period_unavailable_public_message($availability)], 403);
     }
 
     $validation = forms_validate_submission($form, $_POST, $_FILES);
@@ -72,7 +96,7 @@ try {
         json_response(['ok' => false, 'message' => $message], $status);
     } catch (DomainException $e) {
         error_log('[forms submit save closed] ' . (string)$e);
-        json_response(['ok' => false, 'message' => $e->getMessage() ?: '現在このフォームは受付できません。'], 403);
+        json_response(['ok' => false, 'message' => forms_period_unavailable_message_from_exception($e)], 403);
     } catch (Throwable $e) {
         error_log('[forms submit save] ' . (string)$e);
         json_response(['ok' => false, 'message' => '送信の保存に失敗しました。時間をおいて再試行してください。'], 500);
