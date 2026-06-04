@@ -17,6 +17,7 @@ $returnTo = mail_auth_normalize_return_to((string)($_GET['return_to'] ?? mail_ur
 $errorMessage = '';
 $infoMessage = '';
 $roleUserCount = null;
+$accountPdo = null;
 
 try {
     $accountPdo = mail_pdo('account');
@@ -25,7 +26,7 @@ try {
     $errorMessage = '共通アカウントDBへ接続できません: ' . $e->getMessage();
 }
 
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '') {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '' && $accountPdo instanceof PDO) {
     mail_auth_require_csrf();
     $identifier = trim((string)($_POST['login_id'] ?? ''));
     $password = (string)($_POST['password'] ?? '');
