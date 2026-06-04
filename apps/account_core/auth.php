@@ -16,6 +16,7 @@ function account_site_attempt_login(string $identifier, string $password): bool
     $roleKeys = is_array($user['role_keys'] ?? null) ? $user['role_keys'] : [];
     $_SESSION['account_user'] = [
         'id' => (int)($user['id'] ?? 0),
+        'session_version' => (int)($user['session_version'] ?? 1),
         'login_id' => (string)($user['login_id'] ?? ''),
         'display_name' => (string)($user['display_name'] ?? ''),
         'email' => (string)($user['email'] ?? ''),
@@ -28,7 +29,41 @@ function account_site_attempt_login(string $identifier, string $password): bool
 
 function account_site_is_logged_in(): bool
 {
-    return !empty($_SESSION['account_user']) && is_array($_SESSION['account_user']);
+    if (empty($_SESSION['account_user']) || !is_array($_SESSION['account_user'])) {
+        return false;
+    }
+    return account_site_session_state_valid();
+}
+
+function account_site_session_state_valid(): bool
+{
+    $sessionUser = $_SESSION['account_user'] ?? [];
+    $accountId = (int)($sessionUser['id'] ?? 0);
+    if ($accountId < 1) {
+        return false;
+    }
+
+    $now = time();
+    $lastChecked = (int)($sessionUser['_revalidated_at'] ?? 0);
+    if ($lastChecked > 0 && ($now - $lastChecked) < 60) {
+        return true;
+    }
+
+    try {
+        $state = shared_accounts_session_state(account_site_db(), $accountId, account_site_app_key());
+    } catch (Throwable $e) {
+        return true;
+    }
+
+    if ($state === null || (int)($state['is_active'] ?? 0) !== 1) {
+        return false;
+    }
+    if ((int)($state['session_version'] ?? 1) !== (int)($sessionUser['session_version'] ?? -1)) {
+        return false;
+    }
+
+    $_SESSION['account_user']['_revalidated_at'] = $now;
+    return true;
 }
 
 function account_site_current_user(): array

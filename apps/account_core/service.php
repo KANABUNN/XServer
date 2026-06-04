@@ -322,7 +322,7 @@ function account_site_save_account(PDO $pdo, array $payload, int $actorId): int
                 ':organization_name' => $organizationName !== '' ? $organizationName : null,
                 ':is_active' => $isActive,
             ];
-            $setSql = 'login_id = :login_id, email = :email, display_name = :display_name, organization_name = :organization_name, is_active = :is_active';
+            $setSql = 'login_id = :login_id, email = :email, display_name = :display_name, organization_name = :organization_name, is_active = :is_active, session_version = session_version + 1';
             if ($password !== '') {
                 $hash = password_hash($password, PASSWORD_DEFAULT);
                 if ($hash === false) {
@@ -439,7 +439,7 @@ function account_site_change_own_password(PDO $pdo, int $accountId, string $curr
         throw new RuntimeException('新しいパスワードの保存に失敗しました。');
     }
 
-    $updateStmt = $pdo->prepare('UPDATE shared_accounts SET password_hash = :password_hash WHERE id = :id');
+    $updateStmt = $pdo->prepare('UPDATE shared_accounts SET password_hash = :password_hash, session_version = session_version + 1 WHERE id = :id');
     $updateStmt->execute([
         ':password_hash' => $newHash,
         ':id' => $accountId,

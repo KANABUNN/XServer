@@ -34,6 +34,7 @@ function login_user(string $identifier, string $password): bool
     $_SESSION['user'] = [
         'id' => (int)$user['id'],
         'app_key' => lend_auth_app_key(),
+        'session_version' => (int)($user['session_version'] ?? 1),
         'login_id' => (string)($user['login_id'] ?? ''),
         'name' => (string)($user['display_name'] ?? ''),
         'display_name' => (string)($user['display_name'] ?? ''),
@@ -62,7 +63,42 @@ function is_logged_in(): bool
     // forms と lend は同一の lend_core を共有しており、同一ホスト配信時には
     // Cookie・$_SESSION['user'] を共有し得る。app_key を照合することで、
     // 一方のアプリで得た権限(role)が他方へ流用されるのを防ぐ。
-    return (string)($_SESSION['user']['app_key'] ?? '') === lend_auth_app_key();
+    if ((string)($_SESSION['user']['app_key'] ?? '') !== lend_auth_app_key()) {
+        return false;
+    }
+
+    return lend_auth_session_state_valid();
+}
+
+function lend_auth_session_state_valid(): bool
+{
+    $sessionUser = $_SESSION['user'] ?? [];
+    $accountId = (int)($sessionUser['id'] ?? 0);
+    if ($accountId < 1) {
+        return false;
+    }
+
+    $now = time();
+    $lastChecked = (int)($sessionUser['_revalidated_at'] ?? 0);
+    if ($lastChecked > 0 && ($now - $lastChecked) < 60) {
+        return true;
+    }
+
+    try {
+        $state = shared_accounts_session_state(lend_auth_account_db(), $accountId, lend_auth_app_key());
+    } catch (Throwable $e) {
+        return true;
+    }
+
+    if ($state === null || (int)($state['is_active'] ?? 0) !== 1) {
+        return false;
+    }
+    if ((int)($state['session_version'] ?? 1) !== (int)($sessionUser['session_version'] ?? -1)) {
+        return false;
+    }
+
+    $_SESSION['user']['_revalidated_at'] = $now;
+    return true;
 }
 
 function current_user(): array

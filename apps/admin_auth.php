@@ -620,6 +620,7 @@ function admin_auth_login_user(array $user): void
 
     $_SESSION['admin_user'] = [
         'id' => (int)($user['id'] ?? 0),
+        'session_version' => (int)($user['session_version'] ?? 1),
         'login_id' => (string)($user['login_id'] ?? ''),
         'display_name' => (string)($user['display_name'] ?? ''),
         'email' => (string)($user['email'] ?? ''),
@@ -634,11 +635,45 @@ function admin_auth_login_user(array $user): void
     admin_auth_get_csrf_token(true);
 }
 
+function admin_auth_session_state_valid(array $sessionUser): bool
+{
+    $accountId = (int)($sessionUser['id'] ?? 0);
+    if ($accountId < 1) {
+        return false;
+    }
+
+    $now = time();
+    $lastChecked = (int)($_SESSION['admin_user']['_revalidated_at'] ?? 0);
+    if ($lastChecked > 0 && ($now - $lastChecked) < 60) {
+        return true;
+    }
+
+    try {
+        $state = shared_accounts_session_state(admin_auth_account_db(), $accountId, 'admin_book');
+    } catch (Throwable $e) {
+        return true;
+    }
+
+    if ($state === null || (int)($state['is_active'] ?? 0) !== 1) {
+        return false;
+    }
+    if ((int)($state['session_version'] ?? 1) !== (int)($sessionUser['session_version'] ?? -1)) {
+        return false;
+    }
+
+    $_SESSION['admin_user']['_revalidated_at'] = $now;
+    return true;
+}
+
 function admin_auth_current_user(): ?array
 {
     admin_auth_bootstrap();
     $user = $_SESSION['admin_user'] ?? null;
     if (!is_array($user) || (int)($user['id'] ?? 0) < 1) {
+        return null;
+    }
+
+    if (!admin_auth_session_state_valid($user)) {
         return null;
     }
 

@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS shared_accounts (
     display_name VARCHAR(100) NOT NULL,
     organization_name VARCHAR(255) DEFAULT NULL,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
+    session_version INT UNSIGNED NOT NULL DEFAULT 1,
     last_login_at DATETIME DEFAULT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -133,6 +134,23 @@ CREATE TABLE IF NOT EXISTS shared_account_app_roles (
 SQL;
 }
 
+function shared_accounts_table_has_column(PDO $pdo, string $tableName, string $columnName): bool
+{
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS '
+            . 'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name'
+        );
+        $stmt->execute([
+            ':table_name' => $tableName,
+            ':column_name' => $columnName,
+        ]);
+        return (int)$stmt->fetchColumn() > 0;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 function shared_accounts_install_schema(PDO $pdo): void
 {
     static $installed = [];
@@ -145,6 +163,14 @@ function shared_accounts_install_schema(PDO $pdo): void
     $statements = array_filter(array_map('trim', preg_split('/;\s*(?:\R|$)/u', shared_accounts_schema_sql()) ?: []));
     foreach ($statements as $statement) {
         $pdo->exec($statement);
+    }
+
+    if (!shared_accounts_table_has_column($pdo, 'shared_accounts', 'session_version')) {
+        try {
+            $pdo->exec('ALTER TABLE shared_accounts ADD COLUMN session_version INT UNSIGNED NOT NULL DEFAULT 1 AFTER is_active');
+        } catch (Throwable $e) {
+            // 既存列/権限不足時は無視。
+        }
     }
 }
 
@@ -167,9 +193,55 @@ function shared_accounts_hydrate_user_row(array $row, string $appKey): array
     $row['role_keys'] = $roleKeys;
     $row['app_key'] = $appKey;
     $row['is_active'] = (int)($row['is_active'] ?? 0);
+    $row['session_version'] = (int)($row['session_version'] ?? 1);
     $row['name'] = (string)($row['display_name'] ?? '');
     $row['organization'] = (string)($row['organization_name'] ?? '');
     return $row;
+}
+
+function shared_accounts_session_state(PDO $pdo, int $accountId, string $appKey): ?array
+{
+    shared_accounts_install_schema($pdo);
+    if ($accountId <= 0) {
+        return null;
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT a.is_active, a.session_version, '
+        . 'GROUP_CONCAT(DISTINCT ar.role_key ORDER BY ar.role_key SEPARATOR ",") AS role_keys '
+        . 'FROM shared_accounts a '
+        . 'INNER JOIN shared_account_app_roles ar ON ar.account_id = a.id AND ar.app_key = :app_key '
+        . 'WHERE a.id = :id '
+        . 'GROUP BY a.id '
+        . 'LIMIT 1'
+    );
+    $stmt->execute([
+        ':app_key' => $appKey,
+        ':id' => $accountId,
+    ]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return null;
+    }
+
+    return [
+        'is_active' => (int)($row['is_active'] ?? 0),
+        'session_version' => (int)($row['session_version'] ?? 1),
+        'role_keys' => shared_accounts_normalize_role_keys(explode(',', (string)($row['role_keys'] ?? ''))),
+    ];
+}
+
+function shared_accounts_bump_session_version(PDO $pdo, int $accountId): void
+{
+    if ($accountId <= 0) {
+        return;
+    }
+    try {
+        $stmt = $pdo->prepare('UPDATE shared_accounts SET session_version = session_version + 1 WHERE id = :id');
+        $stmt->execute([':id' => $accountId]);
+    } catch (Throwable $e) {
+        // session_version 未導入環境では無視。
+    }
 }
 
 function shared_accounts_fetch_by_identifier(PDO $pdo, string $identifier, string $appKey): ?array
@@ -181,7 +253,7 @@ function shared_accounts_fetch_by_identifier(PDO $pdo, string $identifier, strin
     }
 
     $stmt = $pdo->prepare(
-        'SELECT a.id, a.login_id, a.email, a.password_hash, a.display_name, a.organization_name, a.is_active, a.last_login_at, a.created_at, a.updated_at, '
+        'SELECT a.id, a.login_id, a.email, a.password_hash, a.display_name, a.organization_name, a.is_active, a.session_version, a.last_login_at, a.created_at, a.updated_at, '
         . 'GROUP_CONCAT(DISTINCT ar.role_key ORDER BY ar.role_key SEPARATOR ",") AS role_keys '
         . 'FROM shared_accounts a '
         . 'INNER JOIN shared_account_app_roles ar ON ar.account_id = a.id AND ar.app_key = :app_key '
@@ -210,7 +282,7 @@ function shared_accounts_fetch_by_id(PDO $pdo, int $accountId, string $appKey): 
     }
 
     $stmt = $pdo->prepare(
-        'SELECT a.id, a.login_id, a.email, a.password_hash, a.display_name, a.organization_name, a.is_active, a.last_login_at, a.created_at, a.updated_at, '
+        'SELECT a.id, a.login_id, a.email, a.password_hash, a.display_name, a.organization_name, a.is_active, a.session_version, a.last_login_at, a.created_at, a.updated_at, '
         . 'GROUP_CONCAT(DISTINCT ar.role_key ORDER BY ar.role_key SEPARATOR ",") AS role_keys '
         . 'FROM shared_accounts a '
         . 'INNER JOIN shared_account_app_roles ar ON ar.account_id = a.id AND ar.app_key = :app_key '
@@ -234,7 +306,7 @@ function shared_accounts_list_users(PDO $pdo, string $appKey): array
 {
     shared_accounts_install_schema($pdo);
     $stmt = $pdo->prepare(
-        'SELECT a.id, a.login_id, a.email, a.display_name, a.organization_name, a.is_active, a.last_login_at, a.created_at, a.updated_at, '
+        'SELECT a.id, a.login_id, a.email, a.display_name, a.organization_name, a.is_active, a.session_version, a.last_login_at, a.created_at, a.updated_at, '
         . 'GROUP_CONCAT(DISTINCT ar.role_key ORDER BY ar.role_key SEPARATOR ",") AS role_keys '
         . 'FROM shared_accounts a '
         . 'INNER JOIN shared_account_app_roles ar ON ar.account_id = a.id AND ar.app_key = :app_key '
@@ -337,7 +409,7 @@ function shared_accounts_update_user(PDO $pdo, int $accountId, array $data, stri
             ':organization_name' => $organizationName !== '' ? $organizationName : null,
             ':is_active' => $isActive,
         ];
-        $setSql = 'login_id = :login_id, email = :email, display_name = :display_name, organization_name = :organization_name, is_active = :is_active';
+        $setSql = 'login_id = :login_id, email = :email, display_name = :display_name, organization_name = :organization_name, is_active = :is_active, session_version = session_version + 1';
         if ($passwordHash !== '') {
             $setSql .= ', password_hash = :password_hash';
             $params[':password_hash'] = $passwordHash;
