@@ -28,6 +28,12 @@ try {
     echo 'forms_archive_purge: deleted_files=' . (string)($zipPurge['deleted_files'] ?? 0)
         . ', deleted_bytes=' . (string)($zipPurge['deleted_bytes'] ?? 0) . PHP_EOL;
 
+    $codeMask = $result['reservation_access_code_mask'] ?? [];
+    echo 'reservation_access_code_mask: room_calendar_reservations=' . (string)($codeMask['room_calendar_reservations'] ?? 0)
+        . ', reservations=' . (string)($codeMask['reservations'] ?? 0)
+        . ', switchbot_passcode_requests=' . (string)($codeMask['switchbot_passcode_requests'] ?? 0)
+        . ', mask_after_days=' . (string)($codeMask['mask_after_days'] ?? 0) . PHP_EOL;
+
     $switchbot = $result['switchbot_detail_cleanup'] ?? [];
     echo 'switchbot_detail_cleanup: deleted_files=' . (string)($switchbot['deleted_files'] ?? 0)
         . ', updated_rows=' . (string)($switchbot['updated_rows'] ?? 0) . PHP_EOL;
