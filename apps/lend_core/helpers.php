@@ -63,6 +63,45 @@ function require_post(): void
     }
 }
 
+function lend_db_table_has_column(PDO $pdo, string $tableName, string $columnName): bool
+{
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS '
+            . 'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name'
+        );
+        $stmt->execute([
+            ':table_name' => $tableName,
+            ':column_name' => $columnName,
+        ]);
+        return (int)$stmt->fetchColumn() > 0;
+    } catch (Throwable $e) {
+        error_log('[lend_db_table_has_column] ' . (string)$e);
+        return false;
+    }
+}
+
+function lend_reservation_user_snapshot_available(): bool
+{
+    static $available = null;
+    if (is_bool($available)) {
+        return $available;
+    }
+
+    $pdo = db();
+    $available = lend_db_table_has_column($pdo, 'reservations', 'user_display_name')
+        && lend_db_table_has_column($pdo, 'reservations', 'user_organization_name');
+
+    return $available;
+}
+
+function lend_reservation_user_snapshot_sql(): string
+{
+    return lend_reservation_user_snapshot_available()
+        ? 'r.user_display_name AS snapshot_user_name, r.user_organization_name AS snapshot_organization,'
+        : 'NULL AS snapshot_user_name, NULL AS snapshot_organization,';
+}
+
 function audit_log(?int $userId, string $actorType, string $action, string $targetType, ?int $targetId, array $details = []): void
 {
     $stmt = db()->prepare('

@@ -15,6 +15,90 @@ function lend_auth_app_key(): string
     return str_contains($scriptName, '/forms/') ? 'forms' : 'lend';
 }
 
+function lend_account_labels_from_user(array $user): array
+{
+    return [
+        'user_name' => (string)($user['display_name'] ?? $user['name'] ?? ''),
+        'organization' => (string)($user['organization_name'] ?? $user['organization'] ?? ''),
+    ];
+}
+
+function lend_fetch_account_labels(array $accountIds): array
+{
+    $ids = [];
+    foreach ($accountIds as $accountId) {
+        $id = (int)$accountId;
+        if ($id > 0) {
+            $ids[$id] = $id;
+        }
+    }
+
+    if ($ids === []) {
+        return [];
+    }
+
+    try {
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = lend_auth_account_db()->prepare(
+            'SELECT id, display_name, organization_name '
+            . 'FROM shared_accounts '
+            . 'WHERE id IN (' . $placeholders . ')'
+        );
+        $stmt->execute(array_values($ids));
+
+        $labels = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $id = (int)($row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $labels[$id] = [
+                'user_name' => (string)($row['display_name'] ?? ''),
+                'organization' => (string)($row['organization_name'] ?? ''),
+            ];
+        }
+
+        return $labels;
+    } catch (Throwable $e) {
+        // account DB の表示名解決に失敗しても、lend DB 側の処理は継続する。
+        // admin_data.php では reservations のスナップショット列へフォールバックする。
+        error_log('[lend_fetch_account_labels] ' . (string)$e);
+        return [];
+    }
+}
+
+function lend_apply_account_labels(array $rows, string $userIdKey = 'user_id'): array
+{
+    $ids = [];
+    foreach ($rows as $row) {
+        $id = (int)($row[$userIdKey] ?? 0);
+        if ($id > 0) {
+            $ids[$id] = $id;
+        }
+    }
+
+    $labels = lend_fetch_account_labels(array_values($ids));
+
+    foreach ($rows as &$row) {
+        $userId = (int)($row[$userIdKey] ?? 0);
+        $snapshotName = trim((string)($row['snapshot_user_name'] ?? ''));
+        $snapshotOrganization = trim((string)($row['snapshot_organization'] ?? ''));
+        $current = $labels[$userId] ?? [];
+
+        $row['user_name'] = trim((string)($current['user_name'] ?? '')) !== ''
+            ? (string)$current['user_name']
+            : ($snapshotName !== '' ? $snapshotName : ($userId > 0 ? '利用者ID:' . $userId : '不明な利用者'));
+        $row['organization'] = trim((string)($current['organization'] ?? '')) !== ''
+            ? (string)$current['organization']
+            : $snapshotOrganization;
+
+        unset($row['snapshot_user_name'], $row['snapshot_organization']);
+    }
+    unset($row);
+
+    return $rows;
+}
+
 function login_user(string $identifier, string $password): bool
 {
     $pdo = lend_auth_account_db();

@@ -2,32 +2,35 @@
 require_once __DIR__ . '/../../../apps/lend_core/bootstrap.php';
 api_require_admin();
 
-$pendingReservations = db()->query('
+$snapshotSelect = lend_reservation_user_snapshot_sql();
+
+$pendingReservations = db()->query(<<<SQL
     SELECT
         r.id,
+        r.user_id,
         r.title,
         r.purpose,
         r.place,
         r.start_at,
         r.end_at,
-        u.display_name AS user_name,
-        u.organization_name AS organization,
+        {$snapshotSelect}
         GROUP_CONCAT(a.name SEPARATOR " / ") AS asset_names
     FROM reservations r
-    INNER JOIN fitsc_account.shared_accounts u ON u.id = r.user_id
     LEFT JOIN reservation_asset_sets ras ON ras.reservation_id = r.id
     LEFT JOIN asset_sets a ON a.id = ras.asset_set_id
     WHERE r.status = "pending"
     GROUP BY r.id
     ORDER BY r.start_at ASC
-')->fetchAll();
+SQL)->fetchAll();
+$pendingReservations = lend_apply_account_labels($pendingReservations, 'user_id');
 
-$returnReview = db()->query('
+$returnReview = db()->query(<<<SQL
     SELECT
         ct.id,
+        ct.user_id,
         r.id AS reservation_id,
         r.title,
-        u.display_name AS user_name,
+        {$snapshotSelect}
         a.name AS asset_name,
         a.asset_code,
         a.is_high_value,
@@ -37,29 +40,30 @@ $returnReview = db()->query('
         ct.state
     FROM checkout_transactions ct
     INNER JOIN reservations r ON r.id = ct.reservation_id
-    INNER JOIN fitsc_account.shared_accounts u ON u.id = ct.user_id
     INNER JOIN asset_sets a ON a.id = ct.asset_set_id
     WHERE ct.state IN ("return_declared","flagged")
     ORDER BY ct.return_declared_at DESC
-')->fetchAll();
+SQL)->fetchAll();
+$returnReview = lend_apply_account_labels($returnReview, 'user_id');
 
-$overdues = db()->query('
+$overdues = db()->query(<<<SQL
     SELECT
         ct.id,
+        ct.user_id,
         r.title,
         r.end_at,
-        u.display_name AS user_name,
+        {$snapshotSelect}
         a.name AS asset_name,
         ct.checkout_at,
         ct.state
     FROM checkout_transactions ct
     INNER JOIN reservations r ON r.id = ct.reservation_id
-    INNER JOIN fitsc_account.shared_accounts u ON u.id = ct.user_id
     INNER JOIN asset_sets a ON a.id = ct.asset_set_id
     WHERE ct.state = "checked_out"
       AND r.end_at < NOW()
     ORDER BY r.end_at ASC
-')->fetchAll();
+SQL)->fetchAll();
+$overdues = lend_apply_account_labels($overdues, 'user_id');
 
 json_response([
     'ok' => true,

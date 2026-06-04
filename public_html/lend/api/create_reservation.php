@@ -35,21 +35,44 @@ if (!$assetSet) {
     json_response(['ok' => false, 'message' => '指定された貸出セットが見つかりません。'], 404);
 }
 
+$userId = (int)$user['id'];
+$accountLabels = lend_fetch_account_labels([$userId]);
+$userSnapshot = $accountLabels[$userId] ?? lend_account_labels_from_user($user);
+$hasSnapshotColumns = lend_reservation_user_snapshot_available();
+
 db()->beginTransaction();
 try {
-    $stmt = db()->prepare('
-        INSERT INTO reservations (user_id, title, purpose, place, start_at, end_at, status)
-        VALUES (:user_id, :title, :purpose, :place, :start_at, :end_at, :status)
-    ');
-    $stmt->execute([
-        ':user_id' => $user['id'],
+    $reservationParams = [
+        ':user_id' => $userId,
         ':title' => $title,
         ':purpose' => $purpose,
         ':place' => $place ?: null,
         ':start_at' => $start->format('Y-m-d H:i:s'),
         ':end_at' => $end->format('Y-m-d H:i:s'),
         ':status' => 'pending',
-    ]);
+    ];
+
+    if ($hasSnapshotColumns) {
+        $stmt = db()->prepare('
+            INSERT INTO reservations (
+                user_id, user_display_name, user_organization_name,
+                title, purpose, place, start_at, end_at, status
+            )
+            VALUES (
+                :user_id, :user_display_name, :user_organization_name,
+                :title, :purpose, :place, :start_at, :end_at, :status
+            )
+        ');
+        $reservationParams[':user_display_name'] = mb_substr((string)($userSnapshot['user_name'] ?? ''), 0, 100, 'UTF-8') ?: null;
+        $reservationParams[':user_organization_name'] = mb_substr((string)($userSnapshot['organization'] ?? ''), 0, 255, 'UTF-8') ?: null;
+    } else {
+        $stmt = db()->prepare('
+            INSERT INTO reservations (user_id, title, purpose, place, start_at, end_at, status)
+            VALUES (:user_id, :title, :purpose, :place, :start_at, :end_at, :status)
+        ');
+    }
+
+    $stmt->execute($reservationParams);
     $reservationId = (int)db()->lastInsertId();
 
     $stmt = db()->prepare('
@@ -67,7 +90,7 @@ try {
     ');
     $stmt->execute([
         ':reservation_id' => $reservationId,
-        ':user_id' => $user['id'],
+        ':user_id' => $userId,
         ':asset_set_id' => $assetSetId,
         ':state' => 'reserved',
     ]);
