@@ -13,12 +13,17 @@ $title = trim((string)($data['title'] ?? ''));
 $purpose = trim((string)($data['purpose'] ?? ''));
 $place = trim((string)($data['place'] ?? ''));
 $assetSetId = (int)($data['asset_set_id'] ?? 0);
+$start = null;
+$end = null;
 
 try {
     $start = new DateTimeImmutable((string)($data['start_at'] ?? ''));
     $end = new DateTimeImmutable((string)($data['end_at'] ?? ''));
 } catch (Throwable $e) {
     json_response(['ok' => false, 'message' => '日時の形式が不正です。'], 422);
+}
+if (!$start instanceof DateTimeImmutable || !$end instanceof DateTimeImmutable) {
+    exit;
 }
 
 if ($title === '' || $purpose === '' || $assetSetId <= 0) {
@@ -35,7 +40,11 @@ if (!$assetSet) {
     json_response(['ok' => false, 'message' => '指定された貸出セットが見つかりません。'], 404);
 }
 
-$userId = (int)$user['id'];
+$userId = (int)($user['id'] ?? 0);
+if ($userId <= 0) {
+    json_response(['ok' => false, 'message' => 'ログインが必要です。'], 401);
+    exit;
+}
 $accountLabels = lend_fetch_account_labels([$userId]);
 $userSnapshot = $accountLabels[$userId] ?? lend_account_labels_from_user($user);
 $hasSnapshotColumns = lend_reservation_user_snapshot_available();
@@ -95,7 +104,7 @@ try {
         ':state' => 'reserved',
     ]);
 
-    audit_log((int)$user['id'], 'user', 'reservation_created', 'reservation', $reservationId, [
+    audit_log($userId, 'user', 'reservation_created', 'reservation', $reservationId, [
         'asset_set_id' => $assetSetId,
     ]);
 
