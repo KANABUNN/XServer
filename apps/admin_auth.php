@@ -109,6 +109,10 @@ function admin_auth_join_base_path(string $relativePath = ''): string
 
 function admin_auth_bootstrap(): void
 {
+    // すべての admin.book 応答(HTML/JSON)に共通セキュリティヘッダーを付与する。
+    // headers_sent() ガードは関数内にあるため、多重呼び出し・出力済みでも安全。
+    admin_auth_security_headers();
+
     if (session_status() === PHP_SESSION_ACTIVE) {
         return;
     }

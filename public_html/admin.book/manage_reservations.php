@@ -121,7 +121,7 @@ try {
     http_response_code(500);
     echo json_encode([
         'ok' => false,
-        'message' => '処理に失敗しました。管理者に連絡してください。',
+        'message' => '処理に失敗しました。時間をおいて再度お試しください。',
         'error_id' => $errorId,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
