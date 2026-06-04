@@ -17,16 +17,18 @@ $returnTo = admin_auth_normalize_return_to((string)($_GET['return_to'] ?? admin_
 $errorMessage = '';
 $infoMessage = '';
 $canSetup = false;
+$pdo = null;
 
 try {
     $pdo = admin_auth_db_connect();
     admin_auth_install_schema($pdo);
     $canSetup = admin_auth_count_users($pdo) === 0;
 } catch (Throwable $e) {
-    $errorMessage = 'DB 接続または認証テーブルの確認に失敗しました: ' . $e->getMessage();
+    error_log('[admin.book login init] ' . $e->getMessage());
+    $errorMessage = 'DB 接続または認証テーブルの確認に失敗しました。';
 }
 
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '') {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '' && $pdo instanceof PDO) {
     admin_auth_require_csrf();
     $loginId = trim((string)($_POST['login_id'] ?? ''));
     $password = (string)($_POST['password'] ?? '');
@@ -48,15 +50,17 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '') {
                 if ($user === null) {
                     $errorMessage = 'ログインIDまたはパスワードが正しくありません。';
                 } else {
+                    $userId = (int)($user['id'] ?? 0);
                     admin_auth_login_user($user);
-                    admin_auth_write_audit_log($pdo, $user, 'admin.login', 'admin_user', (int)$user['id'], [
+                    admin_auth_write_audit_log($pdo, $user, 'admin.login', 'admin_user', $userId, [
                         'role_key' => (string)($user['role_key'] ?? ''),
                     ]);
                     header('Location: ' . $returnTo, true, 302);
                     exit;
                 }
             } catch (Throwable $e) {
-                $errorMessage = 'ログイン処理に失敗しました: ' . $e->getMessage();
+                error_log('[admin.book login] ' . $e->getMessage());
+                $errorMessage = 'ログイン処理に失敗しました。';
             }
         }
     }
