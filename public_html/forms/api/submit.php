@@ -26,7 +26,7 @@ function forms_period_unavailable_message_from_exception(Throwable $e): string
     return $message !== '' ? $message : '現在このフォームは受付できません。';
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     json_response(['ok' => false, 'message' => 'POST のみ許可されています。'], 405);
 }
 
@@ -69,8 +69,9 @@ try {
 
     $formId = (int)($_POST['form_id'] ?? 0);
     $form = forms_load_form($formId, true);
-    if (!$form) {
+    if (!is_array($form)) {
         json_response(['ok' => false, 'message' => '対象フォームが見つかりません。'], 404);
+        exit;
     }
     if (!forms_is_publicly_available($form)) {
         $availability = forms_public_period_context($form);
@@ -78,17 +79,21 @@ try {
     }
 
     $validation = forms_validate_submission($form, $_POST, $_FILES);
-    if (!empty($validation['errors'])) {
-        $messages = $validation['error_messages'] ?? array_values($validation['errors']);
+    $validationErrors = (array)($validation['errors'] ?? []);
+    if ($validationErrors !== []) {
+        $validationMessages = $validation['error_messages'] ?? null;
+        $messages = is_array($validationMessages) ? $validationMessages : array_values($validationErrors);
         json_response([
             'ok' => false,
             'message' => implode("\n", $messages),
-            'errors' => $validation['errors'],
+            'errors' => $validationErrors,
         ], 422);
     }
 
+    $validationData = is_array($validation['data'] ?? null) ? $validation['data'] : [];
+    $saved = [];
     try {
-        $saved = forms_save_submission($form, $validation['data']);
+        $saved = forms_save_submission($form, $validationData);
     } catch (InvalidArgumentException $e) {
         error_log('[forms submit save invalid] ' . (string)$e);
         $status = str_contains($e->getMessage(), '見つかりません') ? 404 : 422;
@@ -101,14 +106,15 @@ try {
         json_response(['ok' => false, 'message' => '送信の保存に失敗しました。時間をおいて再試行してください。'], 500);
     }
 
+    $savedStatus = (string)($saved['status'] ?? '');
     json_response([
         'ok' => true,
-        'status' => $saved['status'],
-        'message' => $saved['status'] === 'updated'
+        'status' => $savedStatus,
+        'message' => $savedStatus === 'updated'
             ? '同じメールアドレスと団体名の組み合わせのため、履歴を残して最新データへ更新しました。'
             : ((string)($form['settings']['completion_message'] ?? '送信を受け付けました。')),
-        'submission_id' => $saved['submission_id'],
-        'revision_number' => $saved['revision_number'],
+        'submission_id' => (int)($saved['submission_id'] ?? 0),
+        'revision_number' => (int)($saved['revision_number'] ?? 0),
     ]);
 } catch (Throwable $e) {
     error_log('[forms submit] ' . (string)$e);

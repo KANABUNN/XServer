@@ -8,6 +8,7 @@ if ($formId <= 0) {
     json_response(['ok' => false, 'message' => 'form_id が必要です。'], 422);
 }
 
+$archive = null;
 try {
     $archive = forms_build_latest_attachments_archive($formId, [
         'query' => (string)($_GET['query'] ?? ''),
@@ -19,15 +20,16 @@ try {
     json_response(['ok' => false, 'message' => '最新添付ZIPの作成に失敗しました。', 'error_id' => forms_log_exception('download_latest_attachments.build', $e)], 500);
 }
 
-if (!$archive || empty($archive['path']) || !is_file($archive['path'])) {
+$path = is_array($archive) ? (string)($archive['path'] ?? '') : '';
+if ($path === '' || !is_file($path)) {
     json_response(['ok' => false, 'message' => 'ダウンロード対象の最新添付ファイルがありません。'], 404);
 }
 
-$path = $archive['path'];
-$filename = (string)($archive['filename'] ?? ('latest_attachments_' . date('Ymd_His') . '.zip'));
+$defaultFilename = 'latest_attachments_' . date('Ymd_His') . '.zip';
+$filename = is_array($archive) ? (string)($archive['filename'] ?? $defaultFilename) : $defaultFilename;
 forms_admin_audit_log('export.latest_attachments_zip', 'managed_form', $formId, [
     'filename' => $filename,
-    'count' => (int)($archive['count'] ?? 0),
+    'count' => is_array($archive) ? (int)($archive['count'] ?? 0) : 0,
 ], $actor);
 
 register_shutdown_function(static function () use ($path): void {

@@ -12,6 +12,7 @@ if (!verify_csrf($data['csrf_token'] ?? '')) {
 $submissionId = (int)($data['submission_id'] ?? 0);
 $status = (string)($data['status'] ?? 'new');
 $adminNote = (string)($data['admin_note'] ?? '');
+$entry = [];
 
 if ($submissionId <= 0) {
     json_response(['ok' => false, 'message' => 'submission_id が必要です。'], 422);

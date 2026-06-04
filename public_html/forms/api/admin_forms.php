@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../../apps/forms_core/bootstrap.php';
 forms_bootstrap();
 
-if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     api_require_admin();
     json_response([
         'ok' => true,
@@ -46,6 +46,7 @@ if ($action !== 'save') {
     json_response(['ok' => false, 'message' => '未対応の操作です。'], 422);
 }
 
+$form = [];
 try {
     $form = forms_save_form((array)($data['form'] ?? []), (array)($data['fields'] ?? []));
     forms_admin_audit_log('form.save', 'managed_form', (int)($form['id'] ?? 0), [
