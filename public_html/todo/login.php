@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/../../apps/todo_core/bootstrap.php';
+require_once __DIR__ . '/../../apps/response_limit.php';
 db_init();
 
 if (is_logged_in()) {
@@ -8,6 +9,13 @@ if (is_logged_in()) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
+    try {
+        rate_limit_or_throw(get_client_ip(), __DIR__ . '/../../apps/rate_limit_todo_login.json', 5, 300);
+    } catch (Throwable $rateLimitError) {
+        error_log('[todo login rate_limit] ' . $rateLimitError->getMessage());
+        flash('error', '短時間にログイン試行が多すぎます。時間をおいて再試行してください。');
+        redirect('login.php');
+    }
     $identifier = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 

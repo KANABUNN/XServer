@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/apps/account_core/auth.php';
+require_once dirname(__DIR__, 2) . '/apps/response_limit.php';
 
 account_site_bootstrap_session();
 $flash = account_site_pull_flash();
@@ -18,11 +19,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $identifier = trim((string)($_POST['identifier'] ?? ''));
         $password = (string)($_POST['password'] ?? '');
-        if (account_site_attempt_login($identifier, $password)) {
+        try {
+            rate_limit_or_throw(get_client_ip(), dirname(__DIR__, 2) . '/apps/rate_limit_account_login.json', 5, 300);
+        } catch (Throwable $rateLimitError) {
+            error_log('[account login rate_limit] ' . $rateLimitError->getMessage());
+            $error = '短時間にログイン試行が多すぎます。時間をおいて再試行してください。';
+        }
+        if ($error === '' && account_site_attempt_login($identifier, $password)) {
             account_site_set_flash('success', 'ログインしました。');
             account_site_redirect('index.php');
         }
-        $error = 'ログインに失敗しました。ID・メールアドレス・パスワードを確認してください。';
+        if ($error === '') {
+            $error = 'ログインに失敗しました。ID・メールアドレス・パスワードを確認してください。';
+        }
     }
 }
 ?>

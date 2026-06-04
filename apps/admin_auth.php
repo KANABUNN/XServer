@@ -744,8 +744,16 @@ function admin_auth_normalize_return_to(?string $value): string
         return $basePath;
     }
 
+    if (strpbrk($value, "\\\r\n") !== false) {
+        return $basePath;
+    }
+
     if ($value[0] !== '/') {
         return admin_auth_join_base_path($value);
+    }
+
+    if (isset($value[1]) && $value[1] === '/') {
+        return $basePath;
     }
 
     if ($basePath !== '/' && !str_starts_with($value, $basePath)) {
