@@ -105,7 +105,7 @@ function account_site_require_view_access(): void
 function account_site_require_manage_access(): void
 {
     account_site_require_login();
-    if (!account_site_has_any_role(['user', 'admin'])) {
+    if (!account_site_has_any_role(['admin'])) {
         http_response_code(403);
         echo 'この操作を実行する権限がありません。';
         exit;

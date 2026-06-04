@@ -13,7 +13,7 @@ $currentUser = account_site_current_user();
 $flash = account_site_pull_flash();
 $search = trim((string)($_GET['q'] ?? ''));
 $selectedId = (int)($_GET['edit'] ?? 0);
-$canManage = account_site_has_any_role(['user', 'admin']);
+$canManage = account_site_has_any_role(['admin']);
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
