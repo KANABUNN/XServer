@@ -91,9 +91,8 @@ try {
         $saved = forms_save_submission($form, $validation['data']);
     } catch (InvalidArgumentException $e) {
         error_log('[forms submit save invalid] ' . (string)$e);
-        $message = $e->getMessage() ?: '対象フォームが見つかりません。';
-        $status = str_contains($message, '見つかりません') ? 404 : 422;
-        json_response(['ok' => false, 'message' => $message], $status);
+        $status = str_contains($e->getMessage(), '見つかりません') ? 404 : 422;
+        json_response(['ok' => false, 'message' => $status === 404 ? '対象フォームが見つかりません。' : '送信内容を確認してください。'], $status);
     } catch (DomainException $e) {
         error_log('[forms submit save closed] ' . (string)$e);
         json_response(['ok' => false, 'message' => forms_period_unavailable_message_from_exception($e)], 403);

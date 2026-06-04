@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../../apps/forms_core/bootstrap.php';
 forms_bootstrap();
-require_admin();
+$actor = api_require_admin();
 
 $revisionId = (int)($_GET['revision_id'] ?? 0);
 if ($revisionId <= 0) {
@@ -17,6 +17,11 @@ if (!$download) {
 
 $filename = $download['filename'];
 $path = $download['path'];
+forms_admin_audit_log('attachment.download', 'managed_form_revision', $revisionId, [
+    'filename' => (string)$filename,
+    'from_archive' => !empty($download['from_archive']),
+], $actor);
+
 header('Content-Type: application/octet-stream');
 header('Content-Length: ' . filesize($path));
 header("Content-Disposition: attachment; filename*=UTF-8''" . rawurlencode($filename));

@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../../apps/forms_core/bootstrap.php';
 forms_bootstrap();
 require_post();
-api_require_admin();
+$actor = api_require_admin();
 
 $data = request_json();
 if (!verify_csrf($data['csrf_token'] ?? '')) {
@@ -18,11 +18,14 @@ if ($submissionId <= 0) {
 }
 
 try {
-    $entry = forms_update_submission_status($submissionId, $status, $adminNote, current_user() ?: []);
+    $entry = forms_update_submission_status($submissionId, $status, $adminNote, $actor ?: []);
+    forms_admin_audit_log('submission.status.update', 'managed_form_submission', $submissionId, [
+        'status' => $status,
+    ], $actor);
 } catch (InvalidArgumentException $e) {
     json_response(['ok' => false, 'message' => $e->getMessage()], 422);
 } catch (Throwable $e) {
-    json_response(['ok' => false, 'message' => '状態の更新に失敗しました。', 'error' => $e->getMessage()], 500);
+    json_response(['ok' => false, 'message' => '状態の更新に失敗しました。', 'error_id' => forms_log_exception('admin_entry_status.update', $e)], 500);
 }
 
 json_response([

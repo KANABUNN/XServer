@@ -116,11 +116,13 @@ try {
             throw new RuntimeException('未対応の action です。');
     }
 } catch (Throwable $e) {
-    error_log(sprintf('[manage_reservations] %s in %s:%d', $e->getMessage(), $e->getFile(), $e->getLine()));
+    $errorId = 'BOOK-' . date('YmdHis') . '-' . bin2hex(random_bytes(4));
+    error_log(sprintf('[manage_reservations][%s] %s in %s:%d', $errorId, $e->getMessage(), $e->getFile(), $e->getLine()));
     http_response_code(500);
     echo json_encode([
         'ok' => false,
-        'message' => $e->getMessage(),
+        'message' => '処理に失敗しました。管理者に連絡してください。',
+        'error_id' => $errorId,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 

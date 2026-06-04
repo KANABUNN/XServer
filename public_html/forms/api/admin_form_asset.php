@@ -3,7 +3,7 @@ require_once __DIR__ . '/../../../apps/forms_core/bootstrap.php';
 forms_bootstrap();
 
 require_post();
-api_require_admin();
+$actor = api_require_admin();
 
 $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
 if ($contentLength > 0 && empty($_POST) && empty($_FILES)) {
@@ -33,6 +33,10 @@ try {
             json_response(['ok' => false, 'message' => '配布ファイルを選択してください。'], 422);
         }
         $form = forms_save_distribution_file($formId, $file, $_POST);
+        forms_admin_audit_log('distribution_file.upload', 'managed_form', $formId, [
+            'original_name' => (string)($file['name'] ?? ''),
+            'size_bytes' => (int)($file['size'] ?? 0),
+        ], $actor);
         json_response([
             'ok' => true,
             'message' => '配布ファイルを保存しました。',
@@ -43,6 +47,7 @@ try {
 
     if ($action === 'delete') {
         $form = forms_delete_distribution_file($formId);
+        forms_admin_audit_log('distribution_file.delete', 'managed_form', $formId, [], $actor);
         json_response([
             'ok' => true,
             'message' => '配布ファイルを削除しました。',
@@ -55,5 +60,5 @@ try {
 } catch (InvalidArgumentException $e) {
     json_response(['ok' => false, 'message' => $e->getMessage()], 422);
 } catch (Throwable $e) {
-    json_response(['ok' => false, 'message' => '配布ファイルの操作に失敗しました。', 'error' => $e->getMessage()], 500);
+    json_response(['ok' => false, 'message' => '配布ファイルの操作に失敗しました。', 'error_id' => forms_log_exception('admin_form_asset', $e)], 500);
 }

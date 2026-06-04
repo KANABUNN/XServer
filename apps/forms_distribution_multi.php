@@ -78,6 +78,20 @@ function forms_distmulti_normalize_file_item(array $item): ?array
     ];
 }
 
+function forms_distmulti_validate_uploaded_file(string $originalName, string $extension, string $tmpName): void
+{
+    if (function_exists('forms_validate_safe_upload_extension')) {
+        forms_validate_safe_upload_extension($extension, '配布ファイル');
+    }
+    if (function_exists('forms_detect_uploaded_mime') && function_exists('forms_allowed_mimes_for_extension')) {
+        $detectedMime = forms_detect_uploaded_mime($tmpName);
+        $allowedMimes = forms_allowed_mimes_for_extension($extension);
+        if ($detectedMime !== null && $allowedMimes !== [] && !in_array($detectedMime, $allowedMimes, true)) {
+            throw new RuntimeException($originalName . ' の種類が拡張子と一致しません。ファイル形式を確認してください。');
+        }
+    }
+}
+
 function forms_distmulti_files_from_settings(array $settings): array
 {
     $files = [];
@@ -334,6 +348,7 @@ function forms_distmulti_append_uploaded_files(int $formId, array $fileInput): a
         if ($extension === '' || !in_array($extension, $allowed, true)) {
             throw new RuntimeException($originalName . ' は許可されていない拡張子です。');
         }
+        forms_distmulti_validate_uploaded_file($originalName, $extension, (string)($upload['tmp_name'] ?? ''));
 
         $tmpName = (string)($upload['tmp_name'] ?? '');
         if ($tmpName === '' || !is_uploaded_file($tmpName)) {

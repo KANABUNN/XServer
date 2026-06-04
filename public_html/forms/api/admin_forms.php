@@ -11,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 require_post();
-api_require_admin();
+$actor = api_require_admin();
 $data = request_json();
 if (!verify_csrf($data['csrf_token'] ?? '')) {
     json_response(['ok' => false, 'message' => 'CSRF トークンが不正です。'], 419);
@@ -27,10 +27,11 @@ if ($action === 'delete') {
 
     try {
         forms_delete_form($formId);
+        forms_admin_audit_log('form.delete', 'managed_form', $formId, [], $actor);
     } catch (InvalidArgumentException $e) {
         json_response(['ok' => false, 'message' => $e->getMessage()], 422);
     } catch (Throwable $e) {
-        json_response(['ok' => false, 'message' => 'フォーム削除に失敗しました。', 'error' => $e->getMessage()], 500);
+        json_response(['ok' => false, 'message' => 'フォーム削除に失敗しました。', 'error_id' => forms_log_exception('admin_forms.delete', $e)], 500);
     }
 
     json_response([
@@ -47,10 +48,14 @@ if ($action !== 'save') {
 
 try {
     $form = forms_save_form((array)($data['form'] ?? []), (array)($data['fields'] ?? []));
+    forms_admin_audit_log('form.save', 'managed_form', (int)($form['id'] ?? 0), [
+        'slug' => (string)($form['slug'] ?? ''),
+        'name' => (string)($form['name'] ?? ''),
+    ], $actor);
 } catch (InvalidArgumentException $e) {
     json_response(['ok' => false, 'message' => $e->getMessage()], 422);
 } catch (Throwable $e) {
-    json_response(['ok' => false, 'message' => 'フォーム保存に失敗しました。', 'error' => $e->getMessage()], 500);
+    json_response(['ok' => false, 'message' => 'フォーム保存に失敗しました。', 'error_id' => forms_log_exception('admin_forms.save', $e)], 500);
 }
 
 json_response([

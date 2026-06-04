@@ -351,6 +351,25 @@ CREATE TABLE IF NOT EXISTS managed_form_submission_status_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SQL);
 
+    $pdo->exec(<<<SQL
+CREATE TABLE IF NOT EXISTS forms_admin_audit_logs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    actor_account_id BIGINT UNSIGNED DEFAULT NULL,
+    actor_login_id VARCHAR(100) DEFAULT NULL,
+    action VARCHAR(100) NOT NULL,
+    target_type VARCHAR(100) DEFAULT NULL,
+    target_id VARCHAR(191) DEFAULT NULL,
+    summary_json LONGTEXT DEFAULT NULL,
+    ip_address VARCHAR(64) DEFAULT NULL,
+    user_agent VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_forms_admin_audit_logs_created_at (created_at),
+    KEY idx_forms_admin_audit_logs_actor_account_id (actor_account_id),
+    KEY idx_forms_admin_audit_logs_action (action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SQL);
+
     forms_ensure_column($pdo, 'managed_form_submissions', 'status', "VARCHAR(32) NOT NULL DEFAULT 'new'");
     forms_ensure_column($pdo, 'managed_form_submissions', 'admin_note', 'TEXT DEFAULT NULL');
     forms_ensure_column($pdo, 'managed_form_submissions', 'status_updated_at', 'DATETIME DEFAULT NULL');
@@ -374,6 +393,77 @@ function forms_ensure_column(PDO $pdo, string $table, string $column, string $de
         return;
     }
     $pdo->exec(sprintf('ALTER TABLE `%s` ADD COLUMN `%s` %s', str_replace('`', '``', $table), str_replace('`', '``', $column), $definition));
+}
+
+function forms_client_ip(): string
+{
+    foreach (['HTTP_CF_CONNECTING_IP', 'REMOTE_ADDR'] as $key) {
+        $value = trim((string)($_SERVER[$key] ?? ''));
+        if ($value !== '') {
+            return mb_substr($value, 0, 64, 'UTF-8');
+        }
+    }
+    return '';
+}
+
+function forms_log_exception(string $context, Throwable $e): string
+{
+    $errorId = 'FORMS-' . date('YmdHis') . '-' . bin2hex(random_bytes(4));
+    error_log(sprintf('[%s][%s] %s in %s:%d', $errorId, $context, $e->getMessage(), $e->getFile(), $e->getLine()));
+    return $errorId;
+}
+
+function forms_admin_audit_log(string $action, ?string $targetType = null, string|int|null $targetId = null, array $summary = [], ?array $actor = null): void
+{
+    try {
+        forms_bootstrap();
+        if ($actor === null && function_exists('current_user')) {
+            $actor = current_user();
+        }
+        if (!is_array($actor)) {
+            $actor = [];
+        }
+
+        $summaryJson = $summary !== [] ? forms_encode_json($summary) : null;
+        $stmt = forms_db()->prepare(
+            'INSERT INTO forms_admin_audit_logs (actor_account_id, actor_login_id, action, target_type, target_id, summary_json, ip_address, user_agent) '
+            . 'VALUES (:actor_account_id, :actor_login_id, :action, :target_type, :target_id, :summary_json, :ip_address, :user_agent)'
+        );
+        $stmt->execute([
+            ':actor_account_id' => (int)($actor['id'] ?? 0) > 0 ? (int)$actor['id'] : null,
+            ':actor_login_id' => trim((string)($actor['login_id'] ?? '')) !== '' ? mb_substr(trim((string)$actor['login_id']), 0, 100, 'UTF-8') : null,
+            ':action' => mb_substr($action, 0, 100, 'UTF-8'),
+            ':target_type' => $targetType !== null && $targetType !== '' ? mb_substr($targetType, 0, 100, 'UTF-8') : null,
+            ':target_id' => $targetId !== null && (string)$targetId !== '' ? mb_substr((string)$targetId, 0, 191, 'UTF-8') : null,
+            ':summary_json' => $summaryJson,
+            ':ip_address' => ($ip = forms_client_ip()) !== '' ? $ip : null,
+            ':user_agent' => ($ua = trim((string)($_SERVER['HTTP_USER_AGENT'] ?? ''))) !== '' ? mb_substr($ua, 0, 255, 'UTF-8') : null,
+        ]);
+    } catch (Throwable $e) {
+        error_log('[forms_admin_audit_log] ' . (string)$e);
+    }
+}
+
+function forms_dangerous_upload_extensions(): array
+{
+    return ['php', 'phtml', 'phar', 'html', 'htm', 'xhtml', 'svg', 'js', 'mjs', 'exe', 'bat', 'cmd', 'com', 'scr', 'vbs', 'ps1', 'sh', 'cgi', 'pl', 'docm', 'xlsm', 'pptm'];
+}
+
+function forms_validate_safe_upload_extension(string $extension, string $label = 'ファイル'): void
+{
+    $extension = strtolower(ltrim(trim($extension), '.'));
+    if ($extension === '' || in_array($extension, forms_dangerous_upload_extensions(), true)) {
+        throw new InvalidArgumentException($label . 'に使用できない拡張子です。');
+    }
+}
+
+function forms_csv_safe_cell($value): string
+{
+    $s = (string)$value;
+    if ($s !== '' && preg_match('/^[=+\-@\t\r\n]/u', $s) === 1) {
+        return "'" . $s;
+    }
+    return $s;
 }
 
 function forms_default_settings(): array
@@ -914,6 +1004,7 @@ function forms_validate_uploaded_file(array $file, array $settings): void
 
     $originalName = (string)($file['name'] ?? '');
     $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    forms_validate_safe_upload_extension($extension, '添付ファイル');
     $allowed = forms_allowed_extensions($settings);
     if ($extension === '' || !in_array($extension, $allowed, true)) {
         throw new InvalidArgumentException('許可されていない拡張子です。');
@@ -988,6 +1079,7 @@ function forms_validate_distribution_file(array $file): void
 
     $originalName = (string)($file['name'] ?? '');
     $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    forms_validate_safe_upload_extension($extension, '配布ファイル');
     if ($extension === '' || !in_array($extension, forms_distribution_allowed_extensions(), true)) {
         throw new InvalidArgumentException('配布ファイルに使用できない拡張子です。');
     }
@@ -995,6 +1087,13 @@ function forms_validate_distribution_file(array $file): void
     $maxBytes = 30 * 1024 * 1024;
     if ((int)($file['size'] ?? 0) > $maxBytes) {
         throw new InvalidArgumentException('配布ファイルのサイズが上限の30MBを超えています。');
+    }
+
+    $tmpPath = (string)($file['tmp_name'] ?? '');
+    $detectedMime = forms_detect_uploaded_mime($tmpPath);
+    $allowedMimes = forms_allowed_mimes_for_extension($extension);
+    if ($detectedMime !== null && $allowedMimes !== [] && !in_array($detectedMime, $allowedMimes, true)) {
+        throw new InvalidArgumentException('配布ファイルの種類が拡張子と一致しません。ファイル形式を確認してください。');
     }
 }
 
@@ -1969,7 +2068,7 @@ function forms_csv_headers(array $form): array
         $headers[] = $field['field_label'];
     }
 
-    return $headers;
+    return array_map('forms_csv_safe_cell', $headers);
 }
 
 function forms_csv_rows(int $formId, array $rawFilters = []): array
@@ -2005,7 +2104,7 @@ function forms_csv_rows(int $formId, array $rawFilters = []): array
         foreach ($form['fields'] as $field) {
             $row[] = $payloadMap[$field['field_label']] ?? '';
         }
-        $rows[] = $row;
+        $rows[] = array_map('forms_csv_safe_cell', $row);
     }
 
     return [

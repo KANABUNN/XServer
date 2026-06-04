@@ -3,7 +3,7 @@ require_once __DIR__ . '/../../../apps/forms_core/bootstrap.php';
 require_once __DIR__ . '/../../../apps/forms_distribution_multi.php';
 forms_bootstrap();
 
-api_require_admin();
+$actor = api_require_admin();
 
 $formId = (int)($_GET['form_id'] ?? 0);
 $fileId = trim((string)($_GET['file_id'] ?? ''));
@@ -21,6 +21,7 @@ if (!$form || forms_distmulti_files_from_form($form) === []) {
 }
 
 try {
+    forms_admin_audit_log('distribution_file.download', 'managed_form', $formId, ['file_id' => $fileId], $actor);
     forms_distmulti_output_file_by_id($form, $fileId !== '' ? $fileId : null);
 } catch (Throwable $e) {
     http_response_code(404);
