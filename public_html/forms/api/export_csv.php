@@ -44,9 +44,9 @@ if ($fp === false) {
 }
 
 fwrite($fp, "\xEF\xBB\xBF");
-fputcsv($fp, $result['headers'] ?? []);
+fputcsv($fp, array_map('forms_csv_safe_cell', $result['headers'] ?? []));
 foreach (($result['rows'] ?? []) as $row) {
-    fputcsv($fp, $row);
+    fputcsv($fp, array_map('forms_csv_safe_cell', (array)$row));
 }
 fclose($fp);
 exit;
