@@ -16,7 +16,7 @@ page_header('無人受付PC', 'kiosk-page');
         <?php if (($user['role'] ?? '') === 'admin'): ?>
             <a class="btn" href="admin.php">管理画面</a>
         <?php endif; ?>
-        <a class="btn danger" href="logout.php">ログアウト</a>
+        <a class="btn danger" href="logout.php?csrf_token=<?= urlencode(csrf_token()) ?>">ログアウト</a>
     </nav>
 </header>
 

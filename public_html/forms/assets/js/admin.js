@@ -117,7 +117,7 @@ function renderDistributionFileStatus(form = null) {
       <div class="small-note">${escapeHtml([sizeText, uploadedAt.replace(/^ \/ /, '')].filter(Boolean).join(' / '))}</div>
     </div>
     <div class="inline-actions">
-      <a class="btn btn-small" href="api/admin_download_form_asset.php?form_id=${encodeURIComponent(String(form.id))}" target="_blank" rel="noopener">ダウンロード確認</a>
+      <a class="btn btn-small" href="api/admin_download_form_asset.php?form_id=${encodeURIComponent(String(form.id))}&csrf_token=${encodeURIComponent(csrfToken)}" target="_blank" rel="noopener">ダウンロード確認</a>
       <button type="button" class="btn danger btn-small" id="delete-distribution-file-button">配布ファイルを削除</button>
     </div>
   `;
@@ -495,7 +495,7 @@ function renderHistoryBlocks(history = { revisions: [], status_logs: [] }) {
       <div class="preview-list dense">
         ${(item.payload_preview || []).map((payload) => `<div class="preview-item"><strong>${escapeHtml(payload.label)}:</strong> ${escapeHtml(payload.value || '—')}</div>`).join('')}
       </div>
-      ${item.uploaded_original_name ? `<div class="inline-actions"><a class="btn" href="api/download_revision.php?revision_id=${item.id}">添付を取得</a></div>` : ''}
+      ${item.uploaded_original_name ? `<div class="inline-actions"><a class="btn" href="api/download_revision.php?revision_id=${item.id}&csrf_token=${encodeURIComponent(csrfToken)}">添付を取得</a></div>` : ''}
     </article>
   `).join('') : '<div class="empty-state">更新履歴はまだありません。</div>';
 
@@ -568,7 +568,7 @@ function renderEntryDetail(entry, history = null) {
         </div>
       </div>
       <div class="inline-actions">
-        ${entry.uploaded_original_name && entry.latest_revision_id ? `<a class="btn" href="api/download_revision.php?revision_id=${entry.latest_revision_id}">最新添付を取得</a>` : ''}
+        ${entry.uploaded_original_name && entry.latest_revision_id ? `<a class="btn" href="api/download_revision.php?revision_id=${entry.latest_revision_id}&csrf_token=${encodeURIComponent(csrfToken)}">最新添付を取得</a>` : ''}
       </div>
     </div>
 
@@ -788,7 +788,9 @@ function startNewFormMode() {
 function buildCsvUrl() {
   if (!adminState.activeFormId) return '';
   const query = buildEntriesQuery(adminState.activeFormId, getEntryFilterValues());
-  return `api/export_csv.php?${query}`;
+  const params = new URLSearchParams(query);
+  params.set('csrf_token', csrfToken);
+  return `api/export_csv.php?${params.toString()}`;
 }
 
 function buildLatestAttachmentsUrl() {
@@ -800,7 +802,9 @@ function buildLatestAttachmentsUrl() {
     date_from: filters.date_from,
     date_to: filters.date_to,
   });
-  return `api/download_latest_attachments.php?${query}`;
+  const params = new URLSearchParams(query);
+  params.set('csrf_token', csrfToken);
+  return `api/download_latest_attachments.php?${params.toString()}`;
 }
 
 async function uploadDistributionFile() {

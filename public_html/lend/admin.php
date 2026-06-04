@@ -13,7 +13,7 @@ page_header('管理画面', 'admin-page');
     <nav class="topbar-actions">
         <a class="btn" href="user_dashboard.php">利用者画面</a>
         <a class="btn" href="kiosk.php">無人受付PC画面</a>
-        <a class="btn danger" href="logout.php">ログアウト</a>
+        <a class="btn danger" href="logout.php?csrf_token=<?= urlencode(csrf_token()) ?>">ログアウト</a>
     </nav>
 </header>
 

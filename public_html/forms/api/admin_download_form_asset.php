@@ -5,6 +5,11 @@ forms_bootstrap();
 
 $actor = api_require_admin();
 
+$downloadToken = (string)($_GET['csrf_token'] ?? '');
+if (!verify_csrf($downloadToken)) {
+    json_response(['ok' => false, 'message' => 'CSRF トークンが不正です。画面を再読み込みしてから再度お試しください。'], 419);
+}
+
 $formId = (int)($_GET['form_id'] ?? 0);
 $fileId = trim((string)($_GET['file_id'] ?? ''));
 if ($formId < 1) {

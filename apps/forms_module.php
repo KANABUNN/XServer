@@ -2221,6 +2221,25 @@ function forms_build_latest_attachments_archive(int $formId, array $rawFilters =
         return null;
     }
 
+    $maxFiles = 100;
+    $maxBytes = 500 * 1024 * 1024;
+    if (count($files) > $maxFiles) {
+        throw new RuntimeException('一括ダウンロード対象が多すぎます。絞り込み条件を追加してください。');
+    }
+
+    $totalBytes = 0;
+    foreach ($files as $file) {
+        $path = (string)($file['path'] ?? '');
+        if ($path === '' || !is_file($path)) {
+            continue;
+        }
+        $size = (int)filesize($path);
+        $totalBytes += max(0, $size);
+        if ($totalBytes > $maxBytes) {
+            throw new RuntimeException('一括ダウンロード対象の合計サイズが大きすぎます。絞り込み条件を追加してください。');
+        }
+    }
+
     $form = is_array($bundle['form'] ?? null) ? $bundle['form'] : forms_load_form($formId);
     $slug = forms_safe_download_name((string)($form['slug'] ?? 'forms'), 'forms');
     $zipFilename = sprintf('%s_latest_attachments_%s.zip', $slug, date('Ymd_His'));

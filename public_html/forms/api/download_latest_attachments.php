@@ -3,6 +3,11 @@ require_once __DIR__ . '/../../../apps/forms_core/bootstrap.php';
 forms_bootstrap();
 $actor = api_require_admin();
 
+$downloadToken = (string)($_GET['csrf_token'] ?? '');
+if (!verify_csrf($downloadToken)) {
+    json_response(['ok' => false, 'message' => 'CSRF トークンが不正です。画面を再読み込みしてから再度お試しください。'], 419);
+}
+
 $formId = (int)($_GET['form_id'] ?? 0);
 if ($formId <= 0) {
     json_response(['ok' => false, 'message' => 'form_id が必要です。'], 422);
@@ -41,6 +46,7 @@ register_shutdown_function(static function () use ($path): void {
 
 header('Content-Type: application/zip');
 header('Content-Length: ' . filesize($path));
+header('X-Content-Type-Options: nosniff');
 header("Content-Disposition: attachment; filename*=UTF-8''" . rawurlencode($filename));
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 readfile($path);

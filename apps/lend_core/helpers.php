@@ -26,8 +26,20 @@ function now_str(): string
     return (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
 }
 
+function app_security_headers(): void
+{
+    if (headers_sent()) {
+        return;
+    }
+    header('X-Frame-Options: DENY');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: same-origin');
+    header('Permissions-Policy: camera=(self), microphone=(), geolocation=()');
+}
+
 function json_response(array $payload, int $statusCode = 200): void
 {
+    app_security_headers();
     http_response_code($statusCode);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -109,6 +121,7 @@ function asset_url(string $path): string
 
 function page_header(string $title, string $bodyClass = ''): void
 {
+    app_security_headers();
     $csrf = csrf_token();
     $appName = h(app_config('app_name', '備品貸出システム'));
     $stylesUrl = h(asset_url('assets/css/styles.css'));

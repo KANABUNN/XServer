@@ -14,7 +14,7 @@ page_header('フォーム管理', 'forms-admin-page');
     </div>
     <nav class="topbar-actions">
         <a class="btn" href="index.php">利用者画面</a>
-        <a class="btn danger" href="logout.php">ログアウト</a>
+        <a class="btn danger" href="logout.php?csrf_token=<?= urlencode(csrf_token()) ?>">ログアウト</a>
     </nav>
 </header>
 

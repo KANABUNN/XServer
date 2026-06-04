@@ -3,6 +3,13 @@ require_once __DIR__ . '/../../../apps/forms_core/bootstrap.php';
 forms_bootstrap();
 $actor = api_require_admin();
 
+$downloadToken = (string)($_GET['csrf_token'] ?? '');
+if (!verify_csrf($downloadToken)) {
+    http_response_code(419);
+    echo 'CSRF トークンが不正です。画面を再読み込みしてから再度お試しください。';
+    exit;
+}
+
 $formId = (int)($_GET['form_id'] ?? 0);
 if ($formId <= 0) {
     http_response_code(422);
@@ -36,6 +43,7 @@ forms_admin_audit_log('export.csv', 'managed_form', $formId, [
 
 header('Content-Type: text/csv; charset=UTF-8');
 header('Content-Disposition: attachment; filename="' . $filename . '"');
+header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $fp = fopen('php://output', 'wb');
