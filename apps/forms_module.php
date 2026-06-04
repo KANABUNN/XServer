@@ -444,15 +444,28 @@ function forms_admin_audit_log(string $action, ?string $targetType = null, strin
     }
 }
 
+function forms_blocked_upload_extensions(): array
+{
+    // 実行可能・スクリプト・HTML/SVG 等は保存型XSS/実行リスクのため恒久的に拒否する。
+    return [
+        'php', 'php3', 'php4', 'php5', 'php7', 'php8', 'phtml', 'pht', 'phar', 'phps',
+        'cgi', 'pl', 'py', 'rb', 'sh', 'bash', 'ps1',
+        'exe', 'bat', 'cmd', 'com', 'scr', 'msi', 'jar',
+        'html', 'htm', 'xhtml', 'shtml', 'svg', 'svgz', 'xml', 'xsl',
+        'js', 'mjs', 'vbs', 'hta', 'htaccess',
+        'docm', 'xlsm', 'pptm',
+    ];
+}
+
 function forms_dangerous_upload_extensions(): array
 {
-    return ['php', 'phtml', 'phar', 'html', 'htm', 'xhtml', 'svg', 'js', 'mjs', 'exe', 'bat', 'cmd', 'com', 'scr', 'vbs', 'ps1', 'sh', 'cgi', 'pl', 'docm', 'xlsm', 'pptm'];
+    return forms_blocked_upload_extensions();
 }
 
 function forms_validate_safe_upload_extension(string $extension, string $label = 'ファイル'): void
 {
     $extension = strtolower(ltrim(trim($extension), '.'));
-    if ($extension === '' || in_array($extension, forms_dangerous_upload_extensions(), true)) {
+    if ($extension === '' || in_array($extension, forms_blocked_upload_extensions(), true)) {
         throw new InvalidArgumentException($label . 'に使用できない拡張子です。');
     }
 }
@@ -947,16 +960,18 @@ function forms_public_forms_payload(): array
 
 function forms_allowed_extensions(array $settings): array
 {
+    $blocked = forms_blocked_upload_extensions();
     $raw = trim((string)($settings['allowed_extensions'] ?? ''));
     if ($raw === '') {
-        return ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'zip'];
+        $default = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'zip'];
+        return array_values(array_diff($default, $blocked));
     }
     $parts = preg_split('/\s*,\s*/', $raw) ?: [];
     $result = [];
     foreach ($parts as $part) {
         $part = strtolower(trim((string)$part));
         $part = ltrim($part, '.');
-        if ($part !== '') {
+        if ($part !== '' && !in_array($part, $blocked, true)) {
             $result[] = $part;
         }
     }
@@ -988,6 +1003,13 @@ function forms_upload_root(): string
     $path = forms_resolve_path($configured);
     if (!is_dir($path) && !mkdir($path, 0775, true) && !is_dir($path)) {
         throw new RuntimeException('添付ファイル保存ディレクトリを作成できません。');
+    }
+    $denyFile = $path . '/.htaccess';
+    if (!is_file($denyFile)) {
+        @file_put_contents(
+            $denyFile,
+            "Require all denied\n<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n"
+        );
     }
     return $path;
 }

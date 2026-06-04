@@ -348,12 +348,12 @@ function forms_distmulti_append_uploaded_files(int $formId, array $fileInput): a
         if ($extension === '' || !in_array($extension, $allowed, true)) {
             throw new RuntimeException($originalName . ' は許可されていない拡張子です。');
         }
-        forms_distmulti_validate_uploaded_file($originalName, $extension, (string)($upload['tmp_name'] ?? ''));
 
         $tmpName = (string)($upload['tmp_name'] ?? '');
         if ($tmpName === '' || !is_uploaded_file($tmpName)) {
             throw new RuntimeException($originalName . ' の一時ファイルを確認できません。');
         }
+        forms_distmulti_validate_uploaded_file($originalName, $extension, $tmpName);
 
         $dir = forms_distmulti_storage_dir($formId);
         $storedName = date('YmdHis') . '_' . bin2hex(random_bytes(8)) . '.' . $extension;
