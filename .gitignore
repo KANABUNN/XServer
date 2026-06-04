@@ -8,3 +8,4 @@ app.zip
 includes.zip
 favicon.ico
 *.patch
+config.local.php
