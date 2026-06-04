@@ -33,6 +33,7 @@ function login_user(string $identifier, string $password): bool
 
     $_SESSION['user'] = [
         'id' => (int)$user['id'],
+        'app_key' => lend_auth_app_key(),
         'login_id' => (string)($user['login_id'] ?? ''),
         'name' => (string)($user['display_name'] ?? ''),
         'display_name' => (string)($user['display_name'] ?? ''),
@@ -53,12 +54,20 @@ function login_user(string $identifier, string $password): bool
 
 function is_logged_in(): bool
 {
-    return !empty($_SESSION['user']);
+    if (empty($_SESSION['user']) || !is_array($_SESSION['user'])) {
+        return false;
+    }
+
+    // セッションは発行元アプリ(forms / lend)でのみ有効とする。
+    // forms と lend は同一の lend_core を共有しており、同一ホスト配信時には
+    // Cookie・$_SESSION['user'] を共有し得る。app_key を照合することで、
+    // 一方のアプリで得た権限(role)が他方へ流用されるのを防ぐ。
+    return (string)($_SESSION['user']['app_key'] ?? '') === lend_auth_app_key();
 }
 
 function current_user(): array
 {
-    return $_SESSION['user'] ?? [];
+    return is_logged_in() ? ($_SESSION['user'] ?? []) : [];
 }
 
 function require_login(): void

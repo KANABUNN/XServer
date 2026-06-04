@@ -34,7 +34,16 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
         @ini_set('session.cookie_samesite', 'Lax');
     }
 
-    session_name($GLOBALS['config']['session_name'] ?? 'equipment_kiosk_session');
+    // forms と lend は本ファイルを共有するため、アプリ別にセッション名を分離し、
+    // Cookie・セッションストアの共有による権限混在を物理的に防ぐ。
+    // （auth.php の lend_auth_app_key() と同じ判定。auth.php は session_start 後に
+    //   読み込まれるため、ここでは同等のロジックをインラインで持つ。）
+    $lendAppKey = str_contains(
+        str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? '')),
+        '/forms/'
+    ) ? 'forms' : 'lend';
+    $baseSessionName = (string)($GLOBALS['config']['session_name'] ?? 'equipment_kiosk_session');
+    session_name($baseSessionName . '_' . $lendAppKey);
     session_set_cookie_params([
         'lifetime' => 0,
         'path' => '/',
