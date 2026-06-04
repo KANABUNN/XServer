@@ -19,6 +19,12 @@ foreach ([__DIR__ . '/../../apps/reservation_service.php', __DIR__ . '/../apps/r
         break;
     }
 }
+foreach ([__DIR__ . '/../../apps/response_limit.php', __DIR__ . '/../apps/response_limit.php', __DIR__ . '/apps/response_limit.php'] as $__rateLimitHelper) {
+    if (is_file($__rateLimitHelper)) {
+        require_once $__rateLimitHelper;
+        break;
+    }
+}
 
 try {
     $cfg = load_switchbot_webhook_config();
@@ -27,7 +33,16 @@ try {
         respond_json(['ok' => false, 'message' => 'POST only'], 405);
     }
 
-    $providedToken = trim((string)($_GET['token'] ?? ''));
+    if (function_exists('rate_limit_or_throw') && function_exists('get_client_ip')) {
+        try {
+            rate_limit_or_throw(get_client_ip(), __DIR__ . '/../../apps/rate_limit_switchbot_webhook.json', 60, 60);
+        } catch (Throwable $rateLimitError) {
+            error_log('[switchbot_webhook][rate_limit] ' . $rateLimitError->getMessage());
+            respond_json(['ok' => false, 'message' => 'too many requests'], 429);
+        }
+    }
+
+    $providedToken = switchbot_webhook_token_from_request();
     if (!switchbot_validate_webhook_secret($cfg, $providedToken)) {
         respond_json(['ok' => false, 'message' => 'invalid token'], 403);
     }
@@ -87,6 +102,23 @@ function load_switchbot_webhook_config(): array
     }
 
     throw new RuntimeException('config.php が見つかりません。');
+}
+
+function switchbot_webhook_token_from_request(): string
+{
+    $candidates = [
+        $_SERVER['HTTP_X_WEBHOOK_TOKEN'] ?? '',
+        $_SERVER['HTTP_X_SWITCHBOT_WEBHOOK_TOKEN'] ?? '',
+        $_GET['token'] ?? '',
+    ];
+
+    foreach ($candidates as $candidate) {
+        $token = trim((string)$candidate);
+        if ($token !== '') {
+            return $token;
+        }
+    }
+    return '';
 }
 
 function respond_json(array $data, int $status = 200): void

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../apps/admin_auth.php';
+require_once __DIR__ . '/../../apps/response_limit.php';
 
 admin_auth_bootstrap();
 $csrfToken = admin_auth_get_csrf_token();
@@ -35,19 +36,28 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '') {
         $errorMessage = 'ログインIDとパスワードを入力してください。';
     } else {
         try {
-            $user = admin_auth_attempt_login($pdo, $loginId, $password);
-            if ($user === null) {
-                $errorMessage = 'ログインIDまたはパスワードが正しくありません。';
-            } else {
-                admin_auth_login_user($user);
-                admin_auth_write_audit_log($pdo, $user, 'admin.login', 'admin_user', (int)$user['id'], [
-                    'role_key' => (string)($user['role_key'] ?? ''),
-                ]);
-                header('Location: ' . $returnTo, true, 302);
-                exit;
+            rate_limit_or_throw(get_client_ip(), __DIR__ . '/../../apps/rate_limit_admin_book_login.json', 5, 300);
+        } catch (Throwable $rateLimitError) {
+            error_log('[admin.book login rate_limit] ' . $rateLimitError->getMessage());
+            $errorMessage = '短時間にログイン試行が多すぎます。時間をおいて再試行してください。';
+        }
+
+        if ($errorMessage === '') {
+            try {
+                $user = admin_auth_attempt_login($pdo, $loginId, $password);
+                if ($user === null) {
+                    $errorMessage = 'ログインIDまたはパスワードが正しくありません。';
+                } else {
+                    admin_auth_login_user($user);
+                    admin_auth_write_audit_log($pdo, $user, 'admin.login', 'admin_user', (int)$user['id'], [
+                        'role_key' => (string)($user['role_key'] ?? ''),
+                    ]);
+                    header('Location: ' . $returnTo, true, 302);
+                    exit;
+                }
+            } catch (Throwable $e) {
+                $errorMessage = 'ログイン処理に失敗しました: ' . $e->getMessage();
             }
-        } catch (Throwable $e) {
-            $errorMessage = 'ログイン処理に失敗しました: ' . $e->getMessage();
         }
     }
 }

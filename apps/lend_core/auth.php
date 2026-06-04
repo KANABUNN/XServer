@@ -24,6 +24,10 @@ function login_user(string $identifier, string $password): bool
         return false;
     }
 
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_regenerate_id(true);
+    }
+
     $roleKeys = is_array($user['role_keys'] ?? null) ? $user['role_keys'] : [];
     $primaryRole = in_array('admin', $roleKeys, true) ? 'admin' : ((string)($roleKeys[0] ?? 'user'));
 

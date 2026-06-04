@@ -1353,12 +1353,16 @@ function switchbot_get_request_detail(array $cfg, string $localRequestId = '', i
 
 function switchbot_validate_webhook_secret(array $cfg, ?string $providedToken): bool
 {
-    $expected = switchbot_config($cfg)['webhook_secret'];
+    $expected = trim((string)switchbot_config($cfg)['webhook_secret']);
     if ($expected === '') {
-        return true;
-    }
-    if ($providedToken === null) {
+        switchbot_error_log('SwitchBot webhook secret is not configured; rejecting webhook request');
         return false;
     }
-    return hash_equals($expected, $providedToken);
+
+    $provided = trim((string)($providedToken ?? ''));
+    if ($provided === '') {
+        return false;
+    }
+
+    return hash_equals($expected, $provided);
 }

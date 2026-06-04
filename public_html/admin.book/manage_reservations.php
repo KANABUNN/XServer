@@ -166,10 +166,17 @@ function manage_dashboard_list(PDO $pdo, array $input): void
         $params[':keyword_org'] = '%' . $keyword . '%';
     }
 
-    $sql = 'SELECT r.*, '
+    $sql = 'SELECT '
+        . 'r.id, r.email, r.organization_name, r.room_code, r.room_label, '
+        . 'r.use_date, r.use_date_end, r.selected_dates_count, '
+        . 'r.usage_start_time, r.usage_end_time, r.usage_time, '
+        . 'r.reservation_status, r.status_reason, '
+        . 'r.switchbot_status, r.switchbot_message, '
+        . 'r.google_sync_status, r.google_sync_message, '
+        . 'r.user_mail_status, r.admin_mail_status, '
+        . 'r.created_at, r.updated_at, '
         . '(SELECT GROUP_CONCAT(DISTINCT d.room_label ORDER BY d.room_label SEPARATOR " / ") FROM room_calendar_reservations d WHERE d.reservation_id = r.id) AS room_labels, '
-        . '(SELECT GROUP_CONCAT(CONCAT(d.use_date, " ", d.room_label, " ", d.usage_time) ORDER BY d.use_date SEPARATOR "\n") FROM room_calendar_reservations d WHERE d.reservation_id = r.id) AS usage_summary, '
-        . '(SELECT GROUP_CONCAT(CONCAT(d.use_date, " ", COALESCE(NULLIF(d.access_code, ""), "-") ) ORDER BY d.use_date SEPARATOR "\n") FROM room_calendar_reservations d WHERE d.reservation_id = r.id) AS access_code_summary '
+        . '(SELECT GROUP_CONCAT(CONCAT(d.use_date, " ", d.room_label, " ", d.usage_time) ORDER BY d.use_date SEPARATOR "\n") FROM room_calendar_reservations d WHERE d.reservation_id = r.id) AS usage_summary '
         . 'FROM reservations r';
     if ($where !== []) {
         $sql .= ' WHERE ' . implode(' AND ', $where);
@@ -206,7 +213,7 @@ function manage_calendar_month(PDO $pdo, array $input): void
     $monthEnd = (new DateTimeImmutable($monthStart))->modify('+1 month')->format('Y-m-d');
 
     $stmt = $pdo->prepare(
-        'SELECT id, reservation_id, use_date, room_code, room_label, organization_name, email, usage_start_time, usage_end_time, usage_time, access_code, switchbot_status, google_sync_status '
+        'SELECT id, reservation_id, use_date, room_code, room_label, organization_name, email, usage_start_time, usage_end_time, usage_time, switchbot_status, google_sync_status '
         . 'FROM room_calendar_reservations '
         . 'WHERE use_date >= :month_start AND use_date < :month_end '
         . 'ORDER BY use_date ASC, room_code ASC'

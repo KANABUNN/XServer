@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../../apps/lend_core/bootstrap.php';
+require_once __DIR__ . '/../../../apps/response_limit.php';
 require_post();
 
 $data = request_json();
@@ -12,6 +13,13 @@ $password = (string)($data['password'] ?? '');
 
 if ($identifier === '' || $password === '') {
     json_response(['ok' => false, 'message' => 'ログインIDまたはメールアドレスとパスワードを入力してください。'], 422);
+}
+
+try {
+    rate_limit_or_throw(get_client_ip(), __DIR__ . '/../../../apps/rate_limit_lend_login.json', 5, 300);
+} catch (Throwable $e) {
+    error_log('[lend login rate_limit] ' . $e->getMessage());
+    json_response(['ok' => false, 'message' => '短時間にログイン試行が多すぎます。時間をおいて再試行してください。'], 429);
 }
 
 if (!login_user($identifier, $password)) {
