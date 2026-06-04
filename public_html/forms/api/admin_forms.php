@@ -31,7 +31,8 @@ if ($action === 'delete') {
     } catch (InvalidArgumentException $e) {
         json_response(['ok' => false, 'message' => $e->getMessage()], 422);
     } catch (Throwable $e) {
-        json_response(['ok' => false, 'message' => 'フォーム削除に失敗しました。', 'error_id' => forms_log_exception('admin_forms.delete', $e)], 500);
+        error_log('[forms admin_forms delete] ' . (string)$e);
+        json_response(['ok' => false, 'message' => 'フォーム削除に失敗しました。時間をおいて再試行してください。'], 500);
     }
 
     json_response([
@@ -56,7 +57,8 @@ try {
 } catch (InvalidArgumentException $e) {
     json_response(['ok' => false, 'message' => $e->getMessage()], 422);
 } catch (Throwable $e) {
-    json_response(['ok' => false, 'message' => 'フォーム保存に失敗しました。', 'error_id' => forms_log_exception('admin_forms.save', $e)], 500);
+    error_log('[forms admin_forms save] ' . (string)$e);
+    json_response(['ok' => false, 'message' => 'フォーム保存に失敗しました。時間をおいて再試行してください。'], 500);
 }
 
 json_response([

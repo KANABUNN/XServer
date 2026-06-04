@@ -26,7 +26,8 @@ try {
 } catch (InvalidArgumentException $e) {
     json_response(['ok' => false, 'message' => $e->getMessage()], 422);
 } catch (Throwable $e) {
-    json_response(['ok' => false, 'message' => '状態の更新に失敗しました。', 'error_id' => forms_log_exception('admin_entry_status.update', $e)], 500);
+    error_log('[forms admin_entry_status] ' . (string)$e);
+    json_response(['ok' => false, 'message' => '状態の更新に失敗しました。時間をおいて再試行してください。'], 500);
 }
 
 json_response([

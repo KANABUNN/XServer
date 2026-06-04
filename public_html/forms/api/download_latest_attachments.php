@@ -17,7 +17,8 @@ try {
         'date_to' => (string)($_GET['date_to'] ?? ''),
     ]);
 } catch (Throwable $e) {
-    json_response(['ok' => false, 'message' => '最新添付ZIPの作成に失敗しました。', 'error_id' => forms_log_exception('download_latest_attachments.build', $e)], 500);
+    error_log('[forms download_latest_attachments] ' . (string)$e);
+    json_response(['ok' => false, 'message' => '最新添付ZIPの作成に失敗しました。時間をおいて再試行してください。'], 500);
 }
 
 $path = is_array($archive) ? (string)($archive['path'] ?? '') : '';

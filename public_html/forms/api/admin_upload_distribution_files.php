@@ -323,12 +323,9 @@ try {
 } catch (InvalidArgumentException $e) {
     json_response(['ok' => false, 'message' => $e->getMessage()], 422);
 } catch (Throwable $e) {
+    error_log('[forms admin_upload_distribution_files] ' . (string)$e);
     json_response([
         'ok' => false,
-        'message' => $e->getMessage(),
-        'debug' => [
-            'file' => basename($e->getFile()),
-            'line' => $e->getLine(),
-        ],
+        'message' => '配布ファイルのアップロードに失敗しました。時間をおいて再試行してください。',
     ], 500);
 }
