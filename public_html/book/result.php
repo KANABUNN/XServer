@@ -1,6 +1,14 @@
 <?php
 declare(strict_types=1);
 
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+header('Referrer-Policy: no-referrer');
+header('X-Robots-Tag: noindex, nofollow, noarchive');
+header('X-Frame-Options: DENY');
+header('X-Content-Type-Options: nosniff');
+
 /** @var mixed $cfg */
 $cfg = require __DIR__ . '/../../apps/config.php';
 require_once __DIR__ . '/../../apps/db.php';
@@ -45,6 +53,46 @@ function h(?string $value): string
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
+function result_parse_datetime(?string $value): ?DateTimeImmutable
+{
+    $value = trim((string)$value);
+    if ($value === '') {
+        return null;
+    }
+
+    try {
+        return new DateTimeImmutable($value, new DateTimeZone('Asia/Tokyo'));
+    } catch (Throwable) {
+        return null;
+    }
+}
+
+function result_access_code_is_visible(array $dateRow): bool
+{
+    $code = trim((string)($dateRow['access_code'] ?? ''));
+    if ($code === '') {
+        return false;
+    }
+
+    $start = result_parse_datetime($dateRow['access_code_start_at'] ?? null);
+    $end = result_parse_datetime($dateRow['access_code_end_at'] ?? null);
+    if (!$start || !$end) {
+        return false;
+    }
+
+    $now = new DateTimeImmutable('now', new DateTimeZone('Asia/Tokyo'));
+    return $now >= $start && $now <= $end;
+}
+
+function result_access_code_text(array $dateRow): string
+{
+    if (result_access_code_is_visible($dateRow)) {
+        return (string)($dateRow['access_code'] ?? '');
+    }
+
+    return '有効時間内のみ表示';
+}
+
 function result_base_path(): string
 {
     $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
@@ -78,6 +126,8 @@ $inputUrl = ($basePath !== '' ? $basePath : '') . '/';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
   <title><?php echo h($title); ?> - 貸し部屋予約 - 福岡工業大学</title>
   <link rel="icon" href="icon.png">
   <link rel="stylesheet" href="css/style.css?v=20260407e">
@@ -115,11 +165,11 @@ $inputUrl = ($basePath !== '' ? $basePath : '') . '/';
                     <strong><?php echo h(result_format_jp_date((string)($dateRow['use_date'] ?? ''))); ?></strong>
                     <?php echo h((string)($dateRow['room_label'] ?? '')); ?> / <?php echo h((string)($dateRow['usage_time'] ?? '')); ?>
                   </div>
-                  <span class="passcode-code"><?php echo h((string)($dateRow['access_code'] ?? '')); ?></span>
+                  <span class="passcode-code<?php echo result_access_code_is_visible($dateRow) ? '' : ' passcode-code--masked'; ?>"><?php echo h(result_access_code_text($dateRow)); ?></span>
                 </li>
               <?php endforeach; ?>
             </ul>
-            <p class="passcode-note">※ 利用開始時刻の10分前から終了時刻の10分後まで有効です。第三者には共有しないでください。</p>
+            <p class="passcode-note">※ パスコードは有効時間内のみ表示されます。第三者には共有しないでください。</p>
           </div>
         <?php endif; ?>
 
@@ -133,7 +183,6 @@ $inputUrl = ($basePath !== '' ? $basePath : '') . '/';
                   <span>
                     <?php echo h((string)($dateRow['room_label'] ?? '')); ?> /
                     <?php echo h((string)($dateRow['usage_time'] ?? '')); ?> /
-                    パスコード: <?php echo h((string)($dateRow['access_code'] ?? '')); ?> /
                     SwitchBot: <?php echo h((string)($dateRow['switchbot_status'] ?? '')); ?>
                   </span>
                 </li>

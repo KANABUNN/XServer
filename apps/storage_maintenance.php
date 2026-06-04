@@ -71,6 +71,9 @@ function storage_maintenance_default_config(array $base): array
                 'detail_file_retention_days' => 90,
                 'webhook_event_retention_days' => 90,
             ],
+            'reservation_access_codes' => [
+                'mask_after_days' => 30,
+            ],
             'db_retention_tables' => [
                 [
                     'connection' => 'account',
@@ -681,6 +684,108 @@ function storage_maintenance_purge_old_form_archives(array $cfg, bool $dryRun = 
     ];
 }
 
+function storage_maintenance_reservation_access_code_mask_after_days(array $cfg): int
+{
+    $settings = storage_maintenance_settings($cfg);
+    $reservation = is_array($settings['reservation_access_codes'] ?? null) ? $settings['reservation_access_codes'] : [];
+    $days = (int)($reservation['mask_after_days'] ?? 30);
+    return $days >= 0 ? $days : 30;
+}
+
+function storage_maintenance_mask_expired_reservation_access_codes(array $cfg, bool $dryRun = false): array
+{
+    $pdo = storage_maintenance_db($cfg, 'book');
+    $days = storage_maintenance_reservation_access_code_mask_after_days($cfg);
+    $cutoff = storage_maintenance_now($cfg)->modify('-' . $days . ' days')->format('Y-m-d H:i:s');
+
+    $slotCountStmt = $pdo->prepare(
+        'SELECT COUNT(*)
+           FROM room_calendar_reservations
+          WHERE access_code IS NOT NULL
+            AND access_code != ""
+            AND access_code_end_at < :cutoff'
+    );
+    $slotCountStmt->execute([':cutoff' => $cutoff]);
+    $slotMatches = (int)$slotCountStmt->fetchColumn();
+
+    $reservationCountStmt = $pdo->prepare(
+        'SELECT COUNT(*)
+           FROM reservations r
+          WHERE r.access_code IS NOT NULL
+            AND r.access_code != ""
+            AND NOT EXISTS (
+                SELECT 1
+                  FROM room_calendar_reservations d
+                 WHERE d.reservation_id = r.id
+                   AND d.access_code IS NOT NULL
+                   AND d.access_code != ""
+                   AND d.access_code_end_at >= :cutoff
+            )'
+    );
+    $reservationCountStmt->execute([':cutoff' => $cutoff]);
+    $reservationMatches = (int)$reservationCountStmt->fetchColumn();
+
+    $switchbotCountStmt = $pdo->prepare(
+        'SELECT COUNT(*)
+           FROM switchbot_passcode_requests
+          WHERE passcode IS NOT NULL
+            AND passcode != ""
+            AND end_at IS NOT NULL
+            AND end_at < :cutoff'
+    );
+    $switchbotCountStmt->execute([':cutoff' => $cutoff]);
+    $switchbotMatches = (int)$switchbotCountStmt->fetchColumn();
+
+    if (!$dryRun) {
+        $slotUpdate = $pdo->prepare(
+            'UPDATE room_calendar_reservations
+                SET access_code = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+              WHERE access_code IS NOT NULL
+                AND access_code != ""
+                AND access_code_end_at < :cutoff'
+        );
+        $slotUpdate->execute([':cutoff' => $cutoff]);
+
+        $reservationUpdate = $pdo->prepare(
+            'UPDATE reservations r
+                SET r.access_code = NULL,
+                    r.updated_at = CURRENT_TIMESTAMP
+              WHERE r.access_code IS NOT NULL
+                AND r.access_code != ""
+                AND NOT EXISTS (
+                    SELECT 1
+                      FROM room_calendar_reservations d
+                     WHERE d.reservation_id = r.id
+                       AND d.access_code IS NOT NULL
+                       AND d.access_code != ""
+                       AND d.access_code_end_at >= :cutoff
+                )'
+        );
+        $reservationUpdate->execute([':cutoff' => $cutoff]);
+
+        $switchbotUpdate = $pdo->prepare(
+            'UPDATE switchbot_passcode_requests
+                SET passcode = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+              WHERE passcode IS NOT NULL
+                AND passcode != ""
+                AND end_at IS NOT NULL
+                AND end_at < :cutoff'
+        );
+        $switchbotUpdate->execute([':cutoff' => $cutoff]);
+    }
+
+    return [
+        'cutoff' => $cutoff,
+        'mask_after_days' => $days,
+        'room_calendar_reservations' => $slotMatches,
+        'reservations' => $reservationMatches,
+        'switchbot_passcode_requests' => $switchbotMatches,
+        'dry_run' => $dryRun,
+    ];
+}
+
 function storage_maintenance_switchbot_storage_dir(array $cfg): string
 {
     $switchbot = $cfg['switchbot'] ?? [];
@@ -961,6 +1066,7 @@ function storage_maintenance_run_cleanup(bool $dryRun = false): array
 
     $summary['forms_revision_archives'] = storage_maintenance_archive_forms_revision_uploads($cfg, $dryRun);
     $summary['forms_archive_purge'] = storage_maintenance_purge_old_form_archives($cfg, $dryRun);
+    $summary['reservation_access_code_mask'] = storage_maintenance_mask_expired_reservation_access_codes($cfg, $dryRun);
     $summary['switchbot_detail_cleanup'] = storage_maintenance_cleanup_switchbot_detail_json($cfg, $dryRun);
     $summary['switchbot_webhook_trim'] = storage_maintenance_trim_switchbot_webhook_events($cfg, $dryRun);
     $summary['db_prune'] = storage_maintenance_prune_db_logs($cfg, $dryRun);
@@ -1081,6 +1187,7 @@ function storage_maintenance_collect_usage_report(): array
         'policies' => [
             'forms_archive_after_days' => storage_maintenance_forms_archive_after_days($cfg),
             'forms_zip_retention_days' => storage_maintenance_forms_zip_retention_days($cfg),
+            'reservation_access_code_mask_after_days' => storage_maintenance_reservation_access_code_mask_after_days($cfg),
             'switchbot_detail_retention_days' => storage_maintenance_switchbot_retention_days($cfg),
             'switchbot_webhook_retention_days' => storage_maintenance_switchbot_webhook_retention_days($cfg),
             'report_retention_days' => (int)(storage_maintenance_settings($cfg)['report_retention_days'] ?? 1095),

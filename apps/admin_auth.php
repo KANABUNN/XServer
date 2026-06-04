@@ -67,6 +67,18 @@ function admin_auth_is_https(): bool
     return (int)($_SERVER['SERVER_PORT'] ?? 0) === 443;
 }
 
+function admin_auth_security_headers(): void
+{
+    if (headers_sent()) {
+        return;
+    }
+
+    header('X-Frame-Options: DENY');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: same-origin');
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+}
+
 function admin_auth_base_path(): string
 {
     $scriptName = (string)($_SERVER['SCRIPT_NAME'] ?? '');
@@ -119,6 +131,7 @@ function admin_auth_bootstrap(): void
         'samesite' => 'Lax',
     ]);
     session_start();
+    admin_auth_security_headers();
 }
 
 function admin_auth_h(?string $value): string
