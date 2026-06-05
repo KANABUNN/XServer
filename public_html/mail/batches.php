@@ -10,12 +10,7 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
     mail_auth_require_csrf();
     $action = (string)($_POST['action'] ?? '');
     try {
-        if ($action === 'create') {
-            mail_require_permission_or_forbid($user, 'batch.edit');
-            $batchId = mail_create_batch_from_template($mailPdo, (int)($_POST['template_id'] ?? 0), (string)($_POST['title'] ?? ''), $user);
-            mail_flash_set('info', '送信バッチを作成しました。本文は団体ごとに展開済みです。');
-            mail_redirect('batches.php?batch_id=' . $batchId);
-        } elseif ($action === 'status') {
+        if ($action === 'status') {
             mail_require_permission_or_forbid($user, 'batch.edit');
             $batchId = (int)($_POST['batch_id'] ?? 0);
             $status = (string)($_POST['status'] ?? 'prepared');
@@ -29,13 +24,11 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
     }
 }
 
-$templates = [];
 $batches = [];
 $selectedBatch = null;
 $targets = [];
 $attachments = [];
 if ($mailPdo instanceof PDO && $dbError === '') {
-    $templates = mail_list_templates($mailPdo, true);
     $batches = mail_list_batches($mailPdo, 150);
     if ($selectedBatchId <= 0 && $batches !== []) {
         $selectedBatchId = (int)$batches[0]['id'];
@@ -54,7 +47,7 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
 <header class="page-head">
   <div>
     <h1>送信バッチ</h1>
-    <p class="lead">テンプレートと団体DBから、団体ごとの件名・本文を確定した処理単位を作成します。</p>
+    <p class="lead">メール作成画面で生成した送信バッチを確認し、添付登録・送信承認へ進めます。</p>
   </div>
 </header>
 <?php mail_render_db_error($dbError); ?>
@@ -62,18 +55,9 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
 <?php if ($dbError === ''): ?>
 <div class="two-column-grid">
   <section class="panel">
-    <div class="panel-head"><h2>新規バッチ作成</h2><span class="muted">有効な団体すべてを対象</span></div>
-    <?php if ($templates === []): ?>
-      <p class="empty">有効なテンプレートがありません。先にテンプレートを作成してください。</p>
-    <?php else: ?>
-      <form method="post" class="form-grid">
-        <?php echo mail_auth_csrf_field(); ?>
-        <input type="hidden" name="action" value="create">
-        <label class="full"><span>バッチ名 *</span><input type="text" name="title" placeholder="例: 2026年度 公認団体資料送付" required></label>
-        <label class="full"><span>使用テンプレート *</span><select name="template_id" required><?php foreach ($templates as $tpl): ?><option value="<?php echo (int)$tpl['id']; ?>"><?php echo mail_h((string)$tpl['title']); ?></option><?php endforeach; ?></select></label>
-        <div class="form-actions full"><button type="submit" class="primary"<?php echo mail_auth_has_permission($user, 'batch.edit') ? '' : ' disabled'; ?>>バッチを作成</button></div>
-      </form>
-    <?php endif; ?>
+    <div class="panel-head"><h2>新規メール作成</h2><span class="muted">テンプレート / 直接入力</span></div>
+    <p>新規作成は、使用するテンプレートまたは直接入力した本文を選び、送信相手をチェックボックスで指定する流れに変更しました。</p>
+    <p><a class="link-button primary" href="compose.php">メール作成へ進む</a></p>
   </section>
 
   <section class="panel">
@@ -86,7 +70,7 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
           <?php foreach ($batches as $batch): ?>
             <tr class="<?php echo (int)$batch['id'] === $selectedBatchId ? 'is-selected-row' : ''; ?>">
               <td><?php echo (int)$batch['id']; ?></td>
-              <td><a href="batches.php?batch_id=<?php echo (int)$batch['id']; ?>"><?php echo mail_h((string)$batch['title']); ?></a><br><span class="muted"><?php echo mail_h((string)$batch['template_title']); ?></span></td>
+              <td><a href="batches.php?batch_id=<?php echo (int)$batch['id']; ?>"><?php echo mail_h((string)$batch['title']); ?></a><br><span class="muted"><?php echo mail_h((string)($batch['template_title'] ?? '直接入力')); ?></span></td>
               <td><span class="badge"><?php echo mail_h(mail_status_label((string)$batch['status'])); ?></span></td>
               <td><?php echo (int)$batch['target_count']; ?></td>
             </tr>
@@ -100,7 +84,7 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
 <?php if ($selectedBatch): ?>
 <section class="panel mt-18">
   <div class="panel-head">
-    <div><h2><?php echo mail_h((string)$selectedBatch['title']); ?></h2><p class="muted">テンプレート: <?php echo mail_h((string)$selectedBatch['template_title']); ?> / 作成日時: <?php echo mail_h((string)$selectedBatch['created_at']); ?></p></div>
+    <div><h2><?php echo mail_h((string)$selectedBatch['title']); ?></h2><p class="muted">作成元: <?php echo mail_h((string)($selectedBatch['template_title'] ?? '直接入力')); ?> / 作成日時: <?php echo mail_h((string)$selectedBatch['created_at']); ?></p></div>
     <form method="post" class="inline-actions">
       <?php echo mail_auth_csrf_field(); ?>
       <input type="hidden" name="action" value="status">
@@ -119,8 +103,8 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
     <article class="summary-card"><span>個別添付</span><strong><?php echo (int)$selectedBatch['individual_attachment_count']; ?></strong></article>
     <article class="summary-card"><span>状態</span><strong class="small-strong"><?php echo mail_h(mail_status_label((string)$selectedBatch['status'])); ?></strong></article>
   </div>
-  <p class="muted">承認済みのバッチは、Graph下書き画面からOutlook下書きとして作成できます。</p>
-  <p><a class="text-link" href="graph.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">Graph下書き作成へ進む</a></p>
+  <p class="muted">内容と添付を確認したら、状態を「確認済み」に変更してSMTP送信へ進みます。</p>
+  <p><a class="text-link" href="delivery.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">SMTP送信へ進む</a></p>
 </section>
 
 <section class="panel mt-18">

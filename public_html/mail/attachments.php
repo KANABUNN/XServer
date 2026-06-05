@@ -99,7 +99,7 @@ mail_render_page_header('添付ファイル', $user, 'attachments.php');
         <article class="summary-card"><span>共通添付</span><strong><?php echo (int)$selectedBatch['common_attachment_count']; ?></strong></article>
         <article class="summary-card"><span>個別添付</span><strong><?php echo (int)$selectedBatch['individual_attachment_count']; ?></strong></article>
       </div>
-      <p class="muted">要確認が残っている場合、Graph下書き作成へ進めない運用にします。</p>
+      <p class="muted">要確認が残っている場合、送信へ進めない運用にします。</p>
     <?php endif; ?>
   </section>
 </div>

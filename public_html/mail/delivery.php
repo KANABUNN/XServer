@@ -163,7 +163,7 @@ mail_render_page_header('Google Workspace SMTP送信', $user, 'delivery.php');
     <input type="hidden" name="action" value="send_batch_smtp">
     <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
     <h3>一括SMTP送信</h3>
-    <p class="muted">Google Workspaceの送信用アカウントから直接送信します。Outlook下書きは作成されません。実行前に対象・本文・添付を必ず確認してください。</p>
+    <p class="muted">Google Workspaceの送信用アカウントから直接送信します。Gmail下書きは作成されません。実行前に対象・本文・添付を必ず確認してください。</p>
     <label><span class="muted">1回の最大送信件数</span><input type="text" name="limit" value="<?php echo (int)$maxSendsPerRun; ?>" inputmode="numeric" style="max-width:120px"></label>
     <label><span class="muted">確認入力</span><input type="text" name="confirm_text" placeholder="送信"></label>
     <button type="submit" class="danger"<?php echo ($smtpReady && mail_auth_has_permission($user, 'send.execute') && in_array((string)$selectedBatch['status'], ['approved','draft_created'], true) && $pendingAttachmentCount === 0 && $sendableCount > 0) ? '' : ' disabled'; ?>>SMTPで一括送信</button>
@@ -205,7 +205,7 @@ mail_render_page_header('Google Workspace SMTP送信', $user, 'delivery.php');
 
 <section class="panel mt-18 feature-panel">
   <h2>この画面の位置づけ</h2>
-  <p>Google Workspaceに有効なGmailライセンスがある場合、GraphではなくSMTP経由で送信を完了できます。Graph実装は将来のMicrosoft 365対応用として残し、当面の本番送信はこの画面から行う想定です。</p>
+  <p>Google Workspace SMTP Relay経由で送信を完了します。当面の本番送信はこの画面から行う想定です。</p>
 </section>
 <?php endif; ?>
 <?php

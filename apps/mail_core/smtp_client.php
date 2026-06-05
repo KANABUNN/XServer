@@ -59,16 +59,19 @@ function mail_smtp_delay_seconds(): int
     return max(0, min(30, (int)($smtp['per_message_delay_seconds'] ?? 0)));
 }
 
-function mail_smtp_find_autoload(): ?string
+function mail_smtp_autoload_candidates(): array
 {
-    $candidates = [
+    return array_values(array_unique([
         dirname(mail_apps_dir()) . '/vendor/autoload.php',
         mail_apps_dir() . '/vendor/autoload.php',
         mail_core_dir() . '/vendor/autoload.php',
         dirname(dirname(mail_core_dir())) . '/vendor/autoload.php',
-    ];
+    ]));
+}
 
-    foreach ($candidates as $path) {
+function mail_smtp_find_autoload(): ?string
+{
+    foreach (mail_smtp_autoload_candidates() as $path) {
         if (is_file($path)) {
             return $path;
         }
@@ -77,30 +80,42 @@ function mail_smtp_find_autoload(): ?string
     return null;
 }
 
-function mail_smtp_load_phpmailer(): void
+function mail_smtp_phpmailer_class(): string
 {
-    if (class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
-        return;
+    $mailerClass = 'PHPMailer\\PHPMailer\\PHPMailer';
+    if (class_exists($mailerClass)) {
+        return $mailerClass;
     }
+
     $autoload = mail_smtp_find_autoload();
     if ($autoload !== null) {
         require_once $autoload;
     }
-    if (!class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
-        throw new RuntimeException('PHPMailer の autoload.php が見つかりません。bookと同じ vendor 配置を確認してください。');
+    if (!class_exists($mailerClass)) {
+        throw new RuntimeException(
+            'PHPMailer の autoload.php が見つかりません。composer install を実行するか、vendor/autoload.php を配置してください。探索先: ' .
+            implode(', ', mail_smtp_autoload_candidates())
+        );
     }
+
+    return $mailerClass;
 }
 
-function mail_smtp_create_mailer(): \PHPMailer\PHPMailer\PHPMailer
+function mail_smtp_load_phpmailer(): void
 {
-    mail_smtp_load_phpmailer();
+    mail_smtp_phpmailer_class();
+}
+
+function mail_smtp_create_mailer(): object
+{
+    $mailerClass = mail_smtp_phpmailer_class();
     [$configured, $missing] = mail_smtp_is_configured();
     if (!$configured) {
         throw new RuntimeException('SMTP設定が不足しています: ' . implode(', ', $missing));
     }
 
     $smtp = mail_smtp_config();
-    $mailer = new \PHPMailer\PHPMailer\PHPMailer(true);
+    $mailer = new $mailerClass(true);
     $mailer->isSMTP();
     $mailer->Host = trim((string)$smtp['host']);
     $mailer->Port = (int)$smtp['port'];
@@ -169,7 +184,7 @@ function mail_smtp_test_connection(): array
     } catch (Throwable $e) {
         try {
             $mailer->smtpClose();
-        } catch (Throwable) {
+        } catch (Throwable $closeError) {
         }
         throw new RuntimeException('SMTP接続確認に失敗しました: ' . $e->getMessage());
     }
@@ -286,6 +301,11 @@ function mail_smtp_plain_from_html(string $html): string
     return html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 }
 
+function mail_smtp_normalize_breaks(string $text, string $break = "\r\n"): string
+{
+    return preg_replace('/\r\n|\r|\n/', $break, $text) ?? $text;
+}
+
 function mail_smtp_send_target(PDO $pdo, int $targetId, ?array $actor = null): array
 {
     if (!mail_smtp_enabled()) {
@@ -318,9 +338,9 @@ function mail_smtp_send_target(PDO $pdo, int $targetId, ?array $actor = null): a
         if ($message['body_type'] === 'html') {
             $mailer->isHTML(true);
             $mailer->Body = $message['body'];
-            $mailer->AltBody = \PHPMailer\PHPMailer\PHPMailer::normalizeBreaks(mail_smtp_plain_from_html($message['body']), "\r\n");
+            $mailer->AltBody = mail_smtp_normalize_breaks(mail_smtp_plain_from_html($message['body']));
         } else {
-            $plain = \PHPMailer\PHPMailer\PHPMailer::normalizeBreaks($message['body'], "\r\n");
+            $plain = mail_smtp_normalize_breaks($message['body']);
             $mailer->isHTML(false);
             $mailer->Body = $plain;
             $mailer->AltBody = $plain;

@@ -37,7 +37,7 @@ mail_render_page_header('ダッシュボード', $user, 'index.php');
 <?php if ($dbError === ''): ?>
   <div class="alert alert-info">
     <strong>次段階の管理機能を追加済みです。</strong>
-    <p>団体CSV取込、テンプレート作成、送信バッチ作成、添付ファイル一括アップロード、対応付け確認、Google Workspace SMTP送信まで操作できます。Graph連携は将来用の予備経路として残しています。</p>
+    <p>団体CSV取込、テンプレート作成、送信対象選択、添付ファイル一括アップロード、対応付け確認、Google Workspace SMTP Relay送信まで操作できます。</p>
   </div>
 <?php endif; ?>
 
@@ -111,9 +111,9 @@ mail_render_page_header('ダッシュボード', $user, 'index.php');
   <ol class="flow-list">
     <li><a href="organizations.php">団体データ</a>でCSV取込または手入力を行う。</li>
     <li><a href="templates.php">テンプレート</a>で件名・本文と変数を作る。</li>
-    <li><a href="batches.php">送信バッチ</a>で対象団体へ本文を展開する。</li>
+    <li><a href="compose.php">メール作成</a>でテンプレートまたは直接入力の本文を選び、送信対象をチェックボックスで指定する。</li>
     <li><a href="attachments.php">添付ファイル</a>で共通添付・個別添付を一括登録する。</li>
-    <li><a href="delivery.php">GW SMTP送信</a>でSMTP接続確認後、承認済みバッチを送信する。</li>
+    <li><a href="delivery.php">SMTP送信</a>でSMTP接続確認後、承認済みバッチを送信する。</li>
   </ol>
 </section>
 <?php

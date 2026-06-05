@@ -62,7 +62,7 @@ mail_render_page_header('テンプレート', $user, 'templates.php');
 <?php if ($dbError === ''): ?>
 <div class="two-column-grid wide-left">
   <section class="panel">
-    <div class="panel-head"><h2><?php echo $editTemplate ? 'テンプレートを編集' : 'テンプレートを追加'; ?></h2><span class="muted">下書き生成前に本文を固定します</span></div>
+    <div class="panel-head"><h2><?php echo $editTemplate ? 'テンプレートを編集' : 'テンプレートを追加'; ?></h2><span class="muted">送信バッチ作成前に本文を固定します</span></div>
     <form method="post" class="form-grid">
       <?php echo mail_auth_csrf_field(); ?>
       <input type="hidden" name="action" value="save">

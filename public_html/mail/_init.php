@@ -69,10 +69,10 @@ function mail_nav_items(): array
         ['href' => 'index.php', 'label' => 'ダッシュボード'],
         ['href' => 'organizations.php', 'label' => '団体データ'],
         ['href' => 'templates.php', 'label' => 'テンプレート'],
+        ['href' => 'compose.php', 'label' => 'メール作成'],
         ['href' => 'batches.php', 'label' => '送信バッチ'],
         ['href' => 'attachments.php', 'label' => '添付ファイル'],
         ['href' => 'delivery.php', 'label' => 'GW SMTP送信'],
-        ['href' => 'graph.php', 'label' => 'Graph下書き・送信'],
         ['href' => 'logs.php', 'label' => 'ログ'],
         ['href' => 'settings.php', 'label' => '送信設定'],
     ];
@@ -96,7 +96,7 @@ function mail_render_page_header(string $title, array $user, string $activeHref)
       <div class="sidebar-brand">
         <p class="brand-kicker">mail.fit-sc.jp</p>
         <h1>メール管理</h1>
-        <p>団体DB / テンプレート / 添付 / 下書き・送信</p>
+        <p>団体DB / テンプレート / 添付 / SMTP送信</p>
       </div>
       <nav class="sidebar-nav" aria-label="管理機能">
         <?php foreach (mail_nav_items() as $item): ?>
