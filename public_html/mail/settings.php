@@ -22,14 +22,14 @@ mail_render_page_header('Graph設定', $user, 'settings.php');
 <header class="page-head">
   <div>
     <h1>Graph設定</h1>
-    <p class="lead">Microsoft Graph APIでOutlook下書きを作成するための設定確認画面です。設定値そのものは非公開領域の <code>config.local.php</code> で管理します。</p>
+    <p class="lead">Microsoft Graph APIでOutlook下書き作成・下書き送信を行うための設定確認画面です。設定値そのものは非公開領域の <code>config.local.php</code> で管理します。</p>
   </div>
   <div class="head-actions"><a class="link-button secondary" href="graph.php">Graph下書き画面へ</a></div>
 </header>
 <?php mail_render_db_error($dbError); ?>
 <section class="panel">
   <div class="panel-head"><h2>現在の実装方針</h2><span class="muted">安全側の初期設計</span></div>
-  <p>初期運用では、Webアプリから直接送信せず、Graph APIで <strong>Outlook下書き作成</strong> までを行います。下書きを人間が確認してから送信することで、宛先・本文・添付の誤りを抑えます。</p>
+  <p>初期運用では、Graph APIで <strong>Outlook下書き作成</strong> を行い、必要に応じて作成済み下書きをGraph経由で送信します。送信UIは <code>allow_send_from_ui</code> で明示的に有効化した場合のみ表示・実行できます。</p>
   <p class="muted">認証方式は <code>client_credentials</code> です。送信用メールボックスを固定し、Microsoft Entra ID のアプリケーション権限で下書きを作成します。</p>
 </section>
 <section class="panel mt-18">
@@ -43,6 +43,9 @@ mail_render_page_header('Graph設定', $user, 'settings.php');
     <div><span class="muted">クライアントID</span><code><?php echo mail_h((string)($graph['client_id'] ?? '')); ?></code></div>
     <div><span class="muted">送信用ユーザー</span><code><?php echo mail_h((string)($graph['sender_user_id'] ?? '')); ?></code></div>
     <div><span class="muted">1回の下書き作成上限</span><strong><?php echo (int)($graph['max_drafts_per_run'] ?? 20); ?> 件</strong></div>
+    <div><span class="muted">送信UI</span><strong><?php echo !empty($graph['allow_send_from_ui']) ? '有効' : '無効'; ?></strong></div>
+    <div><span class="muted">1回の送信上限</span><strong><?php echo (int)($graph['max_sends_per_run'] ?? 10); ?> 件</strong></div>
+    <div><span class="muted">委任認証予約設定</span><strong><?php echo !empty($graph['delegated_enabled']) ? '有効' : '無効'; ?></strong></div>
   </div>
   <?php if (!$graphReady): ?>
     <div class="alert alert-warn mt-14">不足している設定: <code><?php echo mail_h(implode(', ', $graphMissing)); ?></code></div>
@@ -63,14 +66,14 @@ mail_render_page_header('Graph設定', $user, 'settings.php');
     <li>Microsoft Entra ID でアプリ登録を作成する。</li>
     <li>クライアントシークレットを作成し、<code>config.local.php</code> に設定する。</li>
     <li>Microsoft Graph のアプリケーション権限として <code>Mail.ReadWrite</code> を付与する。</li>
-    <li>既存下書きを送信する段階まで進める場合は、追加で <code>Mail.Send</code> を付与する。</li>
+    <li>作成済み下書きをWebアプリから送信する場合は、追加で <code>Mail.Send</code> を付与する。</li>
     <li>管理者の同意を実行する。</li>
     <li>可能であれば、Exchange Online 側でアプリがアクセスできるメールボックスを送信用アカウントに限定する。</li>
   </ol>
 </section>
 <section class="panel mt-18 feature-panel">
   <h2>実装済み・未公開の処理</h2>
-  <p>下書き作成、通常添付、大容量添付、ログ保存は実装済みです。既存下書きの送信処理も関数としては用意していますが、送信関係のUIは今後の要件に合わせるため、現時点では画面に表示していません。</p>
+  <p>下書き作成、通常添付、大容量添付、既存下書き送信、ログ保存を実装済みです。委任認証方式は後から追加できるよう、設定項目のみ予約しています。</p>
 </section>
 <?php
 mail_render_page_footer();

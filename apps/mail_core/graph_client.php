@@ -35,6 +35,18 @@ function mail_graph_enabled(): bool
     return !empty($graph['enabled']);
 }
 
+function mail_graph_send_enabled(): bool
+{
+    $graph = mail_graph_config();
+    return mail_graph_enabled() && !empty($graph['allow_send_from_ui']);
+}
+
+function mail_graph_draft_only_default(): bool
+{
+    $graph = mail_graph_config();
+    return !empty($graph['draft_only_default']);
+}
+
 function mail_graph_sender_user_id(): string
 {
     $sender = trim((string)(mail_graph_config()['sender_user_id'] ?? ''));
@@ -304,11 +316,11 @@ function mail_graph_insert_send_log(PDO $pdo, ?int $batchId, ?int $targetId, str
 function mail_graph_mark_target_failed(PDO $pdo, int $targetId, string $message, ?string $messageId = null): void
 {
     if ($messageId !== null && $messageId !== '') {
-        $stmt = $pdo->prepare('UPDATE mail_batch_targets SET status = \"failed\", graph_message_id = :graph_message_id, error_message = :error_message WHERE id = :id');
+        $stmt = $pdo->prepare('UPDATE mail_batch_targets SET status = "failed", graph_message_id = :graph_message_id, error_message = :error_message WHERE id = :id');
         $stmt->execute([':graph_message_id' => $messageId, ':error_message' => mb_substr($message, 0, 1000), ':id' => $targetId]);
         return;
     }
-    $stmt = $pdo->prepare('UPDATE mail_batch_targets SET status = \"failed\", error_message = :error_message WHERE id = :id');
+    $stmt = $pdo->prepare('UPDATE mail_batch_targets SET status = "failed", error_message = :error_message WHERE id = :id');
     $stmt->execute([':error_message' => mb_substr($message, 0, 1000), ':id' => $targetId]);
 }
 
@@ -565,21 +577,118 @@ function mail_graph_create_drafts_for_batch(PDO $pdo, int $batchId, ?array $acto
     ];
 }
 
+function mail_graph_sendable_target_count(PDO $pdo, int $batchId): int
+{
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM mail_batch_targets WHERE batch_id = :batch_id AND status = "draft_created" AND graph_message_id IS NOT NULL AND graph_message_id <> ""'
+    );
+    $stmt->execute([':batch_id' => $batchId]);
+    return (int)$stmt->fetchColumn();
+}
+
+function mail_graph_sent_target_count(PDO $pdo, int $batchId): int
+{
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM mail_batch_targets WHERE batch_id = :batch_id AND status = "sent"');
+    $stmt->execute([':batch_id' => $batchId]);
+    return (int)$stmt->fetchColumn();
+}
+
+function mail_graph_remaining_not_sent_target_count(PDO $pdo, int $batchId): int
+{
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM mail_batch_targets WHERE batch_id = :batch_id AND status <> "excluded" AND status <> "sent"');
+    $stmt->execute([':batch_id' => $batchId]);
+    return (int)$stmt->fetchColumn();
+}
+
+function mail_graph_list_sendable_targets(PDO $pdo, int $batchId, int $limit = 20): array
+{
+    $limit = max(1, min(100, $limit));
+    $stmt = $pdo->prepare(
+        'SELECT id FROM mail_batch_targets WHERE batch_id = :batch_id AND status = "draft_created" AND graph_message_id IS NOT NULL AND graph_message_id <> "" ORDER BY id ASC LIMIT ' . $limit
+    );
+    $stmt->execute([':batch_id' => $batchId]);
+    return array_map('intval', array_column($stmt->fetchAll() ?: [], 'id'));
+}
+
 function mail_graph_send_existing_draft(PDO $pdo, int $targetId, ?array $actor = null): array
 {
+    if (!mail_graph_send_enabled()) {
+        throw new RuntimeException('Graph送信UIが無効です。config.local.php の graph.allow_send_from_ui を確認してください。');
+    }
+
     $target = mail_graph_get_target($pdo, $targetId);
     if (!$target) {
         throw new InvalidArgumentException('対象メールが見つかりません。');
+    }
+    if ((string)$target['status'] !== 'draft_created') {
+        throw new RuntimeException('対象メールは下書き作成済みではありません。現在: ' . mail_status_label((string)$target['status']));
     }
     $messageId = trim((string)($target['graph_message_id'] ?? ''));
     if ($messageId === '') {
         throw new RuntimeException('GraphメッセージIDがないため送信できません。');
     }
-    $response = mail_graph_request('POST', mail_graph_user_message_path($messageId) . '/send', null, ['Content-Length: 0'], 120);
-    mail_graph_assert_success($response, 'Outlook下書き送信', [202]);
-    $stmt = $pdo->prepare('UPDATE mail_batch_targets SET status = "sent", error_message = NULL WHERE id = :id');
-    $stmt->execute([':id' => $targetId]);
-    mail_graph_insert_send_log($pdo, (int)$target['batch_id'], $targetId, 'graph.message.send', 'success', 202, null, null, $actor);
-    mail_audit_log($pdo, $actor, 'mail.graph.send', 'mail_batch_target', (string)$targetId, ['batch_id' => (int)$target['batch_id']]);
-    return ['ok' => true, 'target_id' => $targetId, 'message_id' => $messageId];
+
+    try {
+        $response = mail_graph_request('POST', mail_graph_user_message_path($messageId) . '/send', null, ['Content-Length: 0'], 120);
+        mail_graph_assert_success($response, 'Outlook下書き送信', [202]);
+        $stmt = $pdo->prepare('UPDATE mail_batch_targets SET status = "sent", error_message = NULL WHERE id = :id');
+        $stmt->execute([':id' => $targetId]);
+
+        $batchId = (int)$target['batch_id'];
+        if (mail_graph_remaining_not_sent_target_count($pdo, $batchId) === 0) {
+            mail_update_batch_status($pdo, $batchId, 'sent', $actor);
+        }
+
+        mail_graph_insert_send_log($pdo, $batchId, $targetId, 'graph.message.send', 'success', 202, null, null, $actor);
+        mail_audit_log($pdo, $actor, 'mail.graph.send', 'mail_batch_target', (string)$targetId, [
+            'batch_id' => $batchId,
+            'message_id' => $messageId,
+        ]);
+        return ['ok' => true, 'target_id' => $targetId, 'message_id' => $messageId];
+    } catch (Throwable $e) {
+        mail_graph_mark_target_failed($pdo, $targetId, $e->getMessage(), $messageId);
+        mail_graph_insert_send_log($pdo, (int)$target['batch_id'], $targetId, 'graph.message.send', 'failed', null, null, $e->getMessage(), $actor);
+        throw $e;
+    }
+}
+
+function mail_graph_send_drafts_for_batch(PDO $pdo, int $batchId, ?array $actor = null, int $limit = 20): array
+{
+    if (!mail_graph_send_enabled()) {
+        throw new RuntimeException('Graph送信UIが無効です。config.local.php の graph.allow_send_from_ui を確認してください。');
+    }
+
+    $batch = mail_get_batch($pdo, $batchId);
+    if (!$batch) {
+        throw new InvalidArgumentException('対象バッチが見つかりません。');
+    }
+    if (!in_array((string)$batch['status'], ['draft_created', 'approved'], true)) {
+        throw new RuntimeException('バッチが送信可能状態ではありません。現在: ' . mail_status_label((string)$batch['status']));
+    }
+
+    $targetIds = mail_graph_list_sendable_targets($pdo, $batchId, $limit);
+    $results = [];
+    $success = 0;
+    $failed = 0;
+    foreach ($targetIds as $targetId) {
+        try {
+            $result = mail_graph_send_existing_draft($pdo, $targetId, $actor);
+            $results[] = $result;
+            $success++;
+        } catch (Throwable $e) {
+            $results[] = [
+                'ok' => false,
+                'target_id' => $targetId,
+                'message' => $e->getMessage(),
+            ];
+            $failed++;
+        }
+    }
+
+    return [
+        'success' => $success,
+        'failed' => $failed,
+        'remaining' => mail_graph_sendable_target_count($pdo, $batchId),
+        'results' => $results,
+    ];
 }
