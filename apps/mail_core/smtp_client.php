@@ -118,7 +118,18 @@ function mail_smtp_create_mailer(): \PHPMailer\PHPMailer\PHPMailer
         $mailer->Timeout = max(5, (int)$smtp['timeout']);
     }
     if (!empty($smtp['debug'])) {
-        $mailer->SMTPDebug = 2;
+        // PHPMailerの既定デバッグ出力はechoのため、POST後のheader()リダイレクトを壊す。
+        // 画面には出さず、PHP error_logへ流して運用画面のヘッダ送信を保護する。
+        $debugLevel = isset($smtp['debug_level']) ? (int)$smtp['debug_level'] : 2;
+        $mailer->SMTPDebug = max(0, min(4, $debugLevel));
+        $mailer->Debugoutput = static function ($str, $level): void {
+            $line = trim((string)$str);
+            if ($line !== '') {
+                error_log('[mail.fit-sc.jp SMTP debug L' . (int)$level . '] ' . $line);
+            }
+        };
+    } else {
+        $mailer->SMTPDebug = 0;
     }
 
     $mailer->CharSet = 'UTF-8';

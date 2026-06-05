@@ -48,7 +48,18 @@ function mail_flash_get(): array
 
 function mail_redirect(string $path): void
 {
-    header('Location: ' . mail_url($path), true, 302);
+    $url = mail_url($path);
+    if (!headers_sent()) {
+        header('Location: ' . $url, true, 302);
+        exit;
+    }
+
+    // 予期しないデバッグ出力などで既に本文が出ている場合でも、
+    // PHP Warningを出さずに管理画面へ戻すためのフォールバック。
+    $safeUrl = htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    echo '<script>window.location.replace(' . json_encode($url, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ');</script>';
+    echo '<noscript><meta http-equiv="refresh" content="0;url=' . $safeUrl . '"></noscript>';
+    echo '<p><a href="' . $safeUrl . '">処理後の画面へ移動</a></p>';
     exit;
 }
 
