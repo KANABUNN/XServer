@@ -26,7 +26,7 @@ mail_render_page_header('ダッシュボード', $user, 'index.php');
 <header class="page-head">
   <div>
     <h1>メール半自動化管理</h1>
-    <p class="lead">団体別の差し込みメール、個別添付、Outlook下書き作成を管理する基礎画面です。</p>
+    <p class="lead">団体別の差し込みメール、個別添付、Google Workspace SMTP送信を管理する画面です。</p>
   </div>
   <div class="head-actions">
     <a class="secondary link-button" href="./api/health.php" target="_blank" rel="noopener">接続確認</a>
@@ -37,7 +37,7 @@ mail_render_page_header('ダッシュボード', $user, 'index.php');
 <?php if ($dbError === ''): ?>
   <div class="alert alert-info">
     <strong>次段階の管理機能を追加済みです。</strong>
-    <p>団体CSV取込、テンプレート作成、送信バッチ作成、添付ファイル一括アップロード、対応付け確認まで操作できます。Graph連携は設定確認のみで、送信処理はまだ実行しません。</p>
+    <p>団体CSV取込、テンプレート作成、送信バッチ作成、添付ファイル一括アップロード、対応付け確認、Google Workspace SMTP送信まで操作できます。Graph連携は将来用の予備経路として残しています。</p>
   </div>
 <?php endif; ?>
 
@@ -113,6 +113,7 @@ mail_render_page_header('ダッシュボード', $user, 'index.php');
     <li><a href="templates.php">テンプレート</a>で件名・本文と変数を作る。</li>
     <li><a href="batches.php">送信バッチ</a>で対象団体へ本文を展開する。</li>
     <li><a href="attachments.php">添付ファイル</a>で共通添付・個別添付を一括登録する。</li>
+    <li><a href="delivery.php">GW SMTP送信</a>でSMTP接続確認後、承認済みバッチを送信する。</li>
   </ol>
 </section>
 <?php

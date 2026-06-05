@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/_init.php';
 require_once __DIR__ . '/../../apps/mail_core/graph_client.php';
+require_once __DIR__ . '/../../apps/mail_core/smtp_client.php';
 
 [$user, $mailPdo, $dbError] = mail_app_init();
 $config = [];
@@ -13,27 +14,46 @@ try {
     $config = [];
 }
 $graph = is_array($config['graph'] ?? null) ? $config['graph'] : [];
+$smtp = is_array($config['smtp'] ?? null) ? $config['smtp'] : [];
+$deliveryDriver = mail_delivery_driver();
 $storage = is_array($config['storage'] ?? null) ? $config['storage'] : [];
 $security = is_array($config['security'] ?? null) ? $config['security'] : [];
 [$graphReady, $graphMissing] = mail_graph_is_configured();
+[$smtpReady, $smtpMissing] = mail_smtp_is_configured();
 
-mail_render_page_header('Graph設定', $user, 'settings.php');
+mail_render_page_header('送信設定', $user, 'settings.php');
 ?>
 <header class="page-head">
   <div>
-    <h1>Graph設定</h1>
-    <p class="lead">Microsoft Graph APIでOutlook下書き作成・下書き送信を行うための設定確認画面です。設定値そのものは非公開領域の <code>config.local.php</code> で管理します。</p>
+    <h1>送信設定</h1>
+    <p class="lead">Google Workspace SMTP送信と、将来用のMicrosoft Graph連携設定を確認する画面です。設定値そのものは非公開領域の <code>config.local.php</code> で管理します。</p>
   </div>
-  <div class="head-actions"><a class="link-button secondary" href="graph.php">Graph下書き画面へ</a></div>
+  <div class="head-actions"><a class="link-button secondary" href="delivery.php">GW SMTP送信画面へ</a></div>
 </header>
 <?php mail_render_db_error($dbError); ?>
 <section class="panel">
-  <div class="panel-head"><h2>現在の実装方針</h2><span class="muted">安全側の初期設計</span></div>
-  <p>初期運用では、Graph APIで <strong>Outlook下書き作成</strong> を行い、必要に応じて作成済み下書きをGraph経由で送信します。送信UIは <code>allow_send_from_ui</code> で明示的に有効化した場合のみ表示・実行できます。</p>
-  <p class="muted">認証方式は <code>client_credentials</code> です。送信用メールボックスを固定し、Microsoft Entra ID のアプリケーション権限で下書きを作成します。</p>
+  <div class="panel-head"><h2>現在の実装方針</h2><span class="muted">Google Workspace優先</span></div>
+  <p>当面の本番運用では、bookのメール送信と同様に <strong>Google Workspace / Gmail SMTP</strong> を使って直接送信します。Microsoft Graphは、将来Exchange Onlineが利用可能になった場合の予備経路として残します。</p>
+  <p class="muted">現在の送信ドライバは <code><?php echo mail_h($deliveryDriver); ?></code> です。</p>
 </section>
 <section class="panel mt-18">
-  <div class="panel-head"><h2>Graph設定値</h2><span class="muted">config.local.php から読込</span></div>
+  <div class="panel-head"><h2>Google Workspace SMTP設定値</h2><span class="muted">config.local.php から読込</span></div>
+  <div class="settings-grid">
+    <div><span class="muted">SMTP有効</span><strong><?php echo !empty($smtp['enabled']) ? '有効' : '無効'; ?></strong></div>
+    <div><span class="muted">設定状態</span><strong><?php echo $smtpReady ? '利用可能' : '不足あり'; ?></strong></div>
+    <div><span class="muted">ホスト</span><code><?php echo mail_h((string)($smtp['host'] ?? '')); ?>:<?php echo (int)($smtp['port'] ?? 0); ?></code></div>
+    <div><span class="muted">暗号化</span><code><?php echo mail_h((string)($smtp['secure'] ?? 'tls')); ?></code></div>
+    <div><span class="muted">SMTP認証</span><strong><?php echo array_key_exists('smtp_auth', $smtp) && !$smtp['smtp_auth'] ? '無効' : '有効'; ?></strong></div>
+    <div><span class="muted">ユーザー名</span><code><?php echo mail_h((string)($smtp['username'] ?? '')); ?></code></div>
+    <div><span class="muted">送信元</span><code><?php echo mail_h((string)($smtp['from_address'] ?? '')); ?></code></div>
+    <div><span class="muted">1回の送信上限</span><strong><?php echo (int)($smtp['max_sends_per_run'] ?? 10); ?> 件</strong></div>
+  </div>
+  <?php if (!$smtpReady): ?>
+    <div class="alert alert-warn mt-14">不足しているSMTP設定: <code><?php echo mail_h(implode(', ', $smtpMissing)); ?></code></div>
+  <?php endif; ?>
+</section>
+<section class="panel mt-18">
+  <div class="panel-head"><h2>Graph設定値</h2><span class="muted">将来用 / config.local.php から読込</span></div>
   <div class="settings-grid">
     <div><span class="muted">Graph有効</span><strong><?php echo !empty($graph['enabled']) ? '有効' : '無効'; ?></strong></div>
     <div><span class="muted">設定状態</span><strong><?php echo $graphReady ? '利用可能' : '不足あり'; ?></strong></div>
@@ -61,19 +81,19 @@ mail_render_page_header('Graph設定', $user, 'settings.php');
   </div>
 </section>
 <section class="panel mt-18 feature-panel">
-  <h2>Microsoft Entra ID 側で必要な設定</h2>
+  <h2>Google Workspace SMTP側で必要な設定</h2>
   <ol class="flow-list">
-    <li>Microsoft Entra ID でアプリ登録を作成する。</li>
-    <li>クライアントシークレットを作成し、<code>config.local.php</code> に設定する。</li>
-    <li>Microsoft Graph のアプリケーション権限として <code>Mail.ReadWrite</code> を付与する。</li>
-    <li>作成済み下書きをWebアプリから送信する場合は、追加で <code>Mail.Send</code> を付与する。</li>
-    <li>管理者の同意を実行する。</li>
-    <li>可能であれば、Exchange Online 側でアプリがアクセスできるメールボックスを送信用アカウントに限定する。</li>
+    <li>Google Workspaceで送信用アカウントを用意する。</li>
+    <li>SMTP利用方式を決める。通常は <code>smtp.gmail.com:587 / TLS / SMTP認証</code> を使う。</li>
+    <li>2段階認証とアプリパスワード、または組織で許可されたSMTP認証情報を用意する。</li>
+    <li><code>config.local.php</code> の <code>mail_delivery.driver</code> を <code>smtp</code> にする。</li>
+    <li><code>smtp.username</code>、<code>smtp.password</code>、<code>smtp.from_address</code> を設定する。</li>
+    <li><code>delivery.php</code> でSMTP接続テスト後、まず少数件だけ送信する。</li>
   </ol>
 </section>
 <section class="panel mt-18 feature-panel">
   <h2>実装済み・未公開の処理</h2>
-  <p>下書き作成、通常添付、大容量添付、既存下書き送信、ログ保存を実装済みです。委任認証方式は後から追加できるよう、設定項目のみ予約しています。</p>
+  <p>Google Workspace SMTPによる直接送信、添付ファイル送信、ログ保存を実装済みです。Graphの下書き作成・送信処理は将来用として残し、委任認証方式は後から追加できるよう設定項目のみ予約しています。</p>
 </section>
 <?php
 mail_render_page_footer();

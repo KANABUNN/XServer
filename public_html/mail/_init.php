@@ -60,9 +60,10 @@ function mail_nav_items(): array
         ['href' => 'templates.php', 'label' => 'テンプレート'],
         ['href' => 'batches.php', 'label' => '送信バッチ'],
         ['href' => 'attachments.php', 'label' => '添付ファイル'],
+        ['href' => 'delivery.php', 'label' => 'GW SMTP送信'],
         ['href' => 'graph.php', 'label' => 'Graph下書き・送信'],
         ['href' => 'logs.php', 'label' => 'ログ'],
-        ['href' => 'settings.php', 'label' => 'Graph設定'],
+        ['href' => 'settings.php', 'label' => '送信設定'],
     ];
 }
 
