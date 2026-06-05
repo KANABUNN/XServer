@@ -60,8 +60,9 @@ function mail_nav_items(): array
         ['href' => 'templates.php', 'label' => 'テンプレート'],
         ['href' => 'batches.php', 'label' => '送信バッチ'],
         ['href' => 'attachments.php', 'label' => '添付ファイル'],
+        ['href' => 'graph.php', 'label' => 'Graph下書き'],
         ['href' => 'logs.php', 'label' => 'ログ'],
-        ['href' => 'settings.php', 'label' => 'Graph連携'],
+        ['href' => 'settings.php', 'label' => 'Graph設定'],
     ];
 }
 

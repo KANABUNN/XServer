@@ -119,7 +119,8 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
     <article class="summary-card"><span>個別添付</span><strong><?php echo (int)$selectedBatch['individual_attachment_count']; ?></strong></article>
     <article class="summary-card"><span>状態</span><strong class="small-strong"><?php echo mail_h(mail_status_label((string)$selectedBatch['status'])); ?></strong></article>
   </div>
-  <p class="muted">この段階ではGraph APIへの送信・下書き作成は実行しません。承認済みのバッチを次段階のGraph連携処理に渡す想定です。</p>
+  <p class="muted">承認済みのバッチは、Graph下書き画面からOutlook下書きとして作成できます。</p>
+  <p><a class="text-link" href="graph.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">Graph下書き作成へ進む</a></p>
 </section>
 
 <section class="panel mt-18">
