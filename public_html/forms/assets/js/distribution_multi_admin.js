@@ -94,6 +94,7 @@
         ${files.map((file, index) => {
           const params = new URLSearchParams({ form_id: String(form.id) });
           if (file.id) params.set('file_id', file.id);
+          params.set('csrf_token', csrfToken());
           const meta = [fileSize(file.size_bytes), file.uploaded_at].filter(Boolean).join(' / ');
           return `
             <div class="list-item-header compact-row distribution-admin-file-item">
