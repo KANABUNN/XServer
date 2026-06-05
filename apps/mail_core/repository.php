@@ -425,11 +425,16 @@ function mail_save_template(PDO $pdo, array $data, ?array $actor = null): int
         return $id;
     }
 
+    $insertParams = $params;
+    $insertParams[':created_by_account_id'] = $params[':account_id'];
+    $insertParams[':updated_by_account_id'] = $params[':account_id'];
+    unset($insertParams[':account_id']);
+
     $stmt = $pdo->prepare(
         'INSERT INTO mail_templates (template_key, title, subject_template, body_template, body_type, variables_json, is_active, created_by_account_id, updated_by_account_id) ' .
-        'VALUES (:template_key, :title, :subject_template, :body_template, :body_type, :variables_json, :is_active, :account_id, :account_id)'
+        'VALUES (:template_key, :title, :subject_template, :body_template, :body_type, :variables_json, :is_active, :created_by_account_id, :updated_by_account_id)'
     );
-    $stmt->execute($params);
+    $stmt->execute($insertParams);
     return (int)$pdo->lastInsertId();
 }
 
