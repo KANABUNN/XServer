@@ -275,10 +275,14 @@ function mail_graph_list_target_attachments(PDO $pdo, int $batchId, ?int $organi
         'SELECT a.*, f.original_name, f.relative_path, f.file_size, f.mime_type ' .
         'FROM mail_attachments a INNER JOIN mail_uploaded_files f ON f.id = a.uploaded_file_id ' .
         'WHERE a.mail_batch_id = :batch_id AND a.status = "approved" ' .
-        'AND (a.is_common = 1 OR (:organization_id IS NOT NULL AND a.organization_id = :organization_id)) ' .
+        'AND (a.is_common = 1 OR (:organization_id_present IS NOT NULL AND a.organization_id = :organization_id_value)) ' .
         'ORDER BY a.is_common DESC, f.original_name ASC'
     );
-    $stmt->execute([':batch_id' => $batchId, ':organization_id' => $organizationId]);
+    $stmt->execute([
+        ':batch_id' => $batchId,
+        ':organization_id_present' => $organizationId,
+        ':organization_id_value' => $organizationId,
+    ]);
     return $stmt->fetchAll() ?: [];
 }
 
