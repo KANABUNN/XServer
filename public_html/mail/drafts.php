@@ -108,7 +108,8 @@ mail_render_page_header('Gmail下書き作成', $user, 'drafts.php');
 </section>
 
 <?php if ($selectedBatch): ?>
-<section class="panel mt-18">
+<div class="draft-work-grid mt-18">
+<section class="panel">
   <div class="panel-head"><h2>Gmail下書き作成</h2><span class="muted">最大作成件数は送信設定で管理</span></div>
   <div class="summary-grid small two">
     <article><span>下書き作成可能</span><strong><?php echo $draftableCount; ?></strong></article>
@@ -136,7 +137,7 @@ mail_render_page_header('Gmail下書き作成', $user, 'drafts.php');
   </form>
 </section>
 
-<section class="panel mt-18">
+<section class="panel">
   <div class="panel-head"><h2>対象メール一覧</h2><span class="muted">個別下書き作成</span></div>
   <div class="table-wrap">
     <table>
@@ -167,6 +168,7 @@ mail_render_page_header('Gmail下書き作成', $user, 'drafts.php');
     </table>
   </div>
 </section>
+</div>
 <?php endif; ?>
 
 <script>

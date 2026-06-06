@@ -62,17 +62,17 @@ mail_render_page_header('テンプレート', $user, 'templates.php');
 <?php if ($dbError === ''): ?>
 <div class="two-column-grid wide-left">
   <section class="panel">
-    <div class="panel-head"><h2><?php echo $editTemplate ? 'テンプレートを編集' : 'テンプレートを追加'; ?></h2><span class="muted">送信バッチ作成前に本文を固定します</span></div>
+    <div class="panel-head"><h2><?php echo $editTemplate ? 'テンプレートを編集' : 'テンプレートを追加'; ?></h2><span class="muted">変数名はクリックで挿入できます</span></div>
     <form method="post" class="form-grid">
       <?php echo mail_auth_csrf_field(); ?>
       <input type="hidden" name="action" value="save">
       <input type="hidden" name="id" value="<?php echo (int)$form['id']; ?>">
       <label><span>テンプレートキー</span><input type="text" name="template_key" value="<?php echo mail_h((string)$form['template_key']); ?>" placeholder="空欄なら自動生成"></label>
       <label><span>表示名 *</span><input type="text" name="title" value="<?php echo mail_h((string)$form['title']); ?>" required></label>
-      <label class="full"><span>件名 *</span><input type="text" name="subject_template" value="<?php echo mail_h((string)$form['subject_template']); ?>" required></label>
+      <label class="full"><span>件名 *</span><input type="text" name="subject_template" id="templateSubject" data-variable-insert-target value="<?php echo mail_h((string)$form['subject_template']); ?>" required></label>
       <label><span>本文形式</span><select name="body_type"><option value="plain"<?php echo mail_selected($form['body_type'], 'plain'); ?>>プレーンテキスト</option><option value="html"<?php echo mail_selected($form['body_type'], 'html'); ?>>HTML</option></select></label>
       <label><span>状態</span><select name="is_active"><option value="1"<?php echo mail_selected($form['is_active'], 1); ?>>有効</option><option value="0"<?php echo mail_selected($form['is_active'], 0); ?>>無効</option></select></label>
-      <label class="full"><span>本文 *</span><textarea name="body_template" rows="16" required><?php echo mail_h((string)$form['body_template']); ?></textarea></label>
+      <label class="full"><span>本文 *</span><textarea name="body_template" id="templateBody" data-variable-insert-target rows="16" required><?php echo mail_h((string)$form['body_template']); ?></textarea></label>
       <div class="form-actions full">
         <button type="submit" class="primary"<?php echo mail_auth_has_permission($user, 'template.edit') ? '' : ' disabled'; ?>>保存</button>
         <?php if ($editTemplate): ?><a href="templates.php" class="secondary link-button">新規入力へ戻る</a><?php endif; ?>
@@ -82,17 +82,18 @@ mail_render_page_header('テンプレート', $user, 'templates.php');
 
   <section class="panel">
     <h2>使用可能な基本変数</h2>
-    <div class="variable-list">
-      <code>{{識別番号}}</code>
-      <code>{{団体名}}</code>
-      <code>{{代表者氏名}}</code>
-      <code>{{メールアドレス}}</code>
-      <code>{{区分}}</code>
-      <code>{{identifier}}</code>
-      <code>{{organization_name}}</code>
-      <code>{{representative_name}}</code>
-      <code>{{email}}</code>
+    <div class="variable-list vertical">
+      <button type="button" class="variable-chip" data-insert-variable="{{識別番号}}" data-insert-targets="templateSubject,templateBody">{{識別番号}}</button>
+      <button type="button" class="variable-chip" data-insert-variable="{{団体名}}" data-insert-targets="templateSubject,templateBody">{{団体名}}</button>
+      <button type="button" class="variable-chip" data-insert-variable="{{代表者氏名}}" data-insert-targets="templateSubject,templateBody">{{代表者氏名}}</button>
+      <button type="button" class="variable-chip" data-insert-variable="{{メールアドレス}}" data-insert-targets="templateSubject,templateBody">{{メールアドレス}}</button>
+      <button type="button" class="variable-chip" data-insert-variable="{{区分}}" data-insert-targets="templateSubject,templateBody">{{区分}}</button>
+      <button type="button" class="variable-chip" data-insert-variable="{{identifier}}" data-insert-targets="templateSubject,templateBody">{{identifier}}</button>
+      <button type="button" class="variable-chip" data-insert-variable="{{organization_name}}" data-insert-targets="templateSubject,templateBody">{{organization_name}}</button>
+      <button type="button" class="variable-chip" data-insert-variable="{{representative_name}}" data-insert-targets="templateSubject,templateBody">{{representative_name}}</button>
+      <button type="button" class="variable-chip" data-insert-variable="{{email}}" data-insert-targets="templateSubject,templateBody">{{email}}</button>
     </div>
+    <p class="muted mt-14">挿入先は、最後にカーソルを置いた件名または本文です。どちらにもカーソルがない場合は件名に挿入します。</p>
     <p class="muted mt-14">未定義の変数が残った場合、その宛先は <strong>要確認</strong> としてバッチに登録されます。</p>
   </section>
 </div>

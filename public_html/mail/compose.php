@@ -111,8 +111,8 @@ mail_render_page_header('メール作成', $user, 'compose.php');
           <div class="alert alert-warn">有効なテンプレートがありません。件名・本文を直接入力してください。</div>
         <?php endif; ?>
 
-        <label><span>件名 *</span><input type="text" name="custom_subject" id="composeSubject" placeholder="例: 【学生自治会】{{団体名}}へのご連絡" required></label>
-        <label><span>本文 *</span><textarea name="custom_body" id="composeBody" rows="16" placeholder="{{団体名}}&#10;{{代表者氏名}} 様&#10;&#10;本文を入力してください。" required></textarea></label>
+        <label><span>件名 *</span><input type="text" name="custom_subject" id="composeSubject" data-variable-insert-target placeholder="例: 【学生自治会】{{団体名}}へのご連絡" required></label>
+        <label><span>本文 *</span><textarea name="custom_body" id="composeBody" data-variable-insert-target rows="16" placeholder="{{団体名}}&#10;{{代表者氏名}} 様&#10;&#10;本文を入力してください。" required></textarea></label>
         <label><span>本文形式</span>
           <select name="custom_body_type" id="composeBodyType">
             <option value="plain">プレーンテキスト</option>
@@ -124,7 +124,13 @@ mail_render_page_header('メール作成', $user, 'compose.php');
       <aside class="compose-side">
         <section class="side-card">
           <h3>利用できる変数</h3>
-          <div class="variable-list vertical"><code>{{識別番号}}</code><code>{{団体名}}</code><code>{{代表者氏名}}</code><code>{{メールアドレス}}</code><code>{{区分}}</code></div>
+          <div class="variable-list vertical">
+            <button type="button" class="variable-chip" data-insert-variable="{{識別番号}}" data-insert-targets="composeSubject,composeBody">{{識別番号}}</button>
+            <button type="button" class="variable-chip" data-insert-variable="{{団体名}}" data-insert-targets="composeSubject,composeBody">{{団体名}}</button>
+            <button type="button" class="variable-chip" data-insert-variable="{{代表者氏名}}" data-insert-targets="composeSubject,composeBody">{{代表者氏名}}</button>
+            <button type="button" class="variable-chip" data-insert-variable="{{メールアドレス}}" data-insert-targets="composeSubject,composeBody">{{メールアドレス}}</button>
+            <button type="button" class="variable-chip" data-insert-variable="{{区分}}" data-insert-targets="composeSubject,composeBody">{{区分}}</button>
+          </div>
           <p class="muted">件名・本文内に記載すると、送信対象団体ごとの値に置換されます。</p>
         </section>
 
