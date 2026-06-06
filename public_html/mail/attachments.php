@@ -147,8 +147,8 @@ mail_render_page_header('添付ファイル', $user, 'attachments.php');
 <?php endif; ?>
 <section class="panel mt-18">
   <div class="panel-head"><h2>添付対応一覧</h2><span class="muted"><?php echo count($attachments); ?>件</span></div>
-  <div class="table-wrap">
-    <table>
+  <div class="table-wrap attachment-table-wrap">
+    <table class="attachment-table">
       <thead><tr><th>種別</th><th>識別番号</th><th>団体</th><th>ファイル名</th><th>資料種別</th><th>判定方法</th><th>状態</th><th>操作</th></tr></thead>
       <tbody>
         <?php if ($attachments === []): ?><tr><td colspan="8" class="empty">添付ファイルはまだ登録されていません。</td></tr><?php endif; ?>
@@ -161,7 +161,7 @@ mail_render_page_header('添付ファイル', $user, 'attachments.php');
             <td><?php echo mail_h((string)$att['attachment_type']); ?></td>
             <td><?php echo mail_h((string)$att['match_method']); ?> / <?php echo (int)$att['match_confidence']; ?>%</td>
             <td><span class="badge"><?php echo mail_h(mail_status_label((string)$att['status'])); ?></span></td>
-            <td class="action-cell">
+            <td class="action-cell attachment-action-cell">
               <?php if ((string)$att['status'] !== 'approved'): ?>
                 <form method="post" class="inline-form"><?php echo mail_auth_csrf_field(); ?><input type="hidden" name="action" value="approve"><input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>"><input type="hidden" name="attachment_id" value="<?php echo (int)$att['id']; ?>"><button type="submit" class="text-button"<?php echo mail_auth_has_permission($user, 'attachment.upload') ? '' : ' disabled'; ?>>確認済み</button></form>
               <?php endif; ?>
