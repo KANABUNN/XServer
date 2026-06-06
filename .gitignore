@@ -1,4 +1,5 @@
 /desktop.ini
+.vscode/
 .htaccess
 config.php
 config_test.php
