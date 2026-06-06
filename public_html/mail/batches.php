@@ -119,6 +119,9 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
             mail_require_permission_or_forbid($user, 'batch.edit');
             $batchId = (int)($_POST['batch_id'] ?? 0);
             $status = (string)($_POST['status'] ?? 'prepared');
+            if (!in_array($status, ['prepared', 'reviewing', 'approved', 'cancelled'], true)) {
+                throw new InvalidArgumentException('この画面から設定できない状態です。');
+            }
             mail_update_batch_status($mailPdo, $batchId, $status, $user);
             mail_flash_set('info', 'バッチ状態を更新しました。');
             mail_redirect('batches.php?batch_id=' . $batchId);

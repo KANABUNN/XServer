@@ -685,13 +685,21 @@ function mail_update_batch_status(PDO $pdo, int $batchId, string $status, ?array
     if (!in_array($status, $allowed, true)) {
         throw new InvalidArgumentException('不正なステータスです。');
     }
-    $stmt = $pdo->prepare('UPDATE mail_batches SET status = :status, approved_by_account_id = :approved_by, approved_at = :approved_at WHERE id = :id');
-    $stmt->execute([
-        ':status' => $status,
-        ':approved_by' => $status === 'approved' && $actor !== null ? (int)($actor['id'] ?? 0) : null,
-        ':approved_at' => $status === 'approved' ? date('Y-m-d H:i:s') : null,
-        ':id' => $batchId,
-    ]);
+    if ($status === 'approved') {
+        $stmt = $pdo->prepare('UPDATE mail_batches SET status = :status, approved_by_account_id = :approved_by, approved_at = :approved_at WHERE id = :id');
+        $stmt->execute([
+            ':status' => $status,
+            ':approved_by' => $actor !== null ? (int)($actor['id'] ?? 0) : null,
+            ':approved_at' => date('Y-m-d H:i:s'),
+            ':id' => $batchId,
+        ]);
+    } else {
+        $stmt = $pdo->prepare('UPDATE mail_batches SET status = :status WHERE id = :id');
+        $stmt->execute([
+            ':status' => $status,
+            ':id' => $batchId,
+        ]);
+    }
     mail_audit_log($pdo, $actor, 'mail.batch.status', 'mail_batch', (string)$batchId, ['status' => $status]);
 }
 
