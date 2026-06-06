@@ -119,9 +119,6 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
             mail_require_permission_or_forbid($user, 'batch.edit');
             $batchId = (int)($_POST['batch_id'] ?? 0);
             $status = (string)($_POST['status'] ?? 'prepared');
-            if (!in_array($status, ['prepared', 'reviewing', 'approved', 'cancelled'], true)) {
-                throw new InvalidArgumentException('この画面から設定できない状態です。');
-            }
             mail_update_batch_status($mailPdo, $batchId, $status, $user);
             mail_flash_set('info', 'バッチ状態を更新しました。');
             mail_redirect('batches.php?batch_id=' . $batchId);
@@ -309,7 +306,7 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
     <dl class="detail-list">
       <div><dt>件名</dt><dd id="previewSubject"></dd></div>
     </dl>
-    <pre class="mail-preview-body" id="previewBody"></pre>
+    <iframe class="mail-preview-frame" id="previewBodyFrame" sandbox=""></iframe>
   </div>
 </div>
 
@@ -318,12 +315,27 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
   const modal = document.getElementById('previewModal');
   const meta = document.getElementById('previewMeta');
   const subject = document.getElementById('previewSubject');
-  const body = document.getElementById('previewBody');
+  const bodyFrame = document.getElementById('previewBodyFrame');
+  function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch] || ch));
+  }
+  function looksLikeHtml(value) {
+    return /<\s*(p|div|br|span|strong|b|em|i|u|ul|ol|li|table|h[1-6]|blockquote|a)\b|<\s*\//i.test(value || '');
+  }
+  function plainToHtml(value) {
+    const text = String(value || '').replace(/\r\n|\r/g, '\n').trim();
+    if (!text) return '';
+    return text.split(/\n{2,}/).map(p => '<p>' + p.split('\n').map(escapeHtml).join('<br>') + '</p>').join('');
+  }
   document.querySelectorAll('[data-preview-open]').forEach(button => {
     button.addEventListener('click', function () {
       meta.textContent = `${button.dataset.previewOrg || ''} / ${button.dataset.previewTo || ''}`;
       subject.textContent = button.dataset.previewSubject || '';
-      body.textContent = button.dataset.previewBody || '';
+      const rawBody = button.dataset.previewBody || '';
+      const bodyHtml = looksLikeHtml(rawBody) ? rawBody : plainToHtml(rawBody);
+      if (bodyFrame) {
+        bodyFrame.srcdoc = '<!doctype html><html><head><meta charset="UTF-8"><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.75;color:#1b2430;margin:16px;} p{margin:0 0 1em;} table{border-collapse:collapse;} td,th{border:1px solid #d8e0ea;padding:6px 8px;}</style></head><body>' + bodyHtml + '</body></html>';
+      }
       modal.hidden = false;
     });
   });

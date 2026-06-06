@@ -29,8 +29,8 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
         $title = trim((string)($_POST['title'] ?? ''));
         $templateId = (int)($_POST['template_id'] ?? 0);
         $subject = trim((string)($_POST['custom_subject'] ?? ''));
-        $body = (string)($_POST['custom_body'] ?? '');
-        $bodyType = (string)($_POST['custom_body_type'] ?? 'plain');
+        $body = mail_admin_body_to_editor_html((string)($_POST['custom_body'] ?? ''), 'html');
+        $bodyType = 'html';
         $organizationIds = $_POST['organization_ids'] ?? [];
         if (!is_array($organizationIds)) {
             $organizationIds = [];
@@ -40,9 +40,6 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
             $template = mail_get_template($mailPdo, $templateId);
             if (!$template || (int)($template['is_active'] ?? 0) !== 1) {
                 throw new InvalidArgumentException('使用するテンプレートを選択し直してください。');
-            }
-            if (!in_array($bodyType, ['plain', 'html'], true)) {
-                $bodyType = (string)$template['body_type'];
             }
         } else {
             $templateId = null;
@@ -73,8 +70,8 @@ foreach ($templates as $tpl) {
         'id' => (int)$tpl['id'],
         'title' => (string)$tpl['title'],
         'subject_template' => (string)$tpl['subject_template'],
-        'body_template' => (string)$tpl['body_template'],
-        'body_type' => (string)$tpl['body_type'],
+        'body_template' => mail_admin_body_to_editor_html((string)$tpl['body_template'], (string)($tpl['body_type'] ?? 'html')),
+        'body_type' => 'html',
     ];
 }
 $templateJsonText = json_encode($templateJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR);
@@ -112,12 +109,26 @@ mail_render_page_header('メール作成', $user, 'compose.php');
         <?php endif; ?>
 
         <label><span>件名 *</span><input type="text" name="custom_subject" id="composeSubject" data-variable-insert-target placeholder="例: 【学生自治会】{{団体名}}へのご連絡" required></label>
-        <label><span>本文 *</span><textarea name="custom_body" id="composeBody" data-variable-insert-target rows="16" placeholder="{{団体名}}&#10;{{代表者氏名}} 様&#10;&#10;本文を入力してください。" required></textarea></label>
-        <label><span>本文形式</span>
-          <select name="custom_body_type" id="composeBodyType">
-            <option value="plain">プレーンテキスト</option>
-            <option value="html">HTML</option>
-          </select>
+        <input type="hidden" name="custom_body_type" value="html">
+        <label class="full"><span>本文 * <small class="muted">HTML形式で保存されます</small></span>
+          <textarea name="custom_body" id="composeBody" class="html-editor-source" data-html-editor-input required></textarea>
+          <div class="html-editor-wrap">
+            <div class="html-editor-toolbar" data-editor-toolbar="composeBodyEditor">
+              <button type="button" data-editor-command="bold"><strong>B</strong></button>
+              <button type="button" data-editor-command="italic"><em>I</em></button>
+              <button type="button" data-editor-command="underline"><u>U</u></button>
+              <button type="button" data-editor-command="insertUnorderedList">箇条書き</button>
+              <select data-editor-size title="文字サイズ">
+                <option value="3">標準</option>
+                <option value="2">小さめ</option>
+                <option value="4">大きめ</option>
+                <option value="5">見出し</option>
+              </select>
+              <label class="editor-color-picker">文字色 <input type="color" data-editor-color value="#1b2430"></label>
+              <button type="button" data-editor-command="removeFormat">書式解除</button>
+            </div>
+            <div id="composeBodyEditor" class="html-editor" contenteditable="true" data-variable-insert-target data-html-editor="composeBody" data-placeholder="本文を入力してください。"></div>
+          </div>
         </label>
       </div>
 
@@ -125,11 +136,11 @@ mail_render_page_header('メール作成', $user, 'compose.php');
         <section class="side-card">
           <h3>利用できる変数</h3>
           <div class="variable-list vertical">
-            <button type="button" class="variable-chip" data-insert-variable="{{識別番号}}" data-insert-targets="composeSubject,composeBody">{{識別番号}}</button>
-            <button type="button" class="variable-chip" data-insert-variable="{{団体名}}" data-insert-targets="composeSubject,composeBody">{{団体名}}</button>
-            <button type="button" class="variable-chip" data-insert-variable="{{代表者氏名}}" data-insert-targets="composeSubject,composeBody">{{代表者氏名}}</button>
-            <button type="button" class="variable-chip" data-insert-variable="{{メールアドレス}}" data-insert-targets="composeSubject,composeBody">{{メールアドレス}}</button>
-            <button type="button" class="variable-chip" data-insert-variable="{{区分}}" data-insert-targets="composeSubject,composeBody">{{区分}}</button>
+            <button type="button" class="variable-chip" data-insert-variable="{{識別番号}}" data-insert-targets="composeSubject,composeBodyEditor">{{識別番号}}</button>
+            <button type="button" class="variable-chip" data-insert-variable="{{団体名}}" data-insert-targets="composeSubject,composeBodyEditor">{{団体名}}</button>
+            <button type="button" class="variable-chip" data-insert-variable="{{代表者氏名}}" data-insert-targets="composeSubject,composeBodyEditor">{{代表者氏名}}</button>
+            <button type="button" class="variable-chip" data-insert-variable="{{メールアドレス}}" data-insert-targets="composeSubject,composeBodyEditor">{{メールアドレス}}</button>
+            <button type="button" class="variable-chip" data-insert-variable="{{区分}}" data-insert-targets="composeSubject,composeBodyEditor">{{区分}}</button>
           </div>
           <p class="muted">件名・本文内に記載すると、送信対象団体ごとの値に置換されます。</p>
         </section>
@@ -224,7 +235,7 @@ mail_render_page_header('メール作成', $user, 'compose.php');
   const templateSelect = document.getElementById('templateSelect');
   const subjectInput = document.getElementById('composeSubject');
   const bodyInput = document.getElementById('composeBody');
-  const bodyTypeInput = document.getElementById('composeBodyType');
+  const bodyEditor = document.getElementById('composeBodyEditor');
   const templateData = JSON.parse(document.getElementById('composeTemplateData')?.textContent || '[]');
   const templates = new Map(templateData.map(t => [String(t.id), t]));
 
@@ -235,7 +246,10 @@ mail_render_page_header('メール作成', $user, 'compose.php');
     }
     subjectInput.value = tpl.subject_template || '';
     bodyInput.value = tpl.body_template || '';
-    bodyTypeInput.value = tpl.body_type === 'html' ? 'html' : 'plain';
+    if (bodyEditor) {
+      bodyEditor.innerHTML = tpl.body_template || '';
+      bodyEditor.dispatchEvent(new Event('input', { bubbles: true }));
+    }
   });
 
   const modalButtons = document.querySelectorAll('[data-modal-open], [data-modal-close]');

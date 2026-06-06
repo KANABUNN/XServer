@@ -27,23 +27,140 @@
     activateView(initialHash);
   }
 
+  function normalizeEditorHtml(html) {
+    return String(html || '')
+      .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+      .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      .replace(/javascript:/gi, '');
+  }
+
+  function htmlToPlain(html) {
+    const div = document.createElement('div');
+    div.innerHTML = normalizeEditorHtml(html);
+    return (div.textContent || '').replace(/\u00a0/g, ' ').trim();
+  }
+
+  function syncEditorToInput(editor) {
+    const inputId = editor.dataset.htmlEditor;
+    const input = inputId ? document.getElementById(inputId) : null;
+    if (!input) return;
+    input.value = normalizeEditorHtml(editor.innerHTML);
+  }
+
+  function syncInputToEditor(input) {
+    const editor = Array.from(document.querySelectorAll('[data-html-editor]'))
+      .find(item => item.dataset.htmlEditor === input.id);
+    if (!editor) return;
+    editor.innerHTML = normalizeEditorHtml(input.value || '');
+  }
+
+  document.querySelectorAll('[data-html-editor]').forEach(editor => {
+    syncEditorToInput(editor);
+    editor.addEventListener('input', function () {
+      syncEditorToInput(editor);
+    });
+    editor.addEventListener('paste', function (event) {
+      const html = event.clipboardData?.getData('text/html') || '';
+      const text = event.clipboardData?.getData('text/plain') || '';
+      if (html) {
+        event.preventDefault();
+        document.execCommand('insertHTML', false, normalizeEditorHtml(html));
+      } else if (text) {
+        event.preventDefault();
+        document.execCommand('insertText', false, text);
+      }
+    });
+    const form = editor.closest('form');
+    form?.addEventListener('submit', function (event) {
+      syncEditorToInput(editor);
+      const plain = htmlToPlain(editor.innerHTML);
+      if (editor.hasAttribute('data-required') || document.getElementById(editor.dataset.htmlEditor || '')?.hasAttribute('required')) {
+        if (!plain) {
+          event.preventDefault();
+          editor.focus();
+          alert('本文を入力してください。');
+        }
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-html-editor-input]').forEach(input => {
+    syncInputToEditor(input);
+  });
+
+  function editorByToolbar(toolbar) {
+    const editorId = toolbar.dataset.editorToolbar;
+    return editorId ? document.getElementById(editorId) : null;
+  }
+
+  function runEditorCommand(editor, command, value) {
+    if (!editor) return;
+    editor.focus();
+    document.execCommand(command, false, value ?? null);
+    syncEditorToInput(editor);
+  }
+
+  document.querySelectorAll('.html-editor-toolbar').forEach(toolbar => {
+    toolbar.addEventListener('click', function (event) {
+      const button = event.target.closest('[data-editor-command]');
+      if (!button) return;
+      event.preventDefault();
+      runEditorCommand(editorByToolbar(toolbar), button.dataset.editorCommand || '', null);
+    });
+
+    toolbar.querySelectorAll('[data-editor-size]').forEach(select => {
+      select.addEventListener('change', function () {
+        runEditorCommand(editorByToolbar(toolbar), 'fontSize', select.value || '3');
+        select.value = select.querySelector('option[value="3"]') ? '3' : select.value;
+      });
+    });
+
+    toolbar.querySelectorAll('[data-editor-color]').forEach(input => {
+      input.addEventListener('input', function () {
+        runEditorCommand(editorByToolbar(toolbar), 'foreColor', input.value || '#1b2430');
+      });
+    });
+  });
 
   let lastVariableTarget = null;
   const variableTargets = Array.from(document.querySelectorAll('[data-variable-insert-target]'));
   variableTargets.forEach(target => {
-    target.addEventListener('focus', function () {
-      lastVariableTarget = target;
-    });
-    target.addEventListener('click', function () {
-      lastVariableTarget = target;
-    });
-    target.addEventListener('keyup', function () {
-      lastVariableTarget = target;
+    ['focus', 'click', 'keyup', 'mouseup'].forEach(type => {
+      target.addEventListener(type, function () {
+        lastVariableTarget = target;
+      });
     });
   });
 
+  function insertTextIntoEditable(target, text) {
+    target.focus();
+    const selection = window.getSelection();
+    if (!selection) return;
+    let range;
+    if (selection.rangeCount > 0 && target.contains(selection.anchorNode)) {
+      range = selection.getRangeAt(0);
+    } else {
+      range = document.createRange();
+      range.selectNodeContents(target);
+      range.collapse(false);
+    }
+    range.deleteContents();
+    const node = document.createTextNode(text);
+    range.insertNode(node);
+    range.setStartAfter(node);
+    range.setEndAfter(node);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    target.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
   function insertTextAtCursor(target, text) {
     if (!target) return;
+    if (target.isContentEditable) {
+      insertTextIntoEditable(target, text);
+      return;
+    }
     const value = target.value || '';
     const start = typeof target.selectionStart === 'number' ? target.selectionStart : value.length;
     const end = typeof target.selectionEnd === 'number' ? target.selectionEnd : value.length;

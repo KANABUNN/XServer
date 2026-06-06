@@ -84,6 +84,57 @@ function mail_nav_items(array $user = []): array
     return $items;
 }
 
+
+function mail_admin_html_looks_like_markup(string $value): bool
+{
+    return preg_match('/<\s*(p|div|br|span|strong|b|em|i|u|ul|ol|li|table|thead|tbody|tr|td|th|h[1-6]|blockquote|a|img|hr)\b|<\s*\/\s*(p|div|span|strong|b|em|i|u|ul|ol|li|table|thead|tbody|tr|td|th|h[1-6]|blockquote|a)\s*>/i', $value) === 1;
+}
+
+function mail_admin_plain_text_to_html(string $text): string
+{
+    $text = str_replace(["\r\n", "\r"], "\n", $text);
+    $text = trim($text);
+    if ($text === '') {
+        return '';
+    }
+
+    $paragraphs = preg_split('/\n{2,}/', $text) ?: [];
+    $html = [];
+    foreach ($paragraphs as $paragraph) {
+        $paragraph = trim($paragraph, "\n");
+        if ($paragraph === '') {
+            continue;
+        }
+        $escapedLines = array_map(static function (string $line): string {
+            return mail_h($line);
+        }, explode("\n", $paragraph));
+        $html[] = '<p>' . implode('<br>', $escapedLines) . '</p>';
+    }
+    return implode("\n", $html);
+}
+
+function mail_admin_body_to_editor_html(string $body, ?string $bodyType = null): string
+{
+    $body = trim($body);
+    if ($body === '') {
+        return '';
+    }
+    if (mail_admin_html_looks_like_markup($body)) {
+        return $body;
+    }
+    return mail_admin_plain_text_to_html($body);
+}
+
+
+function mail_admin_sanitize_editor_html(string $html): string
+{
+    $html = preg_replace('/<\s*(script|style|iframe|object|embed|form|input|button|meta|link)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/i', '', $html) ?? $html;
+    $html = preg_replace('/<\s*(script|style|iframe|object|embed|form|input|button|meta|link)\b[^>]*\/?>/i', '', $html) ?? $html;
+    $html = preg_replace('/\s+on[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $html) ?? $html;
+    $html = preg_replace('/javascript\s*:/i', '', $html) ?? $html;
+    return $html;
+}
+
 function mail_render_page_header(string $title, array $user, string $activeHref): void
 {
     $csrfToken = mail_auth_get_csrf_token();

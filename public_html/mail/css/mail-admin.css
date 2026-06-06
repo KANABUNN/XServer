@@ -315,3 +315,138 @@ textarea { resize: vertical; line-height: 1.65; }
   h1 { font-size: 25px; }
   .summary-card strong { font-size: 28px; }
 }
+
+/* HTML body editor */
+.html-editor-source {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.html-editor-wrap {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+.html-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  padding: 9px;
+  border-bottom: 1px solid var(--line);
+  background: #f8fafc;
+}
+.html-editor-toolbar button,
+.html-editor-toolbar select,
+.editor-color-picker {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  padding: 7px 9px;
+  min-height: 36px;
+}
+.html-editor-toolbar button {
+  cursor: pointer;
+}
+.editor-color-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.editor-color-picker input[type="color"] {
+  width: 32px;
+  height: 24px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.html-editor {
+  min-height: 320px;
+  padding: 14px;
+  line-height: 1.75;
+  outline: none;
+  overflow: auto;
+}
+.html-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+}
+.html-editor p { margin: 0 0 1em; }
+.html-editor ul,
+.html-editor ol { margin-top: 0; padding-left: 1.5em; }
+.mail-preview-frame {
+  width: 100%;
+  min-height: 360px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+@media (max-width: 760px) {
+  .html-editor-toolbar {
+    align-items: stretch;
+  }
+  .html-editor-toolbar button,
+  .html-editor-toolbar select,
+  .editor-color-picker {
+    flex: 1 1 auto;
+  }
+}
+
+/* text selection control */
+body,
+.admin-shell,
+.sidebar,
+.content-shell,
+.panel,
+.summary-card,
+.alert,
+.modal,
+.mail-dialog {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+select,
+button,
+[contenteditable="true"],
+.html-editor,
+.html-editor *,
+.html-editor-source,
+.mail-preview-frame,
+code,
+pre,
+.preview-snippet {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+button,
+a,
+.sidebar-link,
+.link-button,
+.text-button,
+.variable-chip,
+.html-editor-toolbar button,
+.choice-card,
+.recipient-mode-tab,
+.modal-close {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}

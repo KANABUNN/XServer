@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/_init.php';
 require_once __DIR__ . '/../../apps/mail_core/gmail_client.php';
+require_once __DIR__ . '/../../apps/mail_core/gmail_html_client.php';
 
 [$user, $mailPdo, $dbError] = mail_app_init();
 [$gmailReady, $gmailMissing] = mail_gmail_is_configured();
@@ -16,20 +17,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dbError === '' && $mailPdo instanc
         $action = (string)($_POST['action'] ?? '');
 
         if ($action === 'create_batch_drafts') {
-            mail_require_permission_or_forbid($user, 'draft.create');
+            mail_require_permission_or_forbid($user, 'send.execute');
             if ((string)($_POST['confirm_submit'] ?? '') !== '1') {
                 throw new RuntimeException('Gmail下書き作成の確認が完了していません。');
             }
             $limit = max(1, min(100, (int)$maxDraftsPerRun));
-            $result = mail_gmail_create_drafts_batch($mailPdo, $selectedBatchId, $user, $limit);
+            $result = mail_gmail_html_create_drafts_batch($mailPdo, $selectedBatchId, $user, $limit);
             mail_flash_set('info', 'Gmail下書き作成を実行しました。成功: ' . $result['success'] . '件 / 失敗: ' . $result['failed'] . '件 / 残り: ' . $result['remaining'] . '件');
             mail_redirect('drafts.php?batch_id=' . $selectedBatchId);
         }
 
         if ($action === 'create_target_draft') {
-            mail_require_permission_or_forbid($user, 'draft.create');
+            mail_require_permission_or_forbid($user, 'send.execute');
             $targetId = (int)($_POST['target_id'] ?? 0);
-            $result = mail_gmail_create_draft_target($mailPdo, $targetId, $user);
+            $result = mail_gmail_html_create_draft_target($mailPdo, $targetId, $user);
             mail_flash_set('info', 'Gmail下書きを作成しました。対象ID: ' . $targetId . ' / Draft ID: ' . $result['draft_id']);
             mail_redirect('drafts.php?batch_id=' . $selectedBatchId);
         }
@@ -133,7 +134,7 @@ mail_render_page_header('Gmail下書き作成', $user, 'drafts.php');
     <input type="hidden" name="confirm_submit" value="1">
     <h3>一括Gmail下書き作成</h3>
     <p class="muted">宛先・件名・本文・添付を含むメールをGmailの下書きフォルダに作成します。ここでは送信しません。</p>
-    <button type="submit" class="primary"<?php echo ($gmailReady && mail_auth_has_permission($user, 'draft.create') && in_array((string)$selectedBatch['status'], ['approved','draft_created'], true) && $pendingAttachmentCount === 0 && $draftableCount > 0) ? '' : ' disabled'; ?>>Gmail下書きを一括作成</button>
+    <button type="submit" class="primary"<?php echo ($gmailReady && mail_auth_has_permission($user, 'send.execute') && in_array((string)$selectedBatch['status'], ['approved','draft_created'], true) && $pendingAttachmentCount === 0 && $draftableCount > 0) ? '' : ' disabled'; ?>>Gmail下書きを一括作成</button>
   </form>
 </section>
 
@@ -145,7 +146,7 @@ mail_render_page_header('Gmail下書き作成', $user, 'drafts.php');
       <tbody>
         <?php if ($targets === []): ?><tr><td colspan="7" class="empty">対象メールはありません。</td></tr><?php endif; ?>
         <?php foreach ($targets as $target): ?>
-          <?php $canDraft = $gmailReady && mail_auth_has_permission($user, 'draft.create') && in_array((string)$selectedBatch['status'], ['approved','draft_created'], true) && $pendingAttachmentCount === 0 && in_array((string)$target['status'], ['ready','failed'], true) && trim((string)($target['graph_message_id'] ?? '')) === ''; ?>
+          <?php $canDraft = $gmailReady && mail_auth_has_permission($user, 'send.execute') && in_array((string)$selectedBatch['status'], ['approved','draft_created'], true) && $pendingAttachmentCount === 0 && in_array((string)$target['status'], ['ready','failed'], true) && trim((string)($target['graph_message_id'] ?? '')) === ''; ?>
           <tr>
             <td><?php echo (int)$target['id']; ?></td>
             <td><code><?php echo mail_h((string)$target['identifier']); ?></code></td>
