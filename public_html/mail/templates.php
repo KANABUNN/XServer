@@ -43,7 +43,7 @@ $form = $editTemplate ?: [
     'template_key' => '',
     'title' => '',
     'subject_template' => '【学生自治会】{{団体名}}への資料送付について',
-    'body_template' => '-----------------------------------------------<br>福岡工業大学 学生自治会 総合管理事務局<br>sogokanri@bene.fit.ac.jp<br>内線 2472番<br>-----------------------------------------------',
+    'body_template' => '<p>{{団体名}}<br>{{代表者氏名}} 様</p><p>平素よりお世話になっております。<br>学生自治会です。</p><p>資料を添付いたしましたので、ご確認ください。</p><p>識別番号：{{識別番号}}</p><p>よろしくお願いいたします。</p>',
     'body_type' => 'html',
     'variables_json' => '',
     'is_active' => 1,
@@ -97,7 +97,7 @@ mail_render_page_header('テンプレート', $user, 'templates.php');
       </label>
       <div class="form-actions full">
         <button type="submit" class="primary"<?php echo mail_auth_has_permission($user, 'template.edit') ? '' : ' disabled'; ?>>保存</button>
-        <?php if ($editTemplate): ?><a href="templates.php" class="secondary link-button">新規入力へ戻る</a><?php endif; ?>
+        <?php if ($editTemplate): ?><button type="button" class="secondary link-button" data-nav-href="templates.php">新規入力へ戻る</button><?php endif; ?>
       </div>
     </form>
   </section>
@@ -143,7 +143,7 @@ mail_render_page_header('テンプレート', $user, 'templates.php');
             <td><?php echo mail_h(implode(', ', array_map('strval', $varInfo))); ?></td>
             <td><span class="badge"><?php echo mail_h(mail_bool_label($tpl['is_active'])); ?></span></td>
             <td class="action-cell">
-              <a href="templates.php?edit=<?php echo (int)$tpl['id']; ?>" class="text-link">編集</a>
+              <button type="button" class="text-link" data-nav-href="templates.php?edit=<?php echo (int)$tpl['id']; ?>">編集</button>
               <form method="post" class="inline-form">
                 <?php echo mail_auth_csrf_field(); ?>
                 <input type="hidden" name="action" value="toggle">

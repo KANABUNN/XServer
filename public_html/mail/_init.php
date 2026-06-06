@@ -157,7 +157,7 @@ function mail_render_page_header(string $title, array $user, string $activeHref)
       </div>
       <nav class="sidebar-nav" aria-label="管理機能">
         <?php foreach (mail_nav_items($user) as $item): ?>
-          <a class="sidebar-link <?php echo $activeHref === $item['href'] ? 'is-active' : ''; ?>" href="<?php echo mail_h($item['href']); ?>"><?php echo mail_h($item['label']); ?></a>
+          <button type="button" class="sidebar-link <?php echo $activeHref === $item['href'] ? 'is-active' : ''; ?>" data-sidebar-href="<?php echo mail_h($item['href']); ?>" draggable="false"><?php echo mail_h($item['label']); ?></button>
         <?php endforeach; ?>
       </nav>
       <div class="sidebar-user">

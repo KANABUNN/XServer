@@ -168,7 +168,7 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
     <h1>送信バッチ</h1>
     <p class="lead">作成済みの送信バッチを確認し、対象別プレビュー・添付確認・状態更新を行います。</p>
   </div>
-  <div class="head-actions"><a class="link-button primary" href="compose.php">新規メール作成</a></div>
+  <div class="head-actions"><button type="button" class="link-button primary" data-nav-href="compose.php">新規メール作成</button></div>
 </header>
 <?php mail_render_db_error($dbError); ?>
 
@@ -184,7 +184,7 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
           <?php foreach ($batches as $batch): ?>
             <tr class="<?php echo (int)$batch['id'] === $selectedBatchId ? 'is-selected-row' : ''; ?>">
               <td><?php echo (int)$batch['id']; ?></td>
-              <td><a href="batches.php?batch_id=<?php echo (int)$batch['id']; ?>"><?php echo mail_h((string)$batch['title']); ?></a></td>
+              <td><button type="button" class="text-link" data-nav-href="batches.php?batch_id=<?php echo (int)$batch['id']; ?>"><?php echo mail_h((string)$batch['title']); ?></button></td>
               <td><span class="badge"><?php echo mail_h(mail_status_label((string)$batch['status'])); ?></span></td>
               <td><?php echo (int)$batch['target_count']; ?></td>
               <td><?php echo mail_h(mail_batch_creator_label($batch, $creatorLabels)); ?></td>
@@ -220,8 +220,8 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
         <button type="submit" class="secondary"<?php echo mail_auth_has_permission($user, 'batch.edit') ? '' : ' disabled'; ?>>状態更新</button>
       </form>
       <div class="form-actions mt-14">
-        <a class="link-button secondary" href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付を登録・確認</a>
-        <a class="link-button secondary" href="drafts.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">Gmail下書き作成</a>
+        <button type="button" class="link-button secondary" data-nav-href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付を登録・確認</button>
+        <button type="button" class="link-button secondary" data-nav-href="drafts.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">Gmail下書き作成</button>
       </div>
 
       <?php $canDeleteBatch = mail_auth_has_permission($user, 'batch.edit') && !in_array((string)$selectedBatch['status'], ['draft_created', 'sent'], true); ?>
@@ -272,7 +272,7 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
 </section>
 
 <section class="panel mt-18">
-  <div class="panel-head"><h2>添付対応状況</h2><a href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>" class="text-link">添付を登録する</a></div>
+  <div class="panel-head"><h2>添付対応状況</h2><button type="button" class="text-link" data-nav-href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付を登録する</button></div>
   <div class="table-wrap">
     <table>
       <thead><tr><th>種別</th><th>識別番号</th><th>団体</th><th>ファイル名</th><th>資料種別</th><th>判定</th><th>状態</th></tr></thead>

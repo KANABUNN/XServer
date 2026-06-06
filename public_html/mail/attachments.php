@@ -96,7 +96,7 @@ mail_render_page_header('添付ファイル', $user, 'attachments.php');
           <p><code>識別番号__資料種別__団体名.pdf</code> 例: <code>C001__代表者確認書__数学研究会.pdf</code></p>
           <p>ZIP内に <code>manifest.csv</code> を入れる場合は、<code>identifier,attachment_type,filename</code> の列を使用できます。</p>
           <div class="template-downloads mt-14">
-            <a class="link-button secondary" href="./template_file/attachment_manifest_template.csv" download>manifest.csvテンプレートをダウンロード</a>
+            <button type="button" class="link-button secondary" data-download-href="./template_file/attachment_manifest_template.csv" data-download-name="attachment_manifest_template.csv">manifest.csvテンプレートをダウンロード</button>
           </div>
         </div>
         <div class="form-actions full"><button type="submit" class="primary"<?php echo mail_auth_has_permission($user, 'attachment.upload') ? '' : ' disabled'; ?>>アップロードして対応付け</button></div>

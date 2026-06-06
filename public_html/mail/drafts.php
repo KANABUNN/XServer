@@ -80,7 +80,7 @@ mail_render_page_header('Gmail下書き作成', $user, 'drafts.php');
     <h1>Gmail下書き作成</h1>
     <p class="lead">承認済みバッチをGoogle Workspace Gmail API経由で、送信用アカウントのGmail下書きへ作成します。送信はGmail側で最終確認後に行います。</p>
   </div>
-  <div class="head-actions"><a class="link-button secondary" href="settings.php">送信設定を確認</a></div>
+  <div class="head-actions"><button type="button" class="link-button secondary" data-nav-href="settings.php">送信設定を確認</button></div>
 </header>
 <?php mail_render_db_error($dbError); ?>
 
@@ -124,7 +124,7 @@ mail_render_page_header('Gmail下書き作成', $user, 'drafts.php');
   <?php elseif (!in_array((string)$selectedBatch['status'], ['approved','draft_created'], true) && $draftableCount > 0): ?>
     <div class="alert alert-warn">Gmail下書き作成には、バッチ状態を「確認済み」にする必要があります。送信バッチ画面で確認済みに変更してください。</div>
   <?php elseif ($pendingAttachmentCount > 0): ?>
-    <div class="alert alert-warn">要確認・未対応の添付が残っています。<a class="text-link" href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付ファイル画面</a>で確定してください。</div>
+    <div class="alert alert-warn">要確認・未対応の添付が残っています。<button type="button" class="inline-nav-button" data-nav-href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付ファイル画面</button>で確定してください。</div>
   <?php endif; ?>
 
   <form method="post" class="panel-subform danger-zone mt-14" id="bulkDraftForm" data-draft-count="<?php echo (int)$draftableCount; ?>" data-max-count="<?php echo (int)$maxDraftsPerRun; ?>">

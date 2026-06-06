@@ -29,7 +29,7 @@ mail_render_page_header('ダッシュボード', $user, 'index.php');
     <p class="lead">団体別の差し込みメール、個別添付、Gmail下書き作成を管理する画面です。</p>
   </div>
   <div class="head-actions">
-    <a class="secondary link-button" href="./api/health.php" target="_blank" rel="noopener">接続確認</a>
+    <button type="button" class="secondary link-button" data-nav-href="./api/health.php" data-nav-target="_blank">接続確認</button>
   </div>
 </header>
 
@@ -52,7 +52,7 @@ mail_render_page_header('ダッシュボード', $user, 'index.php');
   <section class="panel">
     <div class="panel-head">
       <h2>最近の送信バッチ</h2>
-      <a href="batches.php" class="text-link">一覧へ</a>
+      <button type="button" class="text-link" data-nav-href="batches.php">一覧へ</button>
     </div>
     <?php if ($recentBatches === []): ?>
       <p class="empty">まだ送信バッチはありません。</p>
@@ -64,7 +64,7 @@ mail_render_page_header('ダッシュボード', $user, 'index.php');
             <?php foreach ($recentBatches as $batch): ?>
               <tr>
                 <td><?php echo (int)$batch['id']; ?></td>
-                <td><a href="batches.php?batch_id=<?php echo (int)$batch['id']; ?>"><?php echo mail_h((string)$batch['title']); ?></a></td>
+                <td><button type="button" class="text-link" data-nav-href="batches.php?batch_id=<?php echo (int)$batch['id']; ?>"><?php echo mail_h((string)$batch['title']); ?></button></td>
                 <td><span class="badge"><?php echo mail_h(mail_status_label((string)$batch['status'])); ?></span></td>
                 <td><?php echo (int)$batch['target_count']; ?></td>
                 <td>共通 <?php echo (int)$batch['common_attachment_count']; ?> / 個別 <?php echo (int)$batch['individual_attachment_count']; ?></td>
@@ -80,7 +80,7 @@ mail_render_page_header('ダッシュボード', $user, 'index.php');
   <section class="panel">
     <div class="panel-head">
       <h2>最近の添付アップロード</h2>
-      <a href="attachments.php" class="text-link">一覧へ</a>
+      <button type="button" class="text-link" data-nav-href="attachments.php">一覧へ</button>
     </div>
     <?php if ($recentUploads === []): ?>
       <p class="empty">まだアップロード履歴はありません。</p>
@@ -109,11 +109,11 @@ mail_render_page_header('ダッシュボード', $user, 'index.php');
 <section class="panel mt-18">
   <h2>次の操作</h2>
   <ol class="flow-list">
-    <li><a href="organizations.php">団体データ</a>でCSV取込または手入力を行う。</li>
-    <li><a href="templates.php">テンプレート</a>で件名・本文と変数を作る。</li>
-    <li><a href="compose.php">メール作成</a>でテンプレートまたは直接入力の本文を選び、送信対象をチェックボックスで指定する。</li>
-    <li><a href="attachments.php">添付ファイル</a>で共通添付・個別添付を一括登録する。</li>
-    <li><a href="drafts.php">Gmail下書き</a>でGmail API接続確認後、承認済みバッチを下書き化する。</li>
+    <li><button type="button" class="inline-nav-button" data-nav-href="organizations.php">団体データ</button>でCSV取込または手入力を行う。</li>
+    <li><button type="button" class="inline-nav-button" data-nav-href="templates.php">テンプレート</button>で件名・本文と変数を作る。</li>
+    <li><button type="button" class="inline-nav-button" data-nav-href="compose.php">メール作成</button>でテンプレートまたは直接入力の本文を選び、送信対象を指定する。</li>
+    <li><button type="button" class="inline-nav-button" data-nav-href="attachments.php">添付ファイル</button>で共通添付・個別添付を一括登録する。</li>
+    <li><button type="button" class="inline-nav-button" data-nav-href="drafts.php">Gmail下書き</button>で承認済みバッチを下書き化する。</li>
   </ol>
 </section>
 <?php

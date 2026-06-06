@@ -83,7 +83,7 @@ mail_render_page_header('メール作成', $user, 'compose.php');
     <h1>メール作成</h1>
     <p class="lead">テンプレートを下敷きに編集するか、直接入力した件名・本文を、選択した団体へ差し込み展開します。ここではまだ送信せず、送信バッチを作成します。</p>
   </div>
-  <div class="head-actions"><a class="link-button secondary" href="templates.php">テンプレート管理</a></div>
+  <div class="head-actions"><button type="button" class="link-button secondary" data-nav-href="templates.php">テンプレート管理</button></div>
 </header>
 <?php mail_render_db_error($dbError); ?>
 
@@ -156,7 +156,7 @@ mail_render_page_header('メール作成', $user, 'compose.php');
 
     <div class="form-actions">
       <button type="submit" class="primary"<?php echo mail_auth_has_permission($user, 'batch.edit') ? '' : ' disabled'; ?>>送信バッチを作成</button>
-      <a class="link-button secondary" href="batches.php">既存バッチを見る</a>
+      <button type="button" class="link-button secondary" data-nav-href="batches.php">既存バッチを見る</button>
     </div>
 
     <div class="modal-backdrop" id="recipientModal" hidden>

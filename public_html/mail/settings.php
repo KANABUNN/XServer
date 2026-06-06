@@ -40,7 +40,7 @@ mail_render_page_header('送信設定', $user, 'settings.php');
     <h1>送信設定</h1>
     <p class="lead">Gmail APIによる下書き作成設定を確認する画面です。設定値そのものは非公開領域の <code>config.local.php</code> で管理します。</p>
   </div>
-  <div class="head-actions"><a class="link-button secondary" href="drafts.php">Gmail下書き画面へ</a></div>
+  <div class="head-actions"><button type="button" class="link-button secondary" data-nav-href="drafts.php">Gmail下書き画面へ</button></div>
 </header>
 <?php mail_render_db_error($dbError); ?>
 <section class="panel">

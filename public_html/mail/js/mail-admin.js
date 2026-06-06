@@ -1,6 +1,68 @@
 (function () {
   'use strict';
 
+  const sidebar = document.querySelector('.sidebar');
+  const sidebarButtons = Array.from(document.querySelectorAll('[data-sidebar-href]'));
+
+
+  function navigateFromButton(button) {
+    const href = button.dataset.navHref || button.dataset.sidebarHref || '';
+    if (!href) return;
+    const target = button.dataset.navTarget || '';
+    if (target === '_blank') {
+      window.open(href, '_blank', 'noopener');
+      return;
+    }
+    window.location.href = href;
+  }
+
+  document.querySelectorAll('[data-nav-href]').forEach(button => {
+    button.setAttribute('draggable', 'false');
+    button.addEventListener('click', function () {
+      navigateFromButton(button);
+    });
+    button.addEventListener('dragstart', function (event) {
+      event.preventDefault();
+    });
+  });
+
+  document.querySelectorAll('[data-download-href]').forEach(button => {
+    button.setAttribute('draggable', 'false');
+    button.addEventListener('click', function () {
+      const href = button.dataset.downloadHref || '';
+      if (!href) return;
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = button.dataset.downloadName || '';
+      link.rel = 'noopener';
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    });
+    button.addEventListener('dragstart', function (event) {
+      event.preventDefault();
+    });
+  });
+
+  sidebarButtons.forEach(button => {
+    button.setAttribute('draggable', 'false');
+    button.addEventListener('click', function () {
+      navigateFromButton(button);
+    });
+    button.addEventListener('dragstart', function (event) {
+      event.preventDefault();
+    });
+  });
+
+  if (sidebar) {
+    ['dragstart', 'dragover', 'drop'].forEach(type => {
+      sidebar.addEventListener(type, function (event) {
+        event.preventDefault();
+      });
+    });
+  }
+
   const links = Array.from(document.querySelectorAll('[data-view-target]'));
   const views = Array.from(document.querySelectorAll('.content-view'));
 

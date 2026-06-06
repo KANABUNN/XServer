@@ -28,6 +28,7 @@ body {
 button, input, select, textarea { font: inherit; }
 code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
 a { color: var(--accent); }
+button.link-button, button.text-link, button.inline-nav-button { font: inherit; }
 
 .admin-shell { min-height: 100vh; display: flex; }
 .sidebar { width: 280px; flex: 0 0 280px; background: #172033; color: #fff; display: flex; flex-direction: column; padding: 22px 18px; gap: 20px; }
@@ -35,8 +36,17 @@ a { color: var(--accent); }
 .sidebar-brand p { margin: 6px 0 0; color: rgba(255,255,255,.72); line-height: 1.6; }
 .brand-kicker { color: #93c5fd !important; font-weight: 700; letter-spacing: .04em; }
 .sidebar-nav { display: grid; gap: 8px; }
-.sidebar-link { display: block; width: 100%; text-align: left; border: 1px solid transparent; border-radius: 12px; padding: 12px 13px; background: transparent; color: rgba(255,255,255,.82); cursor: pointer; text-decoration: none; }
+.sidebar-link { display: block; width: 100%; text-align: left; border: 1px solid transparent; border-radius: 12px; padding: 12px 13px; background: transparent; color: rgba(255,255,255,.82); cursor: pointer; text-decoration: none; -webkit-user-drag: none; user-drag: none; touch-action: manipulation; }
 .sidebar-link:hover, .sidebar-link.is-active { background: rgba(255,255,255,.10); color: #fff; border-color: rgba(255,255,255,.10); }
+
+.sidebar, .sidebar * {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+.sidebar-nav, .sidebar-link {
+  user-select: none;
+  -webkit-user-select: none;
+}
 .sidebar-user { margin-top: auto; display: grid; gap: 10px; }
 .sidebar-user-card { border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 12px; background: rgba(255,255,255,.07); }
 .sidebar-user-card strong { display: block; }
@@ -95,10 +105,12 @@ th { color: var(--muted); font-size: 13px; font-weight: 600; background: #f8fafc
 .secondary { background: #64748b; color: #fff; }
 .danger { background: var(--danger); color: #fff; }
 .primary:disabled, .secondary:disabled, .text-button:disabled, .danger:disabled { opacity: .55; cursor: not-allowed; }
-.link-button { display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; padding: 10px 14px; text-decoration: none; color: #fff; }
-.link-button.primary { display: inline-block; text-decoration: none; background: var(--accent); color: #fff; border-radius: 10px; padding: 10px 14px; font-weight: 700; }
-.text-link { color: var(--accent); text-decoration: none; font-weight: 600; }
+.link-button { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 10px; padding: 10px 14px; text-decoration: none; color: #fff; cursor: pointer; }
+.link-button.primary { display: inline-flex; text-decoration: none; background: var(--accent); color: #fff; border-radius: 10px; padding: 10px 14px; font-weight: 700; }
+.text-link { border: 0; background: transparent; color: var(--accent); text-decoration: none; font-weight: 600; padding: 0; cursor: pointer; text-align: left; }
 .text-link:hover { text-decoration: underline; }
+.inline-nav-button { border: 0; background: transparent; color: var(--accent); padding: 0; cursor: pointer; font-weight: 600; }
+.inline-nav-button:hover { text-decoration: underline; }
 .text-button { background: transparent; color: var(--accent); padding: 2px 4px; }
 .danger-text { color: var(--danger) !important; }
 .mt-14 { margin-top: 14px; }
