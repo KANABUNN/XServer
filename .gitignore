@@ -10,3 +10,4 @@ includes.zip
 favicon.ico
 *.patch
 config.local.php
+google-service-account.json
