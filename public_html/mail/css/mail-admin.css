@@ -214,6 +214,79 @@ textarea { resize: vertical; line-height: 1.65; }
 .recipient-card.is-disabled { opacity: .64; background: #fff8e1; }
 .mail-preview-body { margin: 14px 0 0; white-space: pre-wrap; line-height: 1.7; background: #f8fafc; border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
 
+
+/* attachment list table: avoid right-side clipping on dense rows */
+.attachment-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.attachment-table {
+  min-width: 920px;
+  table-layout: fixed;
+}
+.attachment-table th,
+.attachment-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.attachment-table th:nth-child(1),
+.attachment-table td:nth-child(1) { width: 64px; }
+.attachment-table th:nth-child(2),
+.attachment-table td:nth-child(2) { width: 96px; }
+.attachment-table th:nth-child(3),
+.attachment-table td:nth-child(3) { width: 150px; }
+.attachment-table th:nth-child(4),
+.attachment-table td:nth-child(4) { width: 220px; }
+.attachment-table th:nth-child(5),
+.attachment-table td:nth-child(5) { width: 120px; }
+.attachment-table th:nth-child(6),
+.attachment-table td:nth-child(6) { width: 110px; }
+.attachment-table th:nth-child(7),
+.attachment-table td:nth-child(7) { width: 96px; }
+.attachment-table th:nth-child(8),
+.attachment-table td:nth-child(8) { width: 210px; }
+.attachment-action-cell {
+  white-space: normal;
+}
+.attachment-action-cell .inline-form {
+  display: block;
+  margin: 0 0 7px;
+}
+.attachment-action-cell .text-button {
+  line-height: 1.4;
+}
+.attachment-action-cell .reassign-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  margin-top: 2px;
+}
+.attachment-action-cell .reassign-form select {
+  min-width: 0;
+}
+@media (max-width: 860px) {
+  .attachment-table {
+    min-width: 760px;
+    font-size: 13px;
+  }
+  .attachment-table th,
+  .attachment-table td {
+    padding: 8px 7px;
+  }
+  .attachment-table th:nth-child(3),
+  .attachment-table td:nth-child(3) { width: 120px; }
+  .attachment-table th:nth-child(4),
+  .attachment-table td:nth-child(4) { width: 170px; }
+  .attachment-table th:nth-child(8),
+  .attachment-table td:nth-child(8) { width: 170px; }
+  .attachment-action-cell .reassign-form {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1100px) {
   .two-column-grid, .two-column-grid.wide-left, .batch-grid, .compose-layout, .draft-work-grid { grid-template-columns: 1fr; }
   .compose-side { position: static; }
