@@ -101,6 +101,9 @@ mail_render_page_header('団体データ', $user, 'organizations.php');
     <div class="panel-head"><h2>CSV取込</h2><span class="muted">追加・更新に対応</span></div>
     <p class="muted">ヘッダー例: <code>identifier,name,representative_name,email,category,notes</code></p>
     <p class="muted">日本語ヘッダーでは <code>識別番号,団体名,代表者氏名,メールアドレス,区分,備考</code> も利用できます。</p>
+    <div class="template-downloads mt-14">
+      <a class="link-button secondary" href="./template_file/organizations_template.csv" download>団体CSVテンプレートをダウンロード</a>
+    </div>
     <form method="post" enctype="multipart/form-data" class="stack-form mt-14">
       <?php echo mail_auth_csrf_field(); ?>
       <input type="hidden" name="action" value="import_csv">

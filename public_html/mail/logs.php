@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/_init.php';
 [$user, $mailPdo, $dbError] = mail_app_init();
+mail_require_permission_or_forbid($user, 'settings.manage');
+
 $logs = [];
 if ($mailPdo instanceof PDO && $dbError === '') {
     $logs = mail_list_audit_logs($mailPdo, 120);
 }
-mail_render_page_header('ログ', $user, 'logs.php');
+mail_render_page_header('操作ログ', $user, 'logs.php');
 ?>
 <header class="page-head">
   <div>
-    <h1>ログ</h1>
+    <h1>操作ログ</h1>
     <p class="lead">mail.fit-sc.jp 内の主要操作ログです。共通アカウント側のログとは別に、メール管理単位で保存します。</p>
   </div>
 </header>

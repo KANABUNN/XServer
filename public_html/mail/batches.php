@@ -6,6 +6,51 @@ require_once __DIR__ . '/_init.php';
 [$user, $mailPdo, $dbError] = mail_app_init();
 $selectedBatchId = (int)($_GET['batch_id'] ?? 0);
 
+function mail_lookup_account_labels_for_batches(array $batches): array
+{
+    $ids = [];
+    foreach ($batches as $batch) {
+        $id = (int)($batch['created_by_account_id'] ?? 0);
+        if ($id > 0) {
+            $ids[$id] = $id;
+        }
+    }
+    if ($ids === []) {
+        return [];
+    }
+
+    try {
+        $accountPdo = mail_pdo('account');
+        $placeholders = [];
+        $params = [];
+        foreach (array_values($ids) as $i => $id) {
+            $key = ':id_' . $i;
+            $placeholders[] = $key;
+            $params[$key] = $id;
+        }
+        $stmt = $accountPdo->prepare('SELECT id, login_id, display_name FROM shared_accounts WHERE id IN (' . implode(',', $placeholders) . ')');
+        $stmt->execute($params);
+        $labels = [];
+        foreach ($stmt->fetchAll() ?: [] as $row) {
+            $display = trim((string)($row['display_name'] ?? ''));
+            $login = trim((string)($row['login_id'] ?? ''));
+            $labels[(int)$row['id']] = $display !== '' ? $display . ($login !== '' ? ' / ' . $login : '') : $login;
+        }
+        return $labels;
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+function mail_batch_creator_label(array $batch, array $creatorLabels): string
+{
+    $id = (int)($batch['created_by_account_id'] ?? 0);
+    if ($id <= 0) {
+        return '不明';
+    }
+    return $creatorLabels[$id] ?? ('アカウントID: ' . $id);
+}
+
 if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     mail_auth_require_csrf();
     $action = (string)($_POST['action'] ?? '');
@@ -25,11 +70,13 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
 }
 
 $batches = [];
+$creatorLabels = [];
 $selectedBatch = null;
 $targets = [];
 $attachments = [];
 if ($mailPdo instanceof PDO && $dbError === '') {
     $batches = mail_list_batches($mailPdo, 150);
+    $creatorLabels = mail_lookup_account_labels_for_batches($batches);
     if ($selectedBatchId <= 0 && $batches !== []) {
         $selectedBatchId = (int)$batches[0]['id'];
     }
@@ -47,71 +94,80 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
 <header class="page-head">
   <div>
     <h1>送信バッチ</h1>
-    <p class="lead">メール作成画面で生成した送信バッチを確認し、添付登録・送信承認へ進めます。</p>
+    <p class="lead">作成済みの送信バッチを確認し、対象別プレビュー・添付確認・状態更新を行います。</p>
   </div>
+  <div class="head-actions"><a class="link-button primary" href="compose.php">新規メール作成</a></div>
 </header>
 <?php mail_render_db_error($dbError); ?>
 
 <?php if ($dbError === ''): ?>
-<div class="two-column-grid">
-  <section class="panel">
-    <div class="panel-head"><h2>新規メール作成</h2><span class="muted">テンプレート / 直接入力</span></div>
-    <p>新規作成は、使用するテンプレートまたは直接入力した本文を選び、送信相手をチェックボックスで指定する流れに変更しました。</p>
-    <p><a class="link-button primary" href="compose.php">メール作成へ進む</a></p>
-  </section>
-
+<div class="two-column-grid batch-grid">
   <section class="panel">
     <div class="panel-head"><h2>バッチ一覧</h2><span class="muted"><?php echo count($batches); ?>件</span></div>
     <div class="table-wrap compact-table">
       <table>
-        <thead><tr><th>ID</th><th>名称</th><th>状態</th><th>対象</th></tr></thead>
+        <thead><tr><th>ID</th><th>名称</th><th>状態</th><th>対象</th><th>作成者</th></tr></thead>
         <tbody>
-          <?php if ($batches === []): ?><tr><td colspan="4" class="empty">バッチはまだありません。</td></tr><?php endif; ?>
+          <?php if ($batches === []): ?><tr><td colspan="5" class="empty">バッチはまだありません。</td></tr><?php endif; ?>
           <?php foreach ($batches as $batch): ?>
             <tr class="<?php echo (int)$batch['id'] === $selectedBatchId ? 'is-selected-row' : ''; ?>">
               <td><?php echo (int)$batch['id']; ?></td>
-              <td><a href="batches.php?batch_id=<?php echo (int)$batch['id']; ?>"><?php echo mail_h((string)$batch['title']); ?></a><br><span class="muted"><?php echo mail_h((string)($batch['template_title'] ?? '直接入力')); ?></span></td>
+              <td><a href="batches.php?batch_id=<?php echo (int)$batch['id']; ?>"><?php echo mail_h((string)$batch['title']); ?></a></td>
               <td><span class="badge"><?php echo mail_h(mail_status_label((string)$batch['status'])); ?></span></td>
               <td><?php echo (int)$batch['target_count']; ?></td>
+              <td><?php echo mail_h(mail_batch_creator_label($batch, $creatorLabels)); ?></td>
             </tr>
           <?php endforeach; ?>
         </tbody>
       </table>
     </div>
   </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>選択中バッチ詳細</h2><span class="muted"><?php echo $selectedBatch ? '#' . (int)$selectedBatch['id'] : ''; ?></span></div>
+    <?php if (!$selectedBatch): ?>
+      <p class="empty">バッチを選択してください。</p>
+    <?php else: ?>
+      <dl class="detail-list">
+        <div><dt>バッチ名</dt><dd><?php echo mail_h((string)$selectedBatch['title']); ?></dd></div>
+        <div><dt>作成者</dt><dd><?php echo mail_h(mail_batch_creator_label($selectedBatch, $creatorLabels)); ?></dd></div>
+        <div><dt>作成日時</dt><dd><?php echo mail_h((string)$selectedBatch['created_at']); ?></dd></div>
+        <div><dt>対象数</dt><dd><?php echo (int)$selectedBatch['target_count']; ?>件</dd></div>
+        <div><dt>添付</dt><dd>共通 <?php echo (int)$selectedBatch['common_attachment_count']; ?>件 / 個別 <?php echo (int)$selectedBatch['individual_attachment_count']; ?>件</dd></div>
+        <div><dt>状態</dt><dd><span class="badge"><?php echo mail_h(mail_status_label((string)$selectedBatch['status'])); ?></span></dd></div>
+      </dl>
+      <form method="post" class="inline-actions mt-14">
+        <?php echo mail_auth_csrf_field(); ?>
+        <input type="hidden" name="action" value="status">
+        <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
+        <select name="status">
+          <?php foreach (['prepared' => '準備済み', 'reviewing' => '確認中', 'approved' => '確認済み', 'cancelled' => '取消'] as $key => $label): ?>
+            <option value="<?php echo mail_h($key); ?>"<?php echo mail_selected($selectedBatch['status'], $key); ?>><?php echo mail_h($label); ?></option>
+          <?php endforeach; ?>
+        </select>
+        <button type="submit" class="secondary"<?php echo mail_auth_has_permission($user, 'batch.edit') ? '' : ' disabled'; ?>>状態更新</button>
+      </form>
+      <div class="form-actions mt-14">
+        <a class="link-button secondary" href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付を登録・確認</a>
+        <a class="link-button secondary" href="drafts.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">Gmail下書き作成</a>
+      </div>
+    <?php endif; ?>
+  </section>
 </div>
 
 <?php if ($selectedBatch): ?>
-<section class="panel mt-18">
-  <div class="panel-head">
-    <div><h2><?php echo mail_h((string)$selectedBatch['title']); ?></h2><p class="muted">作成元: <?php echo mail_h((string)($selectedBatch['template_title'] ?? '直接入力')); ?> / 作成日時: <?php echo mail_h((string)$selectedBatch['created_at']); ?></p></div>
-    <form method="post" class="inline-actions">
-      <?php echo mail_auth_csrf_field(); ?>
-      <input type="hidden" name="action" value="status">
-      <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
-      <select name="status">
-        <?php foreach (['prepared' => '準備済み', 'reviewing' => '確認中', 'approved' => '確認済み', 'cancelled' => '取消'] as $key => $label): ?>
-          <option value="<?php echo mail_h($key); ?>"<?php echo mail_selected($selectedBatch['status'], $key); ?>><?php echo mail_h($label); ?></option>
-        <?php endforeach; ?>
-      </select>
-      <button type="submit" class="secondary"<?php echo mail_auth_has_permission($user, 'batch.edit') ? '' : ' disabled'; ?>>状態更新</button>
-    </form>
-  </div>
-  <div class="summary-grid small">
-    <article class="summary-card"><span>対象メール</span><strong><?php echo (int)$selectedBatch['target_count']; ?></strong></article>
-    <article class="summary-card"><span>共通添付</span><strong><?php echo (int)$selectedBatch['common_attachment_count']; ?></strong></article>
-    <article class="summary-card"><span>個別添付</span><strong><?php echo (int)$selectedBatch['individual_attachment_count']; ?></strong></article>
-    <article class="summary-card"><span>状態</span><strong class="small-strong"><?php echo mail_h(mail_status_label((string)$selectedBatch['status'])); ?></strong></article>
-  </div>
-  <p class="muted">内容と添付を確認したら、状態を「確認済み」に変更してGmail下書き作成へ進みます。</p>
-  <p><a class="text-link" href="drafts.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">Gmail下書き作成へ進む</a></p>
-</section>
+<div class="summary-grid small mt-18">
+  <article class="summary-card"><span>対象メール</span><strong><?php echo (int)$selectedBatch['target_count']; ?></strong></article>
+  <article class="summary-card"><span>共通添付</span><strong><?php echo (int)$selectedBatch['common_attachment_count']; ?></strong></article>
+  <article class="summary-card"><span>個別添付</span><strong><?php echo (int)$selectedBatch['individual_attachment_count']; ?></strong></article>
+  <article class="summary-card"><span>状態</span><strong class="small-strong"><?php echo mail_h(mail_status_label((string)$selectedBatch['status'])); ?></strong></article>
+</div>
 
 <section class="panel mt-18">
-  <div class="panel-head"><h2>生成済みメールプレビュー</h2><span class="muted"><?php echo count($targets); ?>件</span></div>
+  <div class="panel-head"><h2>送信対象別プレビュー</h2><span class="muted"><?php echo count($targets); ?>件</span></div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>識別番号</th><th>団体</th><th>宛先</th><th>件名</th><th>状態</th><th>本文冒頭</th></tr></thead>
+      <thead><tr><th>識別番号</th><th>団体</th><th>宛先</th><th>件名</th><th>状態</th><th>操作</th></tr></thead>
       <tbody>
         <?php if ($targets === []): ?><tr><td colspan="6" class="empty">対象がありません。</td></tr><?php endif; ?>
         <?php foreach ($targets as $target): ?>
@@ -121,7 +177,7 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
             <td><?php echo mail_h((string)$target['to_email']); ?></td>
             <td><?php echo mail_h((string)$target['rendered_subject']); ?></td>
             <td><span class="badge"><?php echo mail_h(mail_status_label((string)$target['status'])); ?></span><?php if (!empty($target['error_message'])): ?><br><span class="danger-text"><?php echo mail_h((string)$target['error_message']); ?></span><?php endif; ?></td>
-            <td><pre class="preview-snippet"><?php echo mail_h(mb_substr((string)$target['rendered_body'], 0, 180)); ?></pre></td>
+            <td><button type="button" class="secondary" data-preview-open data-preview-org="<?php echo mail_h((string)$target['organization_name']); ?>" data-preview-to="<?php echo mail_h((string)$target['to_email']); ?>" data-preview-subject="<?php echo mail_h((string)$target['rendered_subject']); ?>" data-preview-body="<?php echo mail_h((string)$target['rendered_body']); ?>">プレビュー</button></td>
           </tr>
         <?php endforeach; ?>
       </tbody>
@@ -151,6 +207,45 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
     </table>
   </div>
 </section>
+
+<div class="modal-backdrop" id="previewModal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="previewModalTitle">
+    <div class="modal-head">
+      <div>
+        <h2 id="previewModalTitle">メールプレビュー</h2>
+        <p class="muted" id="previewMeta"></p>
+      </div>
+      <button type="button" class="text-button modal-close" data-preview-close>閉じる</button>
+    </div>
+    <dl class="detail-list">
+      <div><dt>件名</dt><dd id="previewSubject"></dd></div>
+    </dl>
+    <pre class="mail-preview-body" id="previewBody"></pre>
+  </div>
+</div>
+
+<script>
+(function () {
+  const modal = document.getElementById('previewModal');
+  const meta = document.getElementById('previewMeta');
+  const subject = document.getElementById('previewSubject');
+  const body = document.getElementById('previewBody');
+  document.querySelectorAll('[data-preview-open]').forEach(button => {
+    button.addEventListener('click', function () {
+      meta.textContent = `${button.dataset.previewOrg || ''} / ${button.dataset.previewTo || ''}`;
+      subject.textContent = button.dataset.previewSubject || '';
+      body.textContent = button.dataset.previewBody || '';
+      modal.hidden = false;
+    });
+  });
+  document.querySelector('[data-preview-close]')?.addEventListener('click', function () {
+    modal.hidden = true;
+  });
+  modal?.addEventListener('click', function (event) {
+    if (event.target === modal) modal.hidden = true;
+  });
+})();
+</script>
 <?php endif; ?>
 <?php endif; ?>
 <?php

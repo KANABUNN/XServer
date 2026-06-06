@@ -63,20 +63,25 @@ function mail_redirect(string $path): void
     exit;
 }
 
-function mail_nav_items(): array
+function mail_nav_items(array $user = []): array
 {
-    return [
+    $items = [
         ['href' => 'index.php', 'label' => 'ダッシュボード'],
-        ['href' => 'organizations.php', 'label' => '団体データ'],
-        ['href' => 'templates.php', 'label' => 'テンプレート'],
         ['href' => 'compose.php', 'label' => 'メール作成'],
         ['href' => 'batches.php', 'label' => '送信バッチ'],
-        ['href' => 'attachments.php', 'label' => '添付ファイル'],
         ['href' => 'drafts.php', 'label' => 'Gmail下書き'],
+        ['href' => 'attachments.php', 'label' => '添付ファイル'],
+        ['href' => 'templates.php', 'label' => 'テンプレート'],
+        ['href' => 'organizations.php', 'label' => '団体データ'],
         ['href' => 'send_logs.php', 'label' => '送信ログ'],
-        ['href' => 'logs.php', 'label' => 'ログ'],
-        ['href' => 'settings.php', 'label' => '送信設定'],
     ];
+
+    if ($user !== [] && mail_auth_has_permission($user, 'settings.manage')) {
+        $items[] = ['href' => 'settings.php', 'label' => '送信設定'];
+        $items[] = ['href' => 'logs.php', 'label' => '操作ログ'];
+    }
+
+    return $items;
 }
 
 function mail_render_page_header(string $title, array $user, string $activeHref): void
@@ -100,7 +105,7 @@ function mail_render_page_header(string $title, array $user, string $activeHref)
         <p>団体DB / テンプレート / 添付 / Gmail下書き</p>
       </div>
       <nav class="sidebar-nav" aria-label="管理機能">
-        <?php foreach (mail_nav_items() as $item): ?>
+        <?php foreach (mail_nav_items($user) as $item): ?>
           <a class="sidebar-link <?php echo $activeHref === $item['href'] ? 'is-active' : ''; ?>" href="<?php echo mail_h($item['href']); ?>"><?php echo mail_h($item['label']); ?></a>
         <?php endforeach; ?>
       </nav>

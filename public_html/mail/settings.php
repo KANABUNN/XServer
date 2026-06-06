@@ -7,6 +7,23 @@ require_once __DIR__ . '/../../apps/mail_core/gmail_client.php';
 require_once __DIR__ . '/../../apps/mail_core/smtp_client.php';
 
 [$user, $mailPdo, $dbError] = mail_app_init();
+mail_require_permission_or_forbid($user, 'settings.manage');
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    try {
+        mail_auth_require_csrf();
+        $action = (string)($_POST['action'] ?? '');
+        if ($action === 'gmail_test') {
+            $result = mail_gmail_test_connection();
+            mail_flash_set('info', 'Gmail API接続テストに成功しました。対象: ' . ((string)($result['emailAddress'] ?? '')));
+            mail_redirect('settings.php');
+        }
+    } catch (Throwable $e) {
+        mail_flash_set('danger', $e->getMessage());
+        mail_redirect('settings.php');
+    }
+}
+
 $config = mail_load_config();
 $gmail = mail_gmail_config();
 [$gmailReady, $gmailMissing] = mail_gmail_is_configured();
@@ -42,12 +59,17 @@ mail_render_page_header('送信設定', $user, 'settings.php');
     <div><span class="muted">Reply-To</span><code><?php echo mail_h((string)($gmail['reply_to'] ?? '')); ?></code></div>
     <div><span class="muted">API</span><code><?php echo mail_h((string)($gmail['api_base'] ?? 'https://gmail.googleapis.com/gmail/v1')); ?></code></div>
     <div><span class="muted">スコープ</span><code><?php echo mail_h(implode(', ', array_map('strval', (array)($gmail['scopes'] ?? [])))); ?></code></div>
-    <div><span class="muted">1回の下書き作成上限</span><strong><?php echo (int)($gmail['max_drafts_per_run'] ?? 10); ?> 件</strong></div>
+    <div><span class="muted">1回の下書き作成上限</span><strong><?php echo (int)($gmail['max_drafts_per_run'] ?? 10); ?> 件</strong><small class="muted">下書き作成画面では変更せず、この設定値を使用します。</small></div>
     <div><span class="muted">サービスアカウントJSON</span><code><?php echo mail_h((string)($gmail['service_account_json_path'] ?? 'inline-json')); ?></code></div>
   </div>
   <?php if (!$gmailReady): ?>
     <div class="alert alert-warn mt-14">不足しているGmail API設定: <code><?php echo mail_h(implode(', ', $gmailMissing)); ?></code></div>
   <?php endif; ?>
+  <form method="post" class="mt-14">
+    <?php echo mail_auth_csrf_field(); ?>
+    <input type="hidden" name="action" value="gmail_test">
+    <button type="submit" class="secondary"<?php echo $gmailReady ? '' : ' disabled'; ?>>Gmail API接続テスト</button>
+  </form>
 </section>
 <section class="panel mt-18">
   <div class="panel-head"><h2>SMTP Relay設定値</h2><span class="muted">保守・暫定直接送信用</span></div>
@@ -78,7 +100,7 @@ mail_render_page_header('送信設定', $user, 'settings.php');
     <li>Google管理コンソールで、サービスアカウントのクライアントIDに <code>https://www.googleapis.com/auth/gmail.compose</code> を許可する。</li>
     <li>サービスアカウントJSONを <code>public_html</code> 外の非公開領域に配置する。</li>
     <li><code>config.local.php</code> の <code>mail_delivery.driver</code> を <code>gmail_draft</code> にする。</li>
-    <li><code>drafts.php</code> でGmail API接続確認後、まず1件だけ下書き作成を試す。</li>
+    <li><code>送信設定</code> でGmail API接続確認後、まず1件だけ下書き作成を試す。</li>
   </ol>
 </section>
 <?php
