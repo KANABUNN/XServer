@@ -42,6 +42,66 @@ function mail_lookup_account_labels_for_batches(array $batches): array
     }
 }
 
+
+function mail_delete_batch(PDO $pdo, int $batchId, array $actor): array
+{
+    if ($batchId <= 0) {
+        throw new InvalidArgumentException('削除するバッチを選択してください。');
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare('SELECT * FROM mail_batches WHERE id = :id LIMIT 1 FOR UPDATE');
+        $stmt->execute([':id' => $batchId]);
+        $batch = $stmt->fetch();
+        if (!$batch) {
+            throw new InvalidArgumentException('対象のバッチが見つかりません。');
+        }
+
+        $status = (string)($batch['status'] ?? '');
+        if (in_array($status, ['draft_created', 'sent'], true)) {
+            throw new RuntimeException('Gmail下書き作成済み、または送信済みのバッチは削除できません。Gmail側の下書きや送信履歴と不整合になるためです。');
+        }
+
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM mail_batch_targets WHERE batch_id = :id');
+        $stmt->execute([':id' => $batchId]);
+        $targetCount = (int)$stmt->fetchColumn();
+
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM mail_attachments WHERE mail_batch_id = :id');
+        $stmt->execute([':id' => $batchId]);
+        $attachmentCount = (int)$stmt->fetchColumn();
+
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM mail_batch_targets WHERE batch_id = :id AND (status = "draft_created" OR (graph_message_id IS NOT NULL AND graph_message_id <> ""))');
+        $stmt->execute([':id' => $batchId]);
+        $draftCreatedTargetCount = (int)$stmt->fetchColumn();
+        if ($draftCreatedTargetCount > 0) {
+            throw new RuntimeException('Gmail下書きIDを持つ対象が含まれるため、このバッチは削除できません。');
+        }
+
+        mail_audit_log($pdo, $actor, 'mail.batch.delete', 'mail_batch', (string)$batchId, [
+            'title' => (string)($batch['title'] ?? ''),
+            'status' => $status,
+            'target_count' => $targetCount,
+            'attachment_count' => $attachmentCount,
+        ]);
+
+        $stmt = $pdo->prepare('DELETE FROM mail_batches WHERE id = :id');
+        $stmt->execute([':id' => $batchId]);
+
+        $pdo->commit();
+        return [
+            'title' => (string)($batch['title'] ?? ''),
+            'target_count' => $targetCount,
+            'attachment_count' => $attachmentCount,
+        ];
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
 function mail_batch_creator_label(array $batch, array $creatorLabels): string
 {
     $id = (int)($batch['created_by_account_id'] ?? 0);
@@ -62,6 +122,18 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
             mail_update_batch_status($mailPdo, $batchId, $status, $user);
             mail_flash_set('info', 'バッチ状態を更新しました。');
             mail_redirect('batches.php?batch_id=' . $batchId);
+        }
+
+        if ($action === 'delete') {
+            mail_require_permission_or_forbid($user, 'batch.edit');
+            $batchId = (int)($_POST['batch_id'] ?? 0);
+            $confirmBatchId = trim((string)($_POST['confirm_batch_id'] ?? ''));
+            if ($confirmBatchId !== (string)$batchId) {
+                throw new InvalidArgumentException('削除確認として、対象バッチIDを正しく入力してください。');
+            }
+            $result = mail_delete_batch($mailPdo, $batchId, $user);
+            mail_flash_set('info', '送信バッチ「' . $result['title'] . '」を削除しました。対象メール ' . $result['target_count'] . '件、添付対応 ' . $result['attachment_count'] . '件も削除されています。');
+            mail_redirect('batches.php');
         }
     } catch (Throwable $e) {
         mail_flash_set('danger', $e->getMessage());
@@ -151,6 +223,20 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
         <a class="link-button secondary" href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付を登録・確認</a>
         <a class="link-button secondary" href="drafts.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">Gmail下書き作成</a>
       </div>
+
+      <?php $canDeleteBatch = mail_auth_has_permission($user, 'batch.edit') && !in_array((string)$selectedBatch['status'], ['draft_created', 'sent'], true); ?>
+      <form method="post" class="panel-subform danger-zone mt-14" data-delete-batch-form>
+        <?php echo mail_auth_csrf_field(); ?>
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
+        <h3>このバッチを削除</h3>
+        <p class="muted">削除すると、このバッチの送信対象メールと添付対応情報も削除されます。アップロード済みファイル本体と送信ログは保持されます。</p>
+        <?php if (in_array((string)$selectedBatch['status'], ['draft_created', 'sent'], true)): ?>
+          <div class="alert alert-warn">Gmail下書き作成済み、または送信済みのバッチは、Gmail側や送信履歴との不整合を避けるため削除できません。</div>
+        <?php endif; ?>
+        <label><span class="muted">削除確認: バッチID <strong>#<?php echo (int)$selectedBatch['id']; ?></strong> を入力</span><input type="text" name="confirm_batch_id" inputmode="numeric" autocomplete="off" placeholder="<?php echo (int)$selectedBatch['id']; ?>"<?php echo $canDeleteBatch ? '' : ' disabled'; ?>></label>
+        <button type="submit" class="danger"<?php echo $canDeleteBatch ? '' : ' disabled'; ?>>送信バッチを削除</button>
+      </form>
     <?php endif; ?>
   </section>
 </div>
@@ -243,6 +329,16 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
   });
   modal?.addEventListener('click', function (event) {
     if (event.target === modal) modal.hidden = true;
+  });
+
+  document.querySelectorAll('[data-delete-batch-form]').forEach(form => {
+    form.addEventListener('submit', function (event) {
+      const batchId = form.querySelector('input[name="batch_id"]')?.value || '';
+      const confirmed = window.confirm('送信バッチ #' + batchId + ' を削除します。対象メールと添付対応情報も削除されます。実行してよろしいですか？');
+      if (!confirmed) {
+        event.preventDefault();
+      }
+    });
   });
 })();
 </script>
