@@ -192,9 +192,17 @@ function mail_smtp_test_connection(): array
 
 function mail_smtp_get_target(PDO $pdo, int $targetId): ?array
 {
+    // 直接入力(テンプレ無し)バッチでも本文形式を正しく判定するため、
+    // テンプレートの body_type を優先しつつ、無ければバッチに保存した body_type を使う。
+    // body_type 列が未追加の環境ではテンプレート値のみで従来通り動作させる。
+    $hasBatchBodyType = mail_column_exists($pdo, 'mail_batches', 'body_type');
+    $bodyTypeSelect = $hasBatchBodyType
+        ? "COALESCE(NULLIF(t.body_type, ''), NULLIF(b.body_type, ''), 'plain') AS body_type"
+        : "COALESCE(NULLIF(t.body_type, ''), 'plain') AS body_type";
+
     $stmt = $pdo->prepare(
         'SELECT bt.*, b.status AS batch_status, b.title AS batch_title, b.id AS batch_id, b.template_id, ' .
-        't.body_type, o.identifier, o.name AS organization_name, o.representative_name, o.category ' .
+        $bodyTypeSelect . ', o.identifier, o.name AS organization_name, o.representative_name, o.category ' .
         'FROM mail_batch_targets bt ' .
         'INNER JOIN mail_batches b ON b.id = bt.batch_id ' .
         'LEFT JOIN mail_templates t ON t.id = b.template_id ' .
