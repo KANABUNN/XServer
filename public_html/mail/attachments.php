@@ -31,6 +31,14 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
             mail_refresh_batch_attachment_counts($mailPdo, (int)$_POST['batch_id']);
             mail_flash_set('info', '添付ファイルを除外しました。');
             mail_redirect('attachments.php?batch_id=' . (int)$_POST['batch_id']);
+        } elseif ($action === 'reassign') {
+          mail_require_permission_or_forbid($user, 'attachment.upload');
+          $id = (int)($_POST['attachment_id'] ?? 0);
+          $organizationId = (int)($_POST['organization_id'] ?? 0);
+          mail_reassign_attachment($mailPdo, $id, $organizationId, $user);
+          mail_refresh_batch_attachment_counts($mailPdo, (int)$_POST['batch_id']);
+          mail_flash_set('info', '添付の割当先団体を更新し、確認済みにしました。');
+          mail_redirect('attachments.php?batch_id=' . (int)$_POST['batch_id']);
         }
     } catch (Throwable $e) {
         mail_flash_set('danger', $e->getMessage());
@@ -42,6 +50,8 @@ $batches = [];
 $selectedBatch = null;
 $attachments = [];
 $uploadBatches = [];
+$activeOrganizations = [];
+$missingOrgs = [];
 if ($mailPdo instanceof PDO && $dbError === '') {
     $batches = mail_list_batches($mailPdo, 200);
     if ($selectedBatchId <= 0 && $batches !== []) {
@@ -51,9 +61,11 @@ if ($mailPdo instanceof PDO && $dbError === '') {
         $selectedBatch = mail_get_batch($mailPdo, $selectedBatchId);
         if ($selectedBatch) {
             $attachments = mail_list_batch_attachments($mailPdo, $selectedBatchId);
+            $missingOrgs = mail_list_orgs_missing_individual_attachment($mailPdo, $selectedBatchId);
         }
     }
     $uploadBatches = mail_list_upload_batches($mailPdo, 80);
+    $activeOrganizations = mail_list_active_organizations($mailPdo);
 }
 
 mail_render_page_header('添付ファイル', $user, 'attachments.php');
@@ -105,6 +117,31 @@ mail_render_page_header('添付ファイル', $user, 'attachments.php');
 </div>
 
 <?php if ($selectedBatch): ?>
+<?php if ((int)$selectedBatch['individual_attachment_count'] > 0): ?>
+<section class="panel mt-18">
+  <div class="panel-head"><h2>承認済みの個別添付が無い団体</h2><span class="muted"><?php echo count($missingOrgs); ?>件</span></div>
+  <?php if ($missingOrgs === []): ?>
+    <p class="empty">全ての送信対象団体に、承認済みの個別添付が1件以上あります。</p>
+  <?php else: ?>
+    <div class="alert alert-warn">これらの団体には承認済みの個別添付がありません。このまま送信すると共通添付のみ（または添付なし）で届きます。</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>識別番号</th><th>団体</th><th>宛先</th><th>宛先状態</th></tr></thead>
+        <tbody>
+          <?php foreach ($missingOrgs as $org): ?>
+            <tr class="needs-review-row">
+              <td><code><?php echo mail_h((string)$org['identifier']); ?></code></td>
+              <td><?php echo mail_h((string)$org['organization_name']); ?></td>
+              <td><?php echo mail_h((string)($org['to_email'] ?? $org['email'] ?? '')); ?></td>
+              <td><span class="badge"><?php echo mail_h(mail_status_label((string)$org['target_status'])); ?></span></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
+</section>
+<?php endif; ?>
 <section class="panel mt-18">
   <div class="panel-head"><h2>添付対応一覧</h2><span class="muted"><?php echo count($attachments); ?>件</span></div>
   <div class="table-wrap">
@@ -127,6 +164,21 @@ mail_render_page_header('添付ファイル', $user, 'attachments.php');
               <?php endif; ?>
               <?php if ((string)$att['status'] !== 'excluded'): ?>
                 <form method="post" class="inline-form"><?php echo mail_auth_csrf_field(); ?><input type="hidden" name="action" value="exclude"><input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>"><input type="hidden" name="attachment_id" value="<?php echo (int)$att['id']; ?>"><button type="submit" class="text-button danger-text"<?php echo mail_auth_has_permission($user, 'attachment.upload') ? '' : ' disabled'; ?>>除外</button></form>
+              <?php endif; ?>
+              <?php if ((int)$att['is_common'] === 0): ?>
+                <form method="post" class="inline-form reassign-form">
+                  <?php echo mail_auth_csrf_field(); ?>
+                  <input type="hidden" name="action" value="reassign">
+                  <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
+                  <input type="hidden" name="attachment_id" value="<?php echo (int)$att['id']; ?>">
+                  <select name="organization_id" required>
+                    <option value="">団体を選択…</option>
+                    <?php foreach ($activeOrganizations as $org): ?>
+                      <option value="<?php echo (int)$org['id']; ?>"<?php echo mail_selected((int)($att['organization_id'] ?? 0), (int)$org['id']); ?>><?php echo mail_h((string)$org['identifier'] . ' ' . (string)$org['name']); ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                  <button type="submit" class="text-button"<?php echo mail_auth_has_permission($user, 'attachment.upload') ? '' : ' disabled'; ?>>団体を割当</button>
+                </form>
               <?php endif; ?>
             </td>
           </tr>

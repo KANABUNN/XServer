@@ -794,3 +794,68 @@ function mail_list_audit_logs(PDO $pdo, int $limit = 80): array
     $stmt = $pdo->query('SELECT * FROM mail_audit_logs ORDER BY created_at DESC, id DESC LIMIT ' . $limit);
     return $stmt->fetchAll() ?: [];
 }
+
+function mail_list_send_logs(PDO $pdo, ?int $batchId = null, int $limit = 200): array
+{
+    if (!mail_table_exists($pdo, 'mail_send_logs')) {
+        return [];
+    }
+    $limit = max(1, min(1000, $limit));
+    $sql =
+        'SELECT s.*, b.title AS batch_title, bt.to_email, o.identifier, o.name AS organization_name ' .
+        'FROM mail_send_logs s ' .
+        'LEFT JOIN mail_batches b ON b.id = s.batch_id ' .
+        'LEFT JOIN mail_batch_targets bt ON bt.id = s.batch_target_id ' .
+        'LEFT JOIN mail_organizations o ON o.id = bt.organization_id ';
+    $params = [];
+    if ($batchId !== null && $batchId > 0) {
+        $sql .= 'WHERE s.batch_id = :batch_id ';
+        $params[':batch_id'] = $batchId;
+    }
+    $sql .= 'ORDER BY s.created_at DESC, s.id DESC LIMIT ' . $limit;
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll() ?: [];
+}
+
+function mail_list_orgs_missing_individual_attachment(PDO $pdo, int $batchId): array
+{
+    $stmt = $pdo->prepare(
+       'SELECT o.id, o.identifier, o.name AS organization_name, o.email, bt.to_email, bt.status AS target_status ' .
+        'FROM mail_batch_targets bt ' .
+        'INNER JOIN mail_organizations o ON o.id = bt.organization_id ' .
+        'WHERE bt.batch_id = :batch_id AND bt.status <> "excluded" ' .
+        'AND NOT EXISTS (' .
+        '  SELECT 1 FROM mail_attachments a ' .
+        '  WHERE a.mail_batch_id = bt.batch_id AND a.organization_id = bt.organization_id ' .
+        '  AND a.is_common = 0 AND a.status = "approved"' .
+        ') ORDER BY o.identifier ASC, o.id ASC'
+    );
+    $stmt->execute([':batch_id' => $batchId]);
+    return $stmt->fetchAll() ?: [];
+}
+
+function mail_reassign_attachment(PDO $pdo, int $attachmentId, int $organizationId, ?array $actor = null): void
+{
+    $stmt = $pdo->prepare('SELECT id, is_common FROM mail_attachments WHERE id = :id LIMIT 1');
+    $stmt->execute([':id' => $attachmentId]);
+    $attachment = $stmt->fetch();
+    if (!$attachment) {
+        throw new InvalidArgumentException('対象の添付が見つかりません。');
+    }
+    if ((int)$attachment['is_common'] === 1) {
+        throw new InvalidArgumentException('共通添付には団体を割り当てられません。');
+    }
+    $organization = mail_get_organization($pdo, $organizationId);
+    if (!$organization) {
+        throw new InvalidArgumentException('割り当てる団体が見つかりません。');
+    }
+    $stmt = $pdo->prepare(
+        'UPDATE mail_attachments SET organization_id = :organization_id, match_method = "manual", match_confidence = 100, status = "approved" WHERE id = :id'
+    );
+    $stmt->execute([':organization_id' => $organizationId, ':id' => $attachmentId]);
+    mail_audit_log($pdo, $actor, 'mail.attachment.reassign', 'mail_attachment', (string)$attachmentId, [
+        'organization_id' => $organizationId,
+        'identifier' => (string)($organization['identifier'] ?? ''),
+    ]);
+}

@@ -73,6 +73,7 @@ function mail_nav_items(): array
         ['href' => 'batches.php', 'label' => '送信バッチ'],
         ['href' => 'attachments.php', 'label' => '添付ファイル'],
         ['href' => 'delivery.php', 'label' => 'GW SMTP送信'],
+        ['href' => 'send_logs.php', 'label' => '送信ログ'],
         ['href' => 'logs.php', 'label' => 'ログ'],
         ['href' => 'settings.php', 'label' => '送信設定'],
     ];

@@ -465,3 +465,58 @@ function mail_smtp_send_batch(PDO $pdo, int $batchId, ?array $actor = null, int 
         'results' => $results,
     ];
 }
+
+function mail_smtp_send_test(PDO $pdo, int $targetId, string $testEmail, ?array $actor = null): array
+{
+    if (!mail_smtp_enabled()) {
+        throw new RuntimeException('SMTP送信が無効です。config.local.php の mail_delivery.driver と smtp.enabled を確認してください。');
+    }
+    $testEmail = mail_normalize_email($testEmail);
+    if ($testEmail === '' || !filter_var($testEmail, FILTER_VALIDATE_EMAIL)) {
+        throw new InvalidArgumentException('テスト送信先メールアドレスが不正です。');
+    }
+    $target = mail_smtp_get_target($pdo, $targetId);
+    if (!$target) {
+        throw new InvalidArgumentException('差し込みに使う対象メールが見つかりません。');
+    }
+    $batchId = (int)$target['batch_id'];
+    $message = mail_smtp_message_data($target);
+
+    $mailer = mail_smtp_create_mailer();
+    $mailer->addAddress($testEmail);
+    $mailer->Subject = '[テスト送信] ' . $message['subject'];
+    if ($message['body_type'] === 'html') {
+        $mailer->isHTML(true);
+        $mailer->Body = $message['body'];
+        $mailer->AltBody = mail_smtp_normalize_breaks(mail_smtp_plain_from_html($message['body']));
+    } else {
+        $plain = mail_smtp_normalize_breaks($message['body']);
+        $mailer->isHTML(false);
+        $mailer->Body = $plain;
+        $mailer->AltBody = $plain;
+    }
+    $mailer->addCustomHeader('X-FIT-SC-Mail-Test', '1');
+    $mailer->addCustomHeader('X-FIT-SC-Mail-Batch-Id', (string)$batchId);
+    $mailer->addCustomHeader('X-FIT-SC-Mail-Target-Id', (string)$targetId);
+
+    $attachments = mail_smtp_list_target_attachments($pdo, $batchId, $target['organization_id'] !== null ? (int)$target['organization_id'] : null);
+    $attachedCount = 0;
+    foreach ($attachments as $attachment) {
+        $mailer->addAttachment(mail_smtp_attachment_absolute_path($attachment), (string)$attachment['original_name']);
+        $attachedCount++;
+    }
+
+    try {
+        $mailer->send();
+        mail_smtp_insert_send_log($pdo, $batchId, $targetId, 'smtp.message.test', 'success', 'Test message accepted (to=' . $testEmail . ')', null, $actor);
+        mail_audit_log($pdo, $actor, 'mail.smtp.test_send', 'mail_batch_target', (string)$targetId, [
+            'batch_id' => $batchId,
+            'test_to' => $testEmail,
+            'attached_count' => $attachedCount,
+        ]);
+        return ['ok' => true, 'target_id' => $targetId, 'test_to' => $testEmail, 'attached_count' => $attachedCount];
+    } catch (Throwable $e) {
+        mail_smtp_insert_send_log($pdo, $batchId, $targetId, 'smtp.message.test', 'failed', null, $e->getMessage(), $actor);
+        throw $e;
+    }
+}

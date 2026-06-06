@@ -22,6 +22,15 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
             mail_redirect('delivery.php' . ($selectedBatchId > 0 ? '?batch_id=' . $selectedBatchId : ''));
         }
 
+        if ($action === 'send_test') {
+            mail_require_permission_or_forbid($user, 'send.execute');
+            $targetId = (int)($_POST['target_id'] ?? 0);
+            $testEmail = trim((string)($_POST['test_email'] ?? ''));
+            $result = mail_smtp_send_test($mailPdo, $targetId, $testEmail, $user);
+            mail_flash_set('info', 'テスト送信を実行しました。送信先: ' . $result['test_to'] . ' / 添付: ' . $result['attached_count'] . '件');
+            mail_redirect('delivery.php?batch_id=' . $selectedBatchId);
+        }
+
         if ($action === 'send_batch_smtp') {
             mail_require_permission_or_forbid($user, 'send.execute');
             if ((string)($_POST['confirm_text'] ?? '') !== '送信') {
@@ -157,6 +166,24 @@ mail_render_page_header('Google Workspace SMTP送信', $user, 'delivery.php');
   <?php elseif ($pendingAttachmentCount > 0): ?>
     <div class="alert alert-warn">要確認・未対応の添付が残っています。<a class="text-link" href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付ファイル画面</a>で確定してください。</div>
   <?php endif; ?>
+
+  <form method="post" class="panel-subform mt-14">
+    <?php echo mail_auth_csrf_field(); ?>
+    <input type="hidden" name="action" value="send_test">
+    <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
+    <h3>テスト送信（自分宛で体裁確認）</h3>
+    <p class="muted">選択した宛先の差し込み結果と、その団体の<strong>承認済み</strong>添付を、入力したアドレスへ1通だけ送ります。件名に [テスト送信] が付き、対象メール・バッチの状態は変化しません。承認前でも実行できます。</p>
+    <label><span class="muted">差し込みに使う宛先</span>
+      <select name="target_id" required>
+        <option value="">宛先を選択…</option>
+        <?php foreach ($targets as $target): ?>
+          <option value="<?php echo (int)$target['id']; ?>">#<?php echo (int)$target['id']; ?> <?php echo mail_h((string)$target['identifier'] . ' ' . (string)$target['organization_name']); ?>（<?php echo mail_h((string)$target['to_email']); ?>）</option>
+        <?php endforeach; ?>
+      </select>
+    </label>
+    <label><span class="muted">テスト送信先メールアドレス</span><input type="email" name="test_email" placeholder="自分のアドレス" required></label>
+    <button type="submit" class="secondary"<?php echo ($smtpReady && mail_auth_has_permission($user, 'send.execute') && $targets !== []) ? '' : ' disabled'; ?>>テスト送信</button>
+  </form>
 
   <form method="post" class="panel-subform danger-zone mt-14">
     <?php echo mail_auth_csrf_field(); ?>
