@@ -301,6 +301,24 @@ function mail_auth_validate_csrf_token(?string $token): bool
     return $expected !== '' && $provided !== '' && hash_equals($expected, $provided);
 }
 
+
+function mail_auth_verify_csrf_token(?string $token): void
+{
+    if (mail_auth_validate_csrf_token($token)) {
+        return;
+    }
+
+    $accept = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+    if (str_contains($accept, 'application/json')) {
+        mail_send_json(['ok' => false, 'message' => 'CSRFトークンが無効です。'], 403);
+    }
+
+    http_response_code(403);
+    header('Content-Type: text/plain; charset=UTF-8');
+    echo 'CSRFトークンが無効です。';
+    exit;
+}
+
 function mail_auth_require_csrf(): void
 {
     $token = (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['_csrf'] ?? ''));

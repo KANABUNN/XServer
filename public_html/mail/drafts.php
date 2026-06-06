@@ -13,7 +13,7 @@ $selectedBatchId = (int)($_GET['batch_id'] ?? $_POST['batch_id'] ?? 0);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dbError === '' && $mailPdo instanceof PDO) {
     try {
-        mail_auth_verify_csrf_token((string)($_POST['csrf_token'] ?? ''));
+        mail_auth_require_csrf();
         $action = (string)($_POST['action'] ?? '');
 
         if ($action === 'gmail_test') {

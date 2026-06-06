@@ -278,6 +278,14 @@ function mail_smtp_message_data(array $target): array
     ];
 }
 
+
+function mail_smtp_normalize_breaks(string $text, string $breakType = "\r\n"): string
+{
+    // PHPMailer::normalizeBreaks() が利用できない版や、他ファイルからの共通利用に備えた互換ヘルパー。
+    $text = str_replace(["\r\n", "\r"], "\n", $text);
+    return str_replace("\n", $breakType, $text);
+}
+
 function mail_smtp_plain_from_html(string $html): string
 {
     $text = preg_replace('/<\s*br\s*\/?\s*>/i', "\n", $html) ?? $html;
@@ -318,9 +326,9 @@ function mail_smtp_send_target(PDO $pdo, int $targetId, ?array $actor = null): a
         if ($message['body_type'] === 'html') {
             $mailer->isHTML(true);
             $mailer->Body = $message['body'];
-            $mailer->AltBody = \PHPMailer\PHPMailer\PHPMailer::normalizeBreaks(mail_smtp_plain_from_html($message['body']), "\r\n");
+            $mailer->AltBody = mail_smtp_normalize_breaks(mail_smtp_plain_from_html($message['body']), "\r\n");
         } else {
-            $plain = \PHPMailer\PHPMailer\PHPMailer::normalizeBreaks($message['body'], "\r\n");
+            $plain = mail_smtp_normalize_breaks($message['body'], "\r\n");
             $mailer->isHTML(false);
             $mailer->Body = $plain;
             $mailer->AltBody = $plain;

@@ -242,9 +242,9 @@ function mail_gmail_build_mime(PDO $pdo, array $target): array
     if ($message['body_type'] === 'html') {
         $mailer->isHTML(true);
         $mailer->Body = $message['body'];
-        $mailer->AltBody = \PHPMailer\PHPMailer\PHPMailer::normalizeBreaks(mail_smtp_plain_from_html($message['body']), "\r\n");
+        $mailer->AltBody = mail_smtp_normalize_breaks(mail_smtp_plain_from_html($message['body']), "\r\n");
     } else {
-        $plain = \PHPMailer\PHPMailer\PHPMailer::normalizeBreaks($message['body'], "\r\n");
+        $plain = mail_smtp_normalize_breaks($message['body'], "\r\n");
         $mailer->isHTML(false);
         $mailer->Body = $plain;
         $mailer->AltBody = $plain;
