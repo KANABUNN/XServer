@@ -215,3 +215,61 @@ textarea { resize: vertical; line-height: 1.65; }
 .panel-subform p { margin: 0; }
 .panel-subform label { display: grid; gap: 6px; }
 .danger-zone { border-color: #fecaca; background: #fff7f7; }
+
+/* compose workflow additions */
+.link-button.primary {
+  display: inline-block;
+  text-decoration: none;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+}
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.choice-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  background: #fff;
+  cursor: pointer;
+}
+.choice-card input { margin-top: 4px; }
+.choice-card strong { display: block; }
+.choice-card span { grid-column: 2; color: var(--muted); font-size: 13px; }
+.compose-source-block {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  background: #f8fafc;
+  display: grid;
+  gap: 12px;
+}
+.is-hidden { display: none !important; }
+.toolbar-row {
+  display: grid;
+  grid-template-columns: minmax(180px, auto) minmax(260px, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+.inline-check {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--text);
+  font-weight: 700;
+}
+.recipient-table-wrap { max-height: 520px; overflow: auto; }
+.recipient-table input[type="checkbox"] { transform: scale(1.1); }
+.panel-head.inner { margin-bottom: 0; }
+@media (max-width: 760px) {
+  .choice-grid, .toolbar-row { grid-template-columns: 1fr; }
+}

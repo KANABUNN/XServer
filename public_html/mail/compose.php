@@ -144,7 +144,7 @@ mail_render_page_header('メール作成', $user, 'compose.php');
 
     <section class="panel-subform">
       <h3>Gmail下書きについて</h3>
-      <p class="muted">現在のSMTP Relay経路では、Gmailの下書きフォルダへ保存することはできません。下書き保存を実装する場合は、Gmail APIの下書き作成権限を使う別経路を追加します。現時点では、ここで送信バッチを作成し、確認後にSMTP送信画面から直接送信します。</p>
+      <p class="muted">この画面で送信バッチを作成した後、内容確認・添付確認を行い、Gmail APIで送信用アカウントの下書きフォルダに作成します。</p>
     </section>
 
     <div class="form-actions">

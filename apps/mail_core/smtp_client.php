@@ -18,7 +18,7 @@ function mail_delivery_driver(): string
     $config = mail_load_config();
     $delivery = $config['mail_delivery'] ?? [];
     $driver = is_array($delivery) ? strtolower(trim((string)($delivery['driver'] ?? 'smtp'))) : 'smtp';
-    return in_array($driver, ['smtp', 'graph', 'manual_export'], true) ? $driver : 'smtp';
+    return in_array($driver, ['smtp', 'gmail_draft', 'graph', 'manual_export'], true) ? $driver : 'smtp';
 }
 
 function mail_smtp_enabled(): bool
@@ -59,19 +59,16 @@ function mail_smtp_delay_seconds(): int
     return max(0, min(30, (int)($smtp['per_message_delay_seconds'] ?? 0)));
 }
 
-function mail_smtp_autoload_candidates(): array
+function mail_smtp_find_autoload(): ?string
 {
-    return array_values(array_unique([
+    $candidates = [
         dirname(mail_apps_dir()) . '/vendor/autoload.php',
         mail_apps_dir() . '/vendor/autoload.php',
         mail_core_dir() . '/vendor/autoload.php',
         dirname(dirname(mail_core_dir())) . '/vendor/autoload.php',
-    ]));
-}
+    ];
 
-function mail_smtp_find_autoload(): ?string
-{
-    foreach (mail_smtp_autoload_candidates() as $path) {
+    foreach ($candidates as $path) {
         if (is_file($path)) {
             return $path;
         }
@@ -80,42 +77,30 @@ function mail_smtp_find_autoload(): ?string
     return null;
 }
 
-function mail_smtp_phpmailer_class(): string
+function mail_smtp_load_phpmailer(): void
 {
-    $mailerClass = 'PHPMailer\\PHPMailer\\PHPMailer';
-    if (class_exists($mailerClass)) {
-        return $mailerClass;
+    if (class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
+        return;
     }
-
     $autoload = mail_smtp_find_autoload();
     if ($autoload !== null) {
         require_once $autoload;
     }
-    if (!class_exists($mailerClass)) {
-        throw new RuntimeException(
-            'PHPMailer の autoload.php が見つかりません。composer install を実行するか、vendor/autoload.php を配置してください。探索先: ' .
-            implode(', ', mail_smtp_autoload_candidates())
-        );
+    if (!class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
+        throw new RuntimeException('PHPMailer の autoload.php が見つかりません。bookと同じ vendor 配置を確認してください。');
     }
-
-    return $mailerClass;
 }
 
-function mail_smtp_load_phpmailer(): void
+function mail_smtp_create_mailer(): \PHPMailer\PHPMailer\PHPMailer
 {
-    mail_smtp_phpmailer_class();
-}
-
-function mail_smtp_create_mailer(): object
-{
-    $mailerClass = mail_smtp_phpmailer_class();
+    mail_smtp_load_phpmailer();
     [$configured, $missing] = mail_smtp_is_configured();
     if (!$configured) {
         throw new RuntimeException('SMTP設定が不足しています: ' . implode(', ', $missing));
     }
 
     $smtp = mail_smtp_config();
-    $mailer = new $mailerClass(true);
+    $mailer = new \PHPMailer\PHPMailer\PHPMailer(true);
     $mailer->isSMTP();
     $mailer->Host = trim((string)$smtp['host']);
     $mailer->Port = (int)$smtp['port'];
@@ -184,7 +169,7 @@ function mail_smtp_test_connection(): array
     } catch (Throwable $e) {
         try {
             $mailer->smtpClose();
-        } catch (Throwable $closeError) {
+        } catch (Throwable) {
         }
         throw new RuntimeException('SMTP接続確認に失敗しました: ' . $e->getMessage());
     }
@@ -192,17 +177,9 @@ function mail_smtp_test_connection(): array
 
 function mail_smtp_get_target(PDO $pdo, int $targetId): ?array
 {
-    // 直接入力(テンプレ無し)バッチでも本文形式を正しく判定するため、
-    // テンプレートの body_type を優先しつつ、無ければバッチに保存した body_type を使う。
-    // body_type 列が未追加の環境ではテンプレート値のみで従来通り動作させる。
-    $hasBatchBodyType = mail_column_exists($pdo, 'mail_batches', 'body_type');
-    $bodyTypeSelect = $hasBatchBodyType
-        ? "COALESCE(NULLIF(t.body_type, ''), NULLIF(b.body_type, ''), 'plain') AS body_type"
-        : "COALESCE(NULLIF(t.body_type, ''), 'plain') AS body_type";
-
     $stmt = $pdo->prepare(
         'SELECT bt.*, b.status AS batch_status, b.title AS batch_title, b.id AS batch_id, b.template_id, ' .
-        $bodyTypeSelect . ', o.identifier, o.name AS organization_name, o.representative_name, o.category ' .
+        't.body_type, o.identifier, o.name AS organization_name, o.representative_name, o.category ' .
         'FROM mail_batch_targets bt ' .
         'INNER JOIN mail_batches b ON b.id = bt.batch_id ' .
         'LEFT JOIN mail_templates t ON t.id = b.template_id ' .
@@ -309,11 +286,6 @@ function mail_smtp_plain_from_html(string $html): string
     return html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 }
 
-function mail_smtp_normalize_breaks(string $text, string $break = "\r\n"): string
-{
-    return preg_replace('/\r\n|\r|\n/', $break, $text) ?? $text;
-}
-
 function mail_smtp_send_target(PDO $pdo, int $targetId, ?array $actor = null): array
 {
     if (!mail_smtp_enabled()) {
@@ -346,9 +318,9 @@ function mail_smtp_send_target(PDO $pdo, int $targetId, ?array $actor = null): a
         if ($message['body_type'] === 'html') {
             $mailer->isHTML(true);
             $mailer->Body = $message['body'];
-            $mailer->AltBody = mail_smtp_normalize_breaks(mail_smtp_plain_from_html($message['body']));
+            $mailer->AltBody = \PHPMailer\PHPMailer\PHPMailer::normalizeBreaks(mail_smtp_plain_from_html($message['body']), "\r\n");
         } else {
-            $plain = mail_smtp_normalize_breaks($message['body']);
+            $plain = \PHPMailer\PHPMailer\PHPMailer::normalizeBreaks($message['body'], "\r\n");
             $mailer->isHTML(false);
             $mailer->Body = $plain;
             $mailer->AltBody = $plain;

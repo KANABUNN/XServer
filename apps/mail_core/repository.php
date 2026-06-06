@@ -556,131 +556,86 @@ function mail_create_batch_from_template(PDO $pdo, int $templateId, string $titl
     }
 }
 
-/**
- * compose.php から呼ばれる送信バッチ生成。
- * テンプレート利用 / 直接入力 のどちらでも、チェックボックスで選択された団体に対して
- * 件名・本文を差し込み展開し、mail_batch_targets を生成する。
- *
- * @param int|null            $templateId       テンプレート利用時はテンプレID、直接入力時は null
- * @param string              $subject          差し込み前の件名テンプレート
- * @param string              $body             差し込み前の本文テンプレート
- * @param string              $bodyType         'plain' | 'html'
- * @param array<int|string>   $organizationIds  送信対象として選択された団体ID
- */
-function mail_create_batch_from_message(
-    PDO $pdo,
-    string $title,
-    ?int $templateId,
-    string $subject,
-    string $body,
-    string $bodyType,
-    array $organizationIds,
-    ?array $actor = null
-): int {
+function mail_create_batch_from_message(PDO $pdo, string $title, ?int $templateId, string $subjectTemplate, string $bodyTemplate, string $bodyType, array $organizationIds, ?array $actor = null): int
+{
     $title = trim($title);
+    $subjectTemplate = trim($subjectTemplate);
+    $bodyTemplate = (string)$bodyTemplate;
+    $bodyType = strtolower(trim($bodyType)) === 'html' ? 'html' : 'plain';
+
     if ($title === '') {
         throw new InvalidArgumentException('バッチ名を入力してください。');
     }
-    $subject = trim($subject);
-    if ($subject === '') {
+    if ($subjectTemplate === '') {
         throw new InvalidArgumentException('件名を入力してください。');
     }
-    if (trim($body) === '') {
+    if (trim($bodyTemplate) === '') {
         throw new InvalidArgumentException('本文を入力してください。');
     }
 
-    $bodyType = strtolower(trim($bodyType));
-    if (!in_array($bodyType, ['plain', 'html'], true)) {
-        $bodyType = 'plain';
-    }
-
-    $templateId = ($templateId !== null && $templateId > 0) ? $templateId : null;
-
-    // 選択された団体IDを正規化（重複排除・正の整数のみ）
-    $ids = [];
-    foreach ($organizationIds as $rawId) {
-        $oid = (int)$rawId;
-        if ($oid > 0) {
-            $ids[$oid] = $oid;
+    $cleanOrgIds = [];
+    foreach ($organizationIds as $orgId) {
+        $orgId = (int)$orgId;
+        if ($orgId > 0) {
+            $cleanOrgIds[$orgId] = $orgId;
         }
     }
-    $ids = array_values($ids);
-    if ($ids === []) {
-        throw new InvalidArgumentException('送信対象の団体を1件以上選択してください。');
+    $cleanOrgIds = array_values($cleanOrgIds);
+    if ($cleanOrgIds === []) {
+        throw new InvalidArgumentException('送信対象を1件以上選択してください。');
     }
 
-    // 選択された有効団体のみを取得（識別番号順）
-    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $placeholders = [];
+    $params = [];
+    foreach ($cleanOrgIds as $index => $orgId) {
+        $key = ':org_id_' . $index;
+        $placeholders[] = $key;
+        $params[$key] = $orgId;
+    }
+
     $stmt = $pdo->prepare(
-        'SELECT * FROM mail_organizations WHERE id IN (' . $placeholders . ') AND is_active = 1 ORDER BY identifier ASC'
+        'SELECT * FROM mail_organizations WHERE is_active = 1 AND id IN (' . implode(',', $placeholders) . ') ORDER BY identifier ASC'
     );
-    $stmt->execute($ids);
+    $stmt->execute($params);
     $organizations = $stmt->fetchAll() ?: [];
     if ($organizations === []) {
-        throw new InvalidArgumentException('選択された有効な団体が見つかりません。');
+        throw new InvalidArgumentException('選択された有効団体が見つかりません。');
     }
-
-    // body_type 列は移行前の環境でも動くよう存在チェックして条件分岐する
-    $hasBodyTypeColumn = mail_column_exists($pdo, 'mail_batches', 'body_type');
 
     $pdo->beginTransaction();
     try {
-        if ($hasBodyTypeColumn) {
-            $stmt = $pdo->prepare(
-                'INSERT INTO mail_batches (batch_key, title, template_id, body_type, status, created_by_account_id) ' .
-                'VALUES (:batch_key, :title, :template_id, :body_type, :status, :created_by)'
-            );
-            $stmt->execute([
-                ':batch_key' => mail_generate_key('batch'),
-                ':title' => $title,
-                ':template_id' => $templateId,
-                ':body_type' => $bodyType,
-                ':status' => 'prepared',
-                ':created_by' => $actor !== null ? (int)($actor['id'] ?? 0) : null,
-            ]);
-        } else {
-            $stmt = $pdo->prepare(
-                'INSERT INTO mail_batches (batch_key, title, template_id, status, created_by_account_id) ' .
-                'VALUES (:batch_key, :title, :template_id, :status, :created_by)'
-            );
-            $stmt->execute([
-                ':batch_key' => mail_generate_key('batch'),
-                ':title' => $title,
-                ':template_id' => $templateId,
-                ':status' => 'prepared',
-                ':created_by' => $actor !== null ? (int)($actor['id'] ?? 0) : null,
-            ]);
-        }
+        $stmt = $pdo->prepare(
+            'INSERT INTO mail_batches (batch_key, title, template_id, status, created_by_account_id) ' .
+            'VALUES (:batch_key, :title, :template_id, :status, :created_by)'
+        );
+        $stmt->execute([
+            ':batch_key' => mail_generate_key('batch'),
+            ':title' => $title,
+            ':template_id' => $templateId !== null && $templateId > 0 ? $templateId : null,
+            ':status' => 'prepared',
+            ':created_by' => $actor !== null ? (int)($actor['id'] ?? 0) : null,
+        ]);
         $batchId = (int)$pdo->lastInsertId();
 
+        $targetCount = 0;
+        $needsReview = 0;
         $insertTarget = $pdo->prepare(
             'INSERT INTO mail_batch_targets (batch_id, organization_id, to_email, rendered_subject, rendered_body, status, error_message) ' .
             'VALUES (:batch_id, :organization_id, :to_email, :rendered_subject, :rendered_body, :status, :error_message)'
         );
 
-        $targetCount = 0;
-        $needsReview = 0;
         foreach ($organizations as $org) {
-            $context = mail_organization_context($org);
-            $renderedSubject = mail_render_template($subject, $context);
-            $renderedBody = mail_render_template($body, $context);
-            $unresolved = array_values(array_unique(array_merge(
-                $renderedSubject['unresolved'],
-                $renderedBody['unresolved']
-            )));
-
             $email = mail_normalize_email((string)($org['email'] ?? ''));
-            $emailValid = $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
-
-            $issues = [];
-            if (!$emailValid) {
-                $issues[] = 'メールアドレス未設定または形式不正';
-            }
-            if ($unresolved !== []) {
-                $issues[] = '未解決変数: ' . implode(', ', $unresolved);
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $needsReview++;
+                continue;
             }
 
-            $status = $issues === [] ? 'ready' : 'needs_review';
+            $context = mail_organization_context($org);
+            $subject = mail_render_template($subjectTemplate, $context);
+            $body = mail_render_template($bodyTemplate, $context);
+            $unresolved = array_values(array_unique(array_merge($subject['unresolved'], $body['unresolved'])));
+            $status = $unresolved === [] ? 'ready' : 'needs_review';
             if ($status === 'needs_review') {
                 $needsReview++;
             }
@@ -689,12 +644,16 @@ function mail_create_batch_from_message(
                 ':batch_id' => $batchId,
                 ':organization_id' => (int)$org['id'],
                 ':to_email' => $email,
-                ':rendered_subject' => $renderedSubject['rendered'],
-                ':rendered_body' => $renderedBody['rendered'],
+                ':rendered_subject' => $subject['rendered'],
+                ':rendered_body' => $body['rendered'],
                 ':status' => $status,
-                ':error_message' => $issues === [] ? null : implode(' / ', $issues),
+                ':error_message' => $unresolved === [] ? null : '未解決変数: ' . implode(', ', $unresolved),
             ]);
             $targetCount++;
+        }
+
+        if ($targetCount === 0) {
+            throw new InvalidArgumentException('有効なメールアドレスを持つ送信対象がありません。');
         }
 
         $stmt = $pdo->prepare('UPDATE mail_batches SET target_count = :target_count, status = :status WHERE id = :id');
@@ -704,12 +663,12 @@ function mail_create_batch_from_message(
             ':id' => $batchId,
         ]);
 
-        mail_audit_log($pdo, $actor, 'mail.batch.create', 'mail_batch', (string)$batchId, [
-            'source' => $templateId !== null ? 'template' : 'custom',
+        mail_audit_log($pdo, $actor, 'mail.batch.compose', 'mail_batch', (string)$batchId, [
             'template_id' => $templateId,
-            'body_type' => $bodyType,
+            'selected_count' => count($cleanOrgIds),
             'target_count' => $targetCount,
             'needs_review' => $needsReview,
+            'body_type' => $bodyType,
         ]);
 
         $pdo->commit();

@@ -103,8 +103,8 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
     <article class="summary-card"><span>個別添付</span><strong><?php echo (int)$selectedBatch['individual_attachment_count']; ?></strong></article>
     <article class="summary-card"><span>状態</span><strong class="small-strong"><?php echo mail_h(mail_status_label((string)$selectedBatch['status'])); ?></strong></article>
   </div>
-  <p class="muted">内容と添付を確認したら、状態を「確認済み」に変更してSMTP送信へ進みます。</p>
-  <p><a class="text-link" href="delivery.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">SMTP送信へ進む</a></p>
+  <p class="muted">内容と添付を確認したら、状態を「確認済み」に変更してGmail下書き作成へ進みます。</p>
+  <p><a class="text-link" href="drafts.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">Gmail下書き作成へ進む</a></p>
 </section>
 
 <section class="panel mt-18">
