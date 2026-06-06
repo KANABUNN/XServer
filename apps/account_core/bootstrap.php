@@ -58,6 +58,14 @@ function account_site_app_definitions(): array
                 'admin' => '管理者',
             ],
         ],
+        'mail' => [
+            'label' => 'メール半自動化管理',
+            'roles' => [
+                'viewer' => '閲覧者',
+                'user' => '編集者',
+                'admin' => '管理者',
+            ],
+        ],
         'admin_book' => [
             'label' => '予約管理',
             'roles' => [
