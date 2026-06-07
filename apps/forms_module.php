@@ -1998,6 +1998,187 @@ function forms_get_submission(int $submissionId): ?array
     return $row ?: null;
 }
 
+function forms_collect_submission_file_paths(int $submissionId): array
+{
+    forms_bootstrap();
+
+    $paths = [];
+
+    $stmt = forms_db()->prepare('
+        SELECT uploaded_relative_path
+        FROM managed_form_submissions
+        WHERE id = :id
+          AND uploaded_relative_path IS NOT NULL
+          AND uploaded_relative_path != ""
+    ');
+    $stmt->execute([':id' => $submissionId]);
+
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $path) {
+        $path = trim((string)$path);
+        if ($path !== '') {
+            $paths[] = $path;
+        }
+    }
+
+    $revStmt = forms_db()->prepare('
+        SELECT uploaded_relative_path
+        FROM managed_form_submission_revisions
+        WHERE submission_id = :submission_id
+          AND uploaded_relative_path IS NOT NULL
+          AND uploaded_relative_path != ""
+    ');
+    $revStmt->execute([':submission_id' => $submissionId]);
+
+    foreach ($revStmt->fetchAll(PDO::FETCH_COLUMN) as $path) {
+        $path = trim((string)$path);
+        if ($path !== '') {
+            $paths[] = $path;
+        }
+    }
+
+    return array_values(array_unique($paths));
+}
+
+function forms_delete_submission(int $submissionId, array $actor = []): array
+{
+    forms_bootstrap();
+
+    $submission = forms_get_submission($submissionId);
+    if (!$submission) {
+        throw new InvalidArgumentException('削除対象の回答が見つかりません。');
+    }
+
+    $formId = (int)$submission['form_id'];
+    $relativePaths = forms_collect_submission_file_paths($submissionId);
+
+    $pdo = forms_db();
+    $pdo->beginTransaction();
+
+    try {
+        $stmt = $pdo->prepare('DELETE FROM managed_form_submissions WHERE id = :id');
+        $stmt->execute([':id' => $submissionId]);
+
+        if ($stmt->rowCount() < 1) {
+            throw new InvalidArgumentException('削除対象の回答が見つかりません。');
+        }
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    foreach ($relativePaths as $relativePath) {
+        forms_delete_relative_file($relativePath);
+    }
+
+    forms_admin_audit_log('submission.delete', 'managed_form_submission', $submissionId, [
+        'form_id' => $formId,
+        'submitter_email' => (string)($submission['submitter_email'] ?? ''),
+        'organization_name' => (string)($submission['organization_name'] ?? ''),
+        'deleted_file_count' => count($relativePaths),
+    ], $actor);
+
+    return [
+        'deleted_submission_id' => $submissionId,
+        'form_id' => $formId,
+        'deleted_file_count' => count($relativePaths),
+    ];
+}
+
+function forms_delete_submission_file(int $submissionId, array $actor = []): array
+{
+    forms_bootstrap();
+
+    $submission = forms_get_submission($submissionId);
+    if (!$submission) {
+        throw new InvalidArgumentException('対象の回答が見つかりません。');
+    }
+
+    $relativePath = trim((string)($submission['uploaded_relative_path'] ?? ''));
+    if ($relativePath === '') {
+        throw new InvalidArgumentException('この回答には削除対象の添付ファイルがありません。');
+    }
+
+    $pdo = forms_db();
+    $pdo->beginTransaction();
+
+    try {
+        $stmt = $pdo->prepare('
+            UPDATE managed_form_submissions
+            SET uploaded_original_name = NULL,
+                uploaded_stored_name = NULL,
+                uploaded_relative_path = NULL,
+                latest_revision_id = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+        ');
+        $stmt->execute([':id' => $submissionId]);
+
+        $revStmt = $pdo->prepare('
+            UPDATE managed_form_submission_revisions
+            SET uploaded_original_name = NULL,
+                uploaded_stored_name = NULL,
+                uploaded_relative_path = NULL
+            WHERE submission_id = :submission_id
+              AND uploaded_relative_path = :relative_path
+        ');
+        $revStmt->execute([
+            ':submission_id' => $submissionId,
+            ':relative_path' => $relativePath,
+        ]);
+
+        $latestStmt = $pdo->prepare('
+            SELECT id
+            FROM managed_form_submission_revisions
+            WHERE submission_id = :submission_id
+              AND uploaded_relative_path IS NOT NULL
+              AND uploaded_relative_path != ""
+            ORDER BY revision_number DESC, id DESC
+            LIMIT 1
+        ');
+        $latestStmt->execute([':submission_id' => $submissionId]);
+        $latestRevisionId = $latestStmt->fetchColumn();
+
+        if ($latestRevisionId) {
+            $pdo->prepare('
+                UPDATE managed_form_submissions
+                SET latest_revision_id = :latest_revision_id
+                WHERE id = :id
+            ')->execute([
+                ':latest_revision_id' => (int)$latestRevisionId,
+                ':id' => $submissionId,
+            ]);
+        }
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    forms_delete_relative_file($relativePath);
+
+    forms_admin_audit_log('submission.file.delete', 'managed_form_submission', $submissionId, [
+        'form_id' => (int)$submission['form_id'],
+        'filename' => (string)($submission['uploaded_original_name'] ?? ''),
+        'relative_path' => $relativePath,
+    ], $actor);
+
+    $updated = forms_get_submission($submissionId);
+    $form = forms_load_form((int)$submission['form_id']);
+
+    return [
+        'submission' => ($updated && $form) ? forms_build_admin_entry_record($updated, $form) : null,
+        'deleted_relative_path' => $relativePath,
+        'form_id' => (int)$submission['form_id'],
+    ];
+}
+
 function forms_update_submission_status(int $submissionId, string $nextStatus, string $adminNote, array $actor = []): array
 {
     $submission = forms_get_submission($submissionId);

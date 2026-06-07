@@ -569,6 +569,8 @@ function renderEntryDetail(entry, history = null) {
       </div>
       <div class="inline-actions">
         ${entry.uploaded_original_name && entry.latest_revision_id ? `<a class="btn" href="api/download_revision.php?revision_id=${entry.latest_revision_id}&csrf_token=${encodeURIComponent(csrfToken)}">最新添付を取得</a>` : ''}
+        ${entry.uploaded_original_name ? `<button type="button" class="btn danger" id="delete-entry-file-button" data-entry-id="${entry.id}">提出ファイルを削除</button>` : ''}
+        <button type="button" class="btn danger" id="delete-entry-button" data-entry-id="${entry.id}">回答を削除</button>
       </div>
     </div>
 
@@ -768,6 +770,82 @@ async function saveCurrentEntryStatus(entryId) {
 
   await loadEntries(adminState.activeFormId, getEntryFilterValues(), true);
   await selectEntry(Number(entryId), false);
+}
+
+async function deleteCurrentEntryFile(entryId) {
+  const entries = adminState.entriesResult?.entries || [];
+  const entry = entries.find((item) => item.id === Number(entryId)) || null;
+
+  if (!entry) {
+    showFlashMessage('削除対象の回答が見つかりません。', 'error', { title: '削除できませんでした' });
+    return;
+  }
+
+  if (!entry.uploaded_original_name) {
+    showFlashMessage('この回答には提出ファイルがありません。', 'info', { title: '削除対象なし' });
+    return;
+  }
+
+  const confirmed = window.confirm(`提出ファイル「${entry.uploaded_original_name}」を削除します。\n回答内容は残りますが、ファイルは元に戻せません。`);
+  if (!confirmed) return;
+
+  const result = await apiPost('api/admin_submission_delete.php', {
+    action: 'delete_file',
+    submission_id: Number(entryId),
+  });
+
+  if (!result.ok) {
+    showFlashMessage(result.message || '提出ファイルの削除に失敗しました。', 'error', {
+      title: '削除できませんでした',
+      duration: 5200,
+    });
+    return;
+  }
+
+  showFlashMessage(result.message || '提出ファイルを削除しました。', 'success', {
+    title: '提出ファイルを削除しました',
+    duration: 3600,
+  });
+
+  await loadEntries(adminState.activeFormId, getEntryFilterValues(), true);
+  await selectEntry(Number(entryId), false);
+}
+
+async function deleteCurrentEntry(entryId) {
+  const entries = adminState.entriesResult?.entries || [];
+  const entry = entries.find((item) => item.id === Number(entryId)) || null;
+
+  if (!entry) {
+    showFlashMessage('削除対象の回答が見つかりません。', 'error', { title: '削除できませんでした' });
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `回答を削除します。\n\n団体名: ${entry.organization_name}\nメール: ${entry.submitter_email}\n\n回答内容、更新履歴、状態ログ、紐づく提出ファイルを削除します。この操作は元に戻せません。`
+  );
+  if (!confirmed) return;
+
+  const result = await apiPost('api/admin_submission_delete.php', {
+    action: 'delete_submission',
+    submission_id: Number(entryId),
+  });
+
+  if (!result.ok) {
+    showFlashMessage(result.message || '回答の削除に失敗しました。', 'error', {
+      title: '削除できませんでした',
+      duration: 5200,
+    });
+    return;
+  }
+
+  showFlashMessage(result.message || '回答を削除しました。', 'success', {
+    title: '回答を削除しました',
+    duration: 3600,
+  });
+
+  adminState.activeEntryId = 0;
+  adminState.activeEntryHistory = null;
+  await loadEntries(adminState.activeFormId, getEntryFilterValues(), false);
 }
 
 function startNewFormMode() {
@@ -1047,6 +1125,17 @@ function bindEvents() {
     const reloadButton = event.target.closest('#reload-entry-history-button');
     if (reloadButton) {
       await selectEntry(Number(reloadButton.dataset.entryId), false);
+    }
+    const deleteFileButton = event.target.closest('#delete-entry-file-button');
+    if (deleteFileButton) {
+      await deleteCurrentEntryFile(Number(deleteFileButton.dataset.entryId));
+      return;
+    }
+
+    const deleteEntryButton = event.target.closest('#delete-entry-button');
+    if (deleteEntryButton) {
+      await deleteCurrentEntry(Number(deleteEntryButton.dataset.entryId));
+      return;
     }
   });
 
