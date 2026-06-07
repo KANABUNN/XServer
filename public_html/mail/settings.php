@@ -89,7 +89,7 @@ mail_render_page_header('送信設定', $user, 'settings.php');
 <section class="panel mt-18">
   <div class="panel-head"><h2>kintone同期設定</h2><span class="muted">団体データ連携</span></div>
   <div class="settings-grid">
-    <div><span class="muted">kintone同期</span><strong><?php echo !empty($kintone['enabled']) ? '有効' : '無効'; ?></strong></div>
+    <div><span class="muted">kintone同期</span><strong><?php echo mail_kintone_enabled() ? '有効' : '無効'; ?></strong></div>
     <div><span class="muted">設定状態</span><strong><?php echo $kintoneReady ? '利用可能' : '不足あり'; ?></strong></div>
     <div><span class="muted">接続先</span><code><?php echo mail_h((string)($kintone['base_url'] ?? $kintone['subdomain'] ?? '')); ?></code></div>
     <div><span class="muted">団体管理アプリID</span><strong><?php echo (int)($kintone['organization_app_id'] ?? 0); ?></strong></div>
