@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_init.php';
 require_once __DIR__ . '/../../apps/mail_core/gmail_client.php';
 require_once __DIR__ . '/../../apps/mail_core/smtp_client.php';
+require_once __DIR__ . '/../../apps/mail_core/kintone_client.php';
 
 [$user, $mailPdo, $dbError] = mail_app_init();
 mail_require_permission_or_forbid($user, 'settings.manage');
@@ -32,6 +33,8 @@ $smtp = mail_smtp_config();
 $deliveryDriver = mail_delivery_driver();
 $storage = $config['storage'] ?? [];
 $security = $config['security'] ?? [];
+$kintone = mail_kintone_config();
+[$kintoneReady, $kintoneMissing] = mail_kintone_is_configured();
 
 mail_render_page_header('送信設定', $user, 'settings.php');
 ?>
@@ -82,6 +85,23 @@ mail_render_page_header('送信設定', $user, 'settings.php');
   <?php if (!$smtpReady): ?>
     <div class="alert alert-warn mt-14">不足しているSMTP設定: <code><?php echo mail_h(implode(', ', $smtpMissing)); ?></code></div>
   <?php endif; ?>
+</section>
+<section class="panel mt-18">
+  <div class="panel-head"><h2>kintone同期設定</h2><span class="muted">団体データ連携</span></div>
+  <div class="settings-grid">
+    <div><span class="muted">kintone同期</span><strong><?php echo !empty($kintone['enabled']) ? '有効' : '無効'; ?></strong></div>
+    <div><span class="muted">設定状態</span><strong><?php echo $kintoneReady ? '利用可能' : '不足あり'; ?></strong></div>
+    <div><span class="muted">接続先</span><code><?php echo mail_h((string)($kintone['base_url'] ?? $kintone['subdomain'] ?? '')); ?></code></div>
+    <div><span class="muted">団体管理アプリID</span><strong><?php echo (int)($kintone['organization_app_id'] ?? 0); ?></strong></div>
+    <div><span class="muted">代表者管理アプリID</span><strong><?php echo (int)($kintone['representative_app_id'] ?? 0); ?></strong></div>
+    <div><span class="muted">団体取得条件</span><code><?php echo mail_h((string)($kintone['organization_query'] ?? 'status = "活動中" order by id asc')); ?></code></div>
+  </div>
+  <?php if (!$kintoneReady): ?>
+    <div class="alert alert-warn mt-14">不足しているkintone設定: <code><?php echo mail_h(implode(', ', $kintoneMissing)); ?></code></div>
+  <?php endif; ?>
+  <div class="mt-14">
+    <button type="button" class="link-button secondary" data-nav-href="organizations.php">団体データ画面へ</button>
+  </div>
 </section>
 <section class="panel mt-18">
   <div class="panel-head"><h2>ストレージ・アップロード</h2><span class="muted">非公開領域に保存</span></div>

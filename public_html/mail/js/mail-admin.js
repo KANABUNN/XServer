@@ -63,6 +63,15 @@
     });
   }
 
+  document.querySelectorAll('form[data-confirm]').forEach(form => {
+    form.addEventListener('submit', function (event) {
+      const message = form.dataset.confirm || 'この操作を実行します。続行しますか？';
+      if (!window.confirm(message)) {
+        event.preventDefault();
+      }
+    });
+  });
+
   const links = Array.from(document.querySelectorAll('[data-view-target]'));
   const views = Array.from(document.querySelectorAll('.content-view'));
 

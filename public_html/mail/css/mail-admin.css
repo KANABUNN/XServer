@@ -462,3 +462,20 @@ a,
   -ms-user-select: none;
   user-select: none;
 }
+
+/* kintone sync additions */
+.kintone-sync-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 18px;
+  align-items: start;
+}
+.kintone-sync-layout p {
+  margin: 0 0 10px;
+  line-height: 1.75;
+}
+@media (max-width: 900px) {
+  .kintone-sync-layout {
+    grid-template-columns: 1fr;
+  }
+}
