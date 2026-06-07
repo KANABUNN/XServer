@@ -26,7 +26,7 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
             mail_redirect('templates.php');
         }
     } catch (Throwable $e) {
-        mail_flash_set('danger', $e->getMessage());
+        mail_flash_set('danger', mail_user_safe_error_message($e));
         mail_redirect('templates.php');
     }
 }

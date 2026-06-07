@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../apps/mail_core/auth.php';
 require_once __DIR__ . '/../../apps/response_limit.php';
 
 mail_auth_bootstrap();
+mail_security_headers();
 $csrfToken = mail_auth_get_csrf_token();
 
 if (mail_auth_is_logged_in()) {
@@ -23,7 +24,8 @@ try {
     $accountPdo = mail_pdo('account');
     $roleUserCount = mail_auth_count_role_users($accountPdo);
 } catch (Throwable $e) {
-    $errorMessage = '共通アカウントDBへ接続できません: ' . $e->getMessage();
+    error_log('[mail login init] ' . (string)$e);
+    $errorMessage = 'ログインの準備に失敗しました。時間をおいて再試行してください。';
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '') {
@@ -56,7 +58,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '') {
                     exit;
                 }
             } catch (Throwable $e) {
-                $errorMessage = 'ログイン処理に失敗しました: ' . $e->getMessage();
+                error_log('[mail login] ' . (string)$e);
+                $errorMessage = 'ログイン処理に失敗しました。時間をおいて再試行してください。';
             }
         }
     }

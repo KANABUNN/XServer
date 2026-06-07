@@ -20,6 +20,17 @@ function mail_h(?string $value): string
     return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+if (!function_exists('mb_strlen')) {
+    function mb_strlen(string $string, ?string $encoding = null): int
+    {
+        if ($string === '') {
+            return 0;
+        }
+        $count = preg_match_all('/./us', $string);
+        return $count !== false ? $count : strlen($string);
+    }
+}
+
 function mail_json_encode(array $data): string
 {
     return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
@@ -167,8 +178,20 @@ function mail_user_agent(): string
     return substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
 }
 
+function mail_security_headers(): void
+{
+    if (headers_sent()) {
+        return;
+    }
+    header('X-Frame-Options: DENY');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: same-origin');
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+}
+
 function mail_send_json(array $payload, int $statusCode = 200): void
 {
+    mail_security_headers();
     http_response_code($statusCode);
     header('Content-Type: application/json; charset=UTF-8');
     echo mail_json_encode($payload);

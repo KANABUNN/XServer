@@ -222,6 +222,21 @@ function mail_save_organization(PDO $pdo, array $data): int
     if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         throw new InvalidArgumentException('メールアドレスの形式が正しくありません。');
     }
+    if (mb_strlen($identifier) > 100) {
+        throw new InvalidArgumentException('識別番号は100文字以内で入力してください。');
+    }
+    if (mb_strlen($name) > 255) {
+        throw new InvalidArgumentException('団体名は255文字以内で入力してください。');
+    }
+    if (mb_strlen($email) > 255) {
+        throw new InvalidArgumentException('メールアドレスは255文字以内で入力してください。');
+    }
+    if (mb_strlen(trim((string)($data['representative_name'] ?? ''))) > 150) {
+        throw new InvalidArgumentException('代表者氏名は150文字以内で入力してください。');
+    }
+    if (mb_strlen(trim((string)($data['category'] ?? ''))) > 100) {
+        throw new InvalidArgumentException('区分は100文字以内で入力してください。');
+    }
 
     $params = [
         ':identifier' => $identifier,
@@ -398,6 +413,15 @@ function mail_save_template(PDO $pdo, array $data, ?array $actor = null): int
     $templateKey = trim((string)($data['template_key'] ?? ''));
     if ($templateKey === '') {
         $templateKey = mail_generate_key('tpl');
+    }
+    if (mb_strlen($title) > 190) {
+        throw new InvalidArgumentException('表示名は190文字以内で入力してください。');
+    }
+    if (mb_strlen($subject) > 500) {
+        throw new InvalidArgumentException('件名は500文字以内で入力してください。');
+    }
+    if (mb_strlen($templateKey) > 120) {
+        throw new InvalidArgumentException('テンプレートキーは120文字以内で入力してください。');
     }
     $vars = array_values(array_unique(array_merge(
         mail_extract_template_variables($subject),

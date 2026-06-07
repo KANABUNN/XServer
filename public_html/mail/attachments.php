@@ -8,6 +8,13 @@ require_once __DIR__ . '/../../apps/mail_core/upload_service.php';
 $selectedBatchId = (int)($_GET['batch_id'] ?? ($_POST['batch_id'] ?? 0));
 
 if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+    if ($contentLength > 0 && empty($_POST) && empty($_FILES)) {
+        $postMaxSize = ini_get('post_max_size') ?: '不明';
+        $uploadMaxSize = ini_get('upload_max_filesize') ?: '不明';
+        mail_flash_set('danger', '添付の合計サイズがPHPの上限を超えている可能性があります。post_max_size=' . $postMaxSize . ' / upload_max_filesize=' . $uploadMaxSize . ' を確認のうえ、分割してアップロードしてください。');
+        mail_redirect('attachments.php' . ($selectedBatchId > 0 ? '?batch_id=' . $selectedBatchId : ''));
+    }
     mail_auth_require_csrf();
     $action = (string)($_POST['action'] ?? '');
     try {
@@ -41,7 +48,7 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
           mail_redirect('attachments.php?batch_id=' . (int)$_POST['batch_id']);
         }
     } catch (Throwable $e) {
-        mail_flash_set('danger', $e->getMessage());
+        mail_flash_set('danger', mail_user_safe_error_message($e));
         mail_redirect('attachments.php' . ($selectedBatchId > 0 ? '?batch_id=' . $selectedBatchId : ''));
     }
 }

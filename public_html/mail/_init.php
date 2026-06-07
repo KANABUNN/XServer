@@ -6,6 +6,25 @@ require_once __DIR__ . '/../../apps/mail_core/bootstrap.php';
 require_once __DIR__ . '/../../apps/mail_core/auth.php';
 require_once __DIR__ . '/../../apps/mail_core/repository.php';
 
+function mail_user_safe_error_message(Throwable $e, string $context = 'mail'): string
+{
+    // 利用者向けに意図して投げる検証エラーはそのまま表示
+    if ($e instanceof InvalidArgumentException) {
+        return $e->getMessage();
+    }
+    // PDOException は RuntimeException 派生のため先に判定し、DB内部情報を隠す
+    if ($e instanceof PDOException || $e instanceof Error) {
+        error_log('[mail ' . $context . '] ' . (string)$e);
+        return 'サーバー側でエラーが発生しました。時間をおいて再試行してください。';
+    }
+    // アプリが意図して投げる業務例外（確認文言・SMTP結果など）は表示
+    if ($e instanceof RuntimeException) {
+        return $e->getMessage();
+    }
+    error_log('[mail ' . $context . '] ' . (string)$e);
+    return 'サーバー側でエラーが発生しました。時間をおいて再試行してください。';
+}
+
 function mail_app_init(): array
 {
     $user = mail_auth_require_login();
@@ -17,7 +36,8 @@ function mail_app_init(): array
         }
         return [$user, $pdo, ''];
     } catch (Throwable $e) {
-        return [$user, null, 'メールDBへ接続できません: ' . $e->getMessage()];
+        error_log('[mail app_init] ' . (string)$e);
+        return [$user, null, 'メールDBへ接続できません。時間をおいて再試行するか、管理者に連絡してください。'];
     }
 }
 
@@ -137,6 +157,7 @@ function mail_admin_sanitize_editor_html(string $html): string
 
 function mail_render_page_header(string $title, array $user, string $activeHref): void
 {
+    mail_security_headers();
     $csrfToken = mail_auth_get_csrf_token();
     ?><!DOCTYPE html>
 <html lang="ja">

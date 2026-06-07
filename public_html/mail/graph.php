@@ -61,7 +61,7 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
             mail_redirect('graph.php?batch_id=' . $selectedBatchId);
         }
     } catch (Throwable $e) {
-        mail_flash_set('danger', $e->getMessage());
+        mail_flash_set('danger', mail_user_safe_error_message($e));
         mail_redirect('graph.php' . ($selectedBatchId > 0 ? '?batch_id=' . $selectedBatchId : ''));
     }
 }

@@ -20,7 +20,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             mail_redirect('settings.php');
         }
     } catch (Throwable $e) {
-        mail_flash_set('danger', $e->getMessage());
+        mail_flash_set('danger', mail_user_safe_error_message($e));
         mail_redirect('settings.php');
     }
 }

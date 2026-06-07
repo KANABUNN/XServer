@@ -59,7 +59,7 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
         mail_flash_set('info', '送信バッチを作成しました。内容確認後、添付登録またはGmail下書き作成へ進んでください。');
         mail_redirect('batches.php?batch_id=' . $batchId);
     } catch (Throwable $e) {
-        mail_flash_set('danger', $e->getMessage());
+        mail_flash_set('danger', mail_user_safe_error_message($e));
         mail_redirect('compose.php');
     }
 }
