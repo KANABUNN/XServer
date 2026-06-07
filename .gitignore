@@ -11,3 +11,4 @@ favicon.ico
 *.patch
 config.local.php
 google-service-account.json
+apps/storage/mail_htmlpurifier_cache/

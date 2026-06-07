@@ -148,11 +148,7 @@ function mail_admin_body_to_editor_html(string $body, ?string $bodyType = null):
 
 function mail_admin_sanitize_editor_html(string $html): string
 {
-    $html = preg_replace('/<\s*(script|style|iframe|object|embed|form|input|button|meta|link)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/i', '', $html) ?? $html;
-    $html = preg_replace('/<\s*(script|style|iframe|object|embed|form|input|button|meta|link)\b[^>]*\/?>/i', '', $html) ?? $html;
-    $html = preg_replace('/\s+on[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $html) ?? $html;
-    $html = preg_replace('/javascript\s*:/i', '', $html) ?? $html;
-    return $html;
+    return mail_purify_html($html);
 }
 
 function mail_render_page_header(string $title, array $user, string $activeHref): void

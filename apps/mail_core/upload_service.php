@@ -57,6 +57,59 @@ function mail_validate_attachment_name(array $config, string $originalName): arr
     return [true, ''];
 }
 
+function mail_detect_uploaded_mime(string $path): ?string
+{
+    if ($path === '' || !is_file($path) || !function_exists('finfo_open')) {
+        return null;
+    }
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    if (!$finfo) {
+        return null;
+    }
+    $detected = finfo_file($finfo, $path);
+    finfo_close($finfo);
+    if (!is_string($detected) || trim($detected) === '') {
+        return null;
+    }
+    return strtolower(trim($detected));
+}
+
+function mail_allowed_mimes_for_extension(string $extension): array
+{
+    return match (strtolower($extension)) {
+        'pdf' => ['application/pdf'],
+        'zip' => [
+            'application/zip',
+            'application/x-zip',
+            'application/x-zip-compressed',
+            'application/octet-stream',
+            'multipart/x-zip',
+        ],
+        'doc' => [
+            'application/msword',
+            'application/vnd.ms-word',
+            'application/octet-stream',
+        ],
+        'docx' => [
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/zip',
+            'application/octet-stream',
+        ],
+        'xls' => [
+            'application/vnd.ms-excel',
+            'application/msexcel',
+            'application/octet-stream',
+        ],
+        'xlsx' => [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/zip',
+            'application/octet-stream',
+        ],
+        // csv / txt は finfo の判定揺れが大きいため MIME 制限を課さない（forms と同方針）
+        default => [],
+    };
+}
+
 function mail_storage_root(): string
 {
     $config = mail_load_config();
@@ -64,7 +117,19 @@ function mail_storage_root(): string
     if ($dir === '') {
         $dir = mail_apps_dir() . '/storage/mail_attachments';
     }
-    return rtrim($dir, '/\\');
+    $dir = rtrim($dir, '/\\');
+
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0750, true);
+    }
+    $denyFile = $dir . '/.htaccess';
+    if (is_dir($dir) && !is_file($denyFile)) {
+        @file_put_contents(
+            $denyFile,
+            "Require all denied\n<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n"
+        );
+    }
+    return $dir;
 }
 
 function mail_ensure_dir(string $dir): void
@@ -263,6 +328,11 @@ function mail_store_and_link_file(PDO $pdo, int $uploadBatchId, int $batchId, st
     $tmpName = (string)$entry['tmp_name'];
     if (!is_file($tmpName)) {
         return ['ok' => false, 'name' => $originalName, 'message' => '一時ファイルが見つかりません。'];
+    }
+    $detectedMime = mail_detect_uploaded_mime($tmpName);
+    $allowedMimes = mail_allowed_mimes_for_extension(pathinfo($originalName, PATHINFO_EXTENSION));
+    if ($detectedMime !== null && $allowedMimes !== [] && !in_array($detectedMime, $allowedMimes, true)) {
+        return ['ok' => false, 'name' => $originalName, 'message' => 'ファイルの実体が拡張子と一致しません（種別: ' . $detectedMime . '）。'];
     }
     if (!empty($entry['from_upload'])) {
         if (!move_uploaded_file($tmpName, $targetPath)) {

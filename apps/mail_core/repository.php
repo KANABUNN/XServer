@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/render.php';
+require_once __DIR__ . '/html_sanitizer.php';
 
 function mail_required_tables(): array
 {
@@ -410,6 +411,9 @@ function mail_save_template(PDO $pdo, array $data, ?array $actor = null): int
     if (!in_array($bodyType, ['plain', 'html'], true)) {
         $bodyType = 'plain';
     }
+    if ($bodyType === 'html') {
+        $body = mail_purify_html($body);
+    }
     $templateKey = trim((string)($data['template_key'] ?? ''));
     if ($templateKey === '') {
         $templateKey = mail_generate_key('tpl');
@@ -586,6 +590,9 @@ function mail_create_batch_from_message(PDO $pdo, string $title, ?int $templateI
     $subjectTemplate = trim($subjectTemplate);
     $bodyTemplate = (string)$bodyTemplate;
     $bodyType = strtolower(trim($bodyType)) === 'html' ? 'html' : 'plain';
+    if ($bodyType === 'html') {
+        $bodyTemplate = mail_purify_html($bodyTemplate);
+    }
 
     if ($title === '') {
         throw new InvalidArgumentException('バッチ名を入力してください。');
