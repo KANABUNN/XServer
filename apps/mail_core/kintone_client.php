@@ -8,14 +8,55 @@ require_once __DIR__ . '/repository.php';
 function mail_kintone_config(): array
 {
     $config = mail_load_config();
-    $kintone = $config['kintone'] ?? [];
-    return is_array($kintone) ? $kintone : [];
+
+    // 通常形: config.local.php の return 配列内に 'kintone' => [...] を置く。
+    $kintone = $config['kintone'] ?? null;
+    if (is_array($kintone)) {
+        return $kintone;
+    }
+
+    // 互換形: 'mail_kintone' => [...] として置いた場合も読む。
+    $mailKintone = $config['mail_kintone'] ?? null;
+    if (is_array($mailKintone)) {
+        return $mailKintone;
+    }
+
+    // 誤配置救済: kintone設定配列だけを直接返してしまった場合も読む。
+    // 例: return ['enabled' => true, 'organization_app_id' => 123, ...];
+    $directConfigKeys = [
+        'organization_app_id',
+        'organization_api_token',
+        'representative_app_id',
+        'representative_api_token',
+        'organization_fields',
+        'representative_fields',
+        'field_map',
+    ];
+    foreach ($directConfigKeys as $key) {
+        if (array_key_exists($key, $config)) {
+            return $config;
+        }
+    }
+
+    return [];
+}
+
+function mail_kintone_config_bool(mixed $value): bool
+{
+    if (is_bool($value)) {
+        return $value;
+    }
+    if (is_int($value) || is_float($value)) {
+        return (int)$value === 1;
+    }
+    $value = strtolower(trim((string)$value));
+    return in_array($value, ['1', 'true', 'yes', 'on', 'enabled', '有効'], true);
 }
 
 function mail_kintone_enabled(): bool
 {
     $config = mail_kintone_config();
-    return !empty($config['enabled']);
+    return mail_kintone_config_bool($config['enabled'] ?? false);
 }
 
 function mail_kintone_default_field_map(): array
@@ -46,8 +87,8 @@ function mail_kintone_is_configured(): array
     $config = mail_kintone_config();
     $missing = [];
 
-    if (empty($config['enabled'])) {
-        return [false, ['enabled']];
+    if (!mail_kintone_enabled()) {
+        return [false, ['kintone.enabled']];
     }
 
     $hasBase = trim((string)($config['base_url'] ?? '')) !== '' || trim((string)($config['subdomain'] ?? '')) !== '';
