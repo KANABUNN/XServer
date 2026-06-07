@@ -1316,7 +1316,6 @@ body.forms-public-page {
     }
 }
 
-
 .flash-message-stack {
     position: fixed;
     top: 14px;
@@ -1327,6 +1326,15 @@ body.forms-public-page {
     gap: 10px;
     width: min(92vw, 620px);
     pointer-events: none;
+}
+
+.flash-message__detail {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
 }
 
 .flash-message {
