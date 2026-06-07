@@ -7,6 +7,59 @@ require_once __DIR__ . '/../../apps/mail_core/kintone_client.php';
 [$user, $mailPdo, $dbError] = mail_app_init();
 $editOrganization = null;
 
+function mail_delete_organization_record(PDO $pdo, int $organizationId, ?array $actor = null): array
+{
+    if ($organizationId <= 0) {
+        throw new InvalidArgumentException('削除対象の団体を選択してください。');
+    }
+
+    $organization = mail_get_organization($pdo, $organizationId);
+    if (!$organization) {
+        throw new InvalidArgumentException('削除対象の団体が見つかりません。');
+    }
+
+    $countTargets = $pdo->prepare('SELECT COUNT(*) FROM mail_batch_targets WHERE organization_id = :id');
+    $countTargets->execute([':id' => $organizationId]);
+    $targetCount = (int)$countTargets->fetchColumn();
+
+    $countAttachments = $pdo->prepare('SELECT COUNT(*) FROM mail_attachments WHERE organization_id = :id');
+    $countAttachments->execute([':id' => $organizationId]);
+    $attachmentCount = (int)$countAttachments->fetchColumn();
+
+    $pdo->beginTransaction();
+    try {
+        // 過去バッチ・添付の参照がある場合は、団体マスタだけを削除し、履歴側は団体未紐付けとして残す。
+        $clearTargets = $pdo->prepare('UPDATE mail_batch_targets SET organization_id = NULL WHERE organization_id = :id');
+        $clearTargets->execute([':id' => $organizationId]);
+
+        $clearAttachments = $pdo->prepare('UPDATE mail_attachments SET organization_id = NULL WHERE organization_id = :id');
+        $clearAttachments->execute([':id' => $organizationId]);
+
+        $delete = $pdo->prepare('DELETE FROM mail_organizations WHERE id = :id');
+        $delete->execute([':id' => $organizationId]);
+
+        mail_audit_log($pdo, $actor, 'mail.organization.delete', 'mail_organization', (string)$organizationId, [
+            'identifier' => (string)($organization['identifier'] ?? ''),
+            'name' => (string)($organization['name'] ?? ''),
+            'external_source' => (string)($organization['external_source'] ?? ''),
+            'external_id' => (string)($organization['external_id'] ?? ''),
+            'detached_batch_targets' => $targetCount,
+            'detached_attachments' => $attachmentCount,
+        ]);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+
+    return [
+        'organization' => $organization,
+        'detached_batch_targets' => $targetCount,
+        'detached_attachments' => $attachmentCount,
+    ];
+}
+
 if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     mail_auth_require_csrf();
     $action = (string)($_POST['action'] ?? '');
@@ -24,6 +77,17 @@ if ($mailPdo instanceof PDO && $dbError === '' && ($_SERVER['REQUEST_METHOD'] ??
             mail_set_organization_active($mailPdo, $id, $active);
             mail_audit_log($mailPdo, $user, 'mail.organization.toggle', 'mail_organization', (string)$id, ['is_active' => $active]);
             mail_flash_set('info', $active ? '団体を有効化しました。' : '団体を無効化しました。');
+            mail_redirect('organizations.php');
+        } elseif ($action === 'delete') {
+            mail_require_permission_or_forbid($user, 'organization.edit');
+            $id = (int)($_POST['id'] ?? 0);
+            $result = mail_delete_organization_record($mailPdo, $id, $user);
+            $org = $result['organization'];
+            $message = '団体レコード「' . (string)($org['name'] ?? '') . '」を削除しました。';
+            if ((int)$result['detached_batch_targets'] > 0 || (int)$result['detached_attachments'] > 0) {
+                $message .= ' 過去バッチ ' . (int)$result['detached_batch_targets'] . '件、添付 ' . (int)$result['detached_attachments'] . '件の団体紐付けを解除しました。';
+            }
+            mail_flash_set('info', $message);
             mail_redirect('organizations.php');
         } elseif ($action === 'import_csv') {
             mail_require_permission_or_forbid($user, 'organization.edit');
@@ -174,14 +238,22 @@ mail_render_page_header('団体データ', $user, 'organizations.php');
             <td><?php echo (string)($org['external_source'] ?? '') === 'kintone' ? '<span class="badge">kintone</span>' : '<span class="muted">手動/CSV</span>'; ?></td>
             <td><span class="badge"><?php echo mail_h(mail_bool_label($org['is_active'])); ?></span></td>
             <td class="action-cell">
-              <button type="button" class="text-link" data-nav-href="organizations.php?edit=<?php echo (int)$org['id']; ?>">編集</button>
-              <form method="post" class="inline-form">
-                <?php echo mail_auth_csrf_field(); ?>
-                <input type="hidden" name="action" value="toggle">
-                <input type="hidden" name="id" value="<?php echo (int)$org['id']; ?>">
-                <input type="hidden" name="is_active" value="<?php echo (int)$org['is_active'] === 1 ? 0 : 1; ?>">
-                <button type="submit" class="text-button"<?php echo mail_auth_has_permission($user, 'organization.edit') ? '' : ' disabled'; ?>><?php echo (int)$org['is_active'] === 1 ? '無効化' : '有効化'; ?></button>
-              </form>
+              <div class="org-action-stack">
+                <button type="button" class="text-link" data-nav-href="organizations.php?edit=<?php echo (int)$org['id']; ?>">編集</button>
+                <form method="post" class="inline-form">
+                  <?php echo mail_auth_csrf_field(); ?>
+                  <input type="hidden" name="action" value="toggle">
+                  <input type="hidden" name="id" value="<?php echo (int)$org['id']; ?>">
+                  <input type="hidden" name="is_active" value="<?php echo (int)$org['is_active'] === 1 ? 0 : 1; ?>">
+                  <button type="submit" class="text-button"<?php echo mail_auth_has_permission($user, 'organization.edit') ? '' : ' disabled'; ?>><?php echo (int)$org['is_active'] === 1 ? '無効化' : '有効化'; ?></button>
+                </form>
+                <form method="post" class="inline-form" data-confirm="団体レコード「<?php echo mail_h((string)$org['name']); ?>」を削除します。過去バッチや添付に紐付いている場合は、履歴側の団体紐付けが解除されます。kintone由来の団体は、kintone側で活動中のままだと次回同期で再作成されます。続行しますか？">
+                  <?php echo mail_auth_csrf_field(); ?>
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="id" value="<?php echo (int)$org['id']; ?>">
+                  <button type="submit" class="text-button danger-text"<?php echo mail_auth_has_permission($user, 'organization.edit') ? '' : ' disabled'; ?>>削除</button>
+                </form>
+              </div>
             </td>
           </tr>
         <?php endforeach; ?>

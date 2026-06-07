@@ -479,3 +479,21 @@ a,
     grid-template-columns: 1fr;
   }
 }
+
+/* organization list actions */
+.org-action-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+}
+.org-action-stack .inline-form {
+  display: inline-flex;
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .org-action-stack {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
