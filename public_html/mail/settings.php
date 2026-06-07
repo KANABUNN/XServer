@@ -94,7 +94,7 @@ mail_render_page_header('送信設定', $user, 'settings.php');
     <div><span class="muted">接続先</span><code><?php echo mail_h((string)($kintone['base_url'] ?? $kintone['subdomain'] ?? '')); ?></code></div>
     <div><span class="muted">団体管理アプリID</span><strong><?php echo (int)($kintone['organization_app_id'] ?? 0); ?></strong></div>
     <div><span class="muted">代表者管理アプリID</span><strong><?php echo (int)($kintone['representative_app_id'] ?? 0); ?></strong></div>
-    <div><span class="muted">団体取得条件</span><code><?php echo mail_h((string)($kintone['organization_query'] ?? 'status = "活動中" order by id asc')); ?></code></div>
+    <div><span class="muted">団体取得条件</span><code><?php echo mail_h((string)($kintone['organization_query'] ?? 'status in ("活動中") order by id asc')); ?></code></div>
   </div>
   <?php if (!$kintoneReady): ?>
     <div class="alert alert-warn mt-14">不足しているkintone設定: <code><?php echo mail_h(implode(', ', $kintoneMissing)); ?></code></div>

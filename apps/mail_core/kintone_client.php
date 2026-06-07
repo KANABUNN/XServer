@@ -263,6 +263,40 @@ function mail_kintone_configured_fields(string $key, array $defaultFields): arra
     return array_values($clean);
 }
 
+function mail_kintone_quote_query_value(string $value): string
+{
+    return '"' . str_replace(['\\', '"'], ['\\\\', '\"'], $value) . '"';
+}
+
+function mail_kintone_dropdown_in_query(string $fieldCode, string $value): string
+{
+    $fieldCode = trim($fieldCode);
+    if ($fieldCode === '') {
+        throw new InvalidArgumentException('kintoneのフィールドコードが空です。');
+    }
+    return $fieldCode . ' in (' . mail_kintone_quote_query_value($value) . ')';
+}
+
+function mail_kintone_default_organization_query(array $map): string
+{
+    return mail_kintone_dropdown_in_query((string)$map['status'], '活動中') . ' order by ' . (string)$map['identifier'] . ' asc';
+}
+
+function mail_kintone_normalize_dropdown_query(string $query, string $fieldCode): string
+{
+    $fieldCode = trim($fieldCode);
+    if ($query === '' || $fieldCode === '') {
+        return $query;
+    }
+
+    // kintoneのドロップダウンフィールドでは「=」が使えないため、過去設定との互換として
+    // status = "活動中" / status = "活動中" を status in ("活動中") へ自動補正する。
+    $pattern = '/(?<![A-Za-z0-9_])' . preg_quote($fieldCode, '/') . '\s*=\s*(["\'])(.*?)\1/u';
+    return preg_replace_callback($pattern, static function (array $matches) use ($fieldCode): string {
+        return mail_kintone_dropdown_in_query($fieldCode, (string)$matches[2]);
+    }, $query) ?? $query;
+}
+
 function mail_kintone_ensure_schema(PDO $pdo): void
 {
     if (!mail_column_exists($pdo, 'mail_organizations', 'external_source')) {
@@ -374,7 +408,8 @@ function mail_kintone_sync_organizations(PDO $pdo, ?array $actor = null): array
         (string)$map['email'],
         (string)$map['status'],
     ]);
-    $orgQuery = trim((string)($config['organization_query'] ?? ((string)$map['status'] . ' = "活動中" order by ' . (string)$map['identifier'] . ' asc')));
+    $orgQuery = trim((string)($config['organization_query'] ?? mail_kintone_default_organization_query($map)));
+    $orgQuery = mail_kintone_normalize_dropdown_query($orgQuery, (string)$map['status']);
 
     $orgRecords = mail_kintone_fetch_records(
         (int)$config['organization_app_id'],

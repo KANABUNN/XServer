@@ -135,7 +135,7 @@ mail_render_page_header('団体データ', $user, 'organizations.php');
   <div class="panel-head"><h2>kintone同期</h2><span class="muted">活動中団体のみ反映</span></div>
   <div class="kintone-sync-layout">
     <div>
-      <p>団体管理アプリの <code>status = &quot;活動中&quot;</code> のレコードを取得し、代表者管理アプリの <code>group_id</code> と突き合わせて団体データへ反映します。</p>
+      <p>団体管理アプリの <code>status in (&quot;活動中&quot;)</code> のレコードを取得し、代表者管理アプリの <code>group_id</code> と突き合わせて団体データへ反映します。</p>
       <p class="muted">kintone由来の団体だけを同期対象として管理するため、CSVや手入力で追加した団体は同期時の無効化対象に含めません。</p>
       <?php if (!$kintoneReady): ?>
         <div class="alert alert-warn mt-14">kintone設定が不足しています: <code><?php echo mail_h(implode(', ', $kintoneMissing)); ?></code></div>
