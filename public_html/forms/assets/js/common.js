@@ -1,59 +1,173 @@
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
-async function readApiJson(response) {
-  const text = await response.text();
-  let data = null;
+function makeClientRequestId() {
+  const rand = (typeof crypto !== 'undefined' && crypto.getRandomValues)
+    ? Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, '0')).join('')
+    : Math.random().toString(16).slice(2, 10);
+  return 'C-' + Date.now().toString(36) + '-' + rand;
+}
 
-  if (text) {
+// code -> 利用者向けメッセージ
+function apiErrorUserMessage(code) {
+  switch (code) {
+    case 'NETWORK':
+      return 'ネットワークに接続できませんでした。電波・接続状況をご確認のうえ、再度お試しください。';
+    case 'TIMEOUT':
+      return '通信がタイムアウトしました。回線が不安定な可能性があります。少し時間をおいて再送信してください。';
+    case 'ABORTED':
+      return '送信が中断されました。ページを離れずに、もう一度お試しください。';
+    case 'EMPTY_RESPONSE':
+      return 'サーバーから空の応答が返されました。時間をおいて再度お試しください。';
+    case 'NON_JSON':
+      return 'サーバーから想定外の応答が返されました。学内・公共Wi-Fiのログイン（認証ページ）や、拡張機能・プロキシの影響が考えられます。';
+    default:
+      return '通信に失敗しました。時間をおいて再度お試しください。';
+  }
+}
+
+// 構造化APIエラー：code で原因分類、status/requestId/detail を保持。
+class ApiError extends Error {
+  constructor(code, { status = 0, requestId = '', detail = '' } = {}) {
+    super(apiErrorUserMessage(code));
+    this.name = 'ApiError';
+    this.code = code;
+    this.status = status;
+    this.requestId = requestId;
+    this.detail = detail;
+  }
+}
+
+// 利用者向けメッセージと、サポート連絡用の技術詳細(コード/状態/参照ID)を返す。
+function describeApiError(error) {
+  if (error instanceof ApiError) {
+    const parts = ['コード: ' + error.code];
+    if (error.status) parts.push('状態: ' + error.status);
+    if (error.requestId) parts.push('参照ID: ' + error.requestId);
+    return { code: error.code, message: error.message, detail: parts.join(' / ') };
+  }
+  return {
+    code: 'UNKNOWN',
+    message: apiErrorUserMessage('UNKNOWN'),
+    detail: 'コード: UNKNOWN' + (error?.message ? ' / ' + String(error.message).slice(0, 120) : ''),
+  };
+}
+
+function apiBackoffDelay(attempt) {
+  const base = 400 * Math.pow(2, attempt); // 400ms, 800ms, 1600ms...
+  return Math.min(base + Math.floor(Math.random() * 200), 2000); // ジッタ付き、上限2s
+}
+function apiSleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+// fetch 本体：タイムアウト(AbortController)＋瞬断/タイムアウト/指定HTTP状態の再試行。
+// 非idempotentなPOSTでは retries を低く・retryStatuses を空に保つこと(二重送信回避)。
+async function apiFetch(url, fetchOptions = {}, opts = {}) {
+  const { timeoutMs = 12000, retries = 0, retryStatuses = [], requestId = '', onRetry = null } = opts;
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = window.setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
+
     try {
-      data = JSON.parse(text);
-    } catch (error) {
-      data = null;
+      const response = await fetch(url, { ...fetchOptions, signal: controller.signal });
+      window.clearTimeout(timer);
+
+      if (retryStatuses.includes(response.status) && attempt < retries) {
+        if (onRetry) onRetry({ attempt, reason: 'status', status: response.status });
+        await apiSleep(apiBackoffDelay(attempt));
+        continue;
+      }
+      return response;
+    } catch (err) {
+      window.clearTimeout(timer);
+
+      let code = 'NETWORK';
+      if (timedOut) code = 'TIMEOUT';
+      else if (err && err.name === 'AbortError') code = 'ABORTED';
+      lastError = new ApiError(code, { requestId });
+
+      // ABORTED(ページ離脱等)は再試行しない。NETWORK/TIMEOUT のみ瞬断として掬う。
+      if ((code === 'NETWORK' || code === 'TIMEOUT') && attempt < retries) {
+        if (onRetry) onRetry({ attempt, reason: code });
+        await apiSleep(apiBackoffDelay(attempt));
+        continue;
+      }
+      throw lastError;
     }
   }
+  throw lastError || new ApiError('NETWORK', { requestId });
+}
 
-  if (!data || typeof data !== 'object') {
-    const fallbackMessage = text
-      ? text.replace(/<[^>]*>/g, '').trim().slice(0, 300)
-      : 'サーバーから空の応答が返されました。';
-    throw new Error(fallbackMessage || 'サーバー応答を解析できませんでした。');
+async function readApiJson(response, requestId = '') {
+  const text = await response.text();
+  if (!text) {
+    throw new ApiError('EMPTY_RESPONSE', { status: response.status, requestId });
   }
-
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch (error) {
+    const snippet = text.replace(/<[^>]*>/g, '').trim().slice(0, 300);
+    throw new ApiError('NON_JSON', { status: response.status, requestId, detail: snippet });
+  }
+  if (!data || typeof data !== 'object') {
+    throw new ApiError('NON_JSON', { status: response.status, requestId });
+  }
   if (!response.ok && data.ok !== false) {
     data.ok = false;
   }
-
   return data;
 }
 
-async function apiGet(url) {
-  const response = await fetch(url, {
+async function apiGet(url, opts = {}) {
+  const requestId = makeClientRequestId();
+  const response = await apiFetch(url, {
     method: 'GET',
     credentials: 'same-origin',
+  }, {
+    timeoutMs: 12000,
+    retries: 2,                       // GETはidempotentなので積極的に瞬断を掬う
+    retryStatuses: [502, 503, 504],   // ゲートウェイ系のみ。500(アプリJSON)は再試行しない
+    requestId,
+    ...opts,
   });
-  return readApiJson(response);
+  return readApiJson(response, requestId);
 }
 
-async function apiPost(url, payload = {}) {
-  const response = await fetch(url, {
+async function apiPost(url, payload = {}, opts = {}) {
+  const requestId = makeClientRequestId();
+  const response = await apiFetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ csrf_token: csrfToken, ...payload }),
+    body: JSON.stringify({ csrf_token: csrfToken, client_request_id: requestId, ...payload }),
+  }, {
+    timeoutMs: 15000,
+    retries: 0,   // 非idempotent：既定は再試行しない(呼び出し側で明示的に有効化)
+    requestId,
+    ...opts,
   });
-  return readApiJson(response);
+  return readApiJson(response, requestId);
 }
 
-async function apiPostForm(url, formData) {
+async function apiPostForm(url, formData, opts = {}) {
+  const requestId = makeClientRequestId();
   formData.set('csrf_token', csrfToken);
-  const response = await fetch(url, {
+  formData.set('client_request_id', requestId);
+  const response = await apiFetch(url, {
     method: 'POST',
     credentials: 'same-origin',
     body: formData,
+  }, {
+    timeoutMs: 20000,  // 添付アップロードを考慮し長め
+    retries: 0,        // 既定は再試行しない(呼び出し側で明示的に有効化)
+    requestId,
+    ...opts,
   });
-  return readApiJson(response);
+  return readApiJson(response, requestId);
 }
 
 function setMessage(element, message, type = 'info') {
@@ -124,6 +238,12 @@ function showFlashMessage(message, type = 'info', options = {}) {
 
   body.appendChild(title);
   body.appendChild(text);
+  if (options.detail) {
+    const detail = document.createElement('small');
+    detail.className = 'flash-message__detail';
+    detail.textContent = options.detail;
+    body.appendChild(detail);
+  }
   item.appendChild(body);
   item.appendChild(close);
   stack.appendChild(item);

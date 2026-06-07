@@ -656,7 +656,10 @@ function renderActiveForm() {
     formHost?.setAttribute('aria-busy', 'true');
     clearMessage(message);
     try {
-      const result = await apiPostForm('api/submit.php', formData);
+      const result = await apiPostForm('api/submit.php', formData, {
+        retries: 1, // 瞬断/タイムアウトのみ1回だけ再送（後述の二重送信注意を参照）
+        onRetry: () => showFlashMessage('接続が不安定です。再送信しています…', 'info', { duration: 2500 }),
+      });
       if (!result.ok) {
         if (result.csrf_expired || result.reload_required) {
           persistCurrentPublicDraft(submitForm, form);
@@ -688,9 +691,13 @@ function renderActiveForm() {
         duration: 5200,
       });
     } catch (error) {
-      showFlashMessage('通信に失敗しました。時間をおいて再度お試しください。', 'error', {
-        title: '通信エラー',
-        duration: 6200,
+      // 失敗時も入力を下書き保存し、再送信で再入力が要らないようにする。
+      persistCurrentPublicDraft(submitForm, form);
+      const info = describeApiError(error);
+      showFlashMessage(info.message, 'error', {
+        title: '送信できませんでした',
+        detail: info.detail,
+        duration: 8000,
       });
     } finally {
       submitButton.disabled = false;
