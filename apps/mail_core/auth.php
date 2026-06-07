@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/../shared_accounts.php';
 
 function mail_auth_bootstrap(): void
 {
@@ -239,7 +240,60 @@ function mail_auth_current_user(): ?array
 {
     mail_auth_bootstrap();
     $user = $_SESSION['mail_user'] ?? null;
-    return is_array($user) ? $user : null;
+    if (!is_array($user)) {
+        return null;
+    }
+    if (!mail_auth_session_state_valid()) {
+        return null;
+    }
+    // 再検証でロール・権限が更新されている可能性があるため、最新のセッション値を返す
+    return is_array($_SESSION['mail_user'] ?? null) ? $_SESSION['mail_user'] : null;
+}
+
+function mail_auth_session_state_valid(): bool
+{
+    $sessionUser = $_SESSION['mail_user'] ?? null;
+    if (!is_array($sessionUser)) {
+        return false;
+    }
+    $accountId = (int)($sessionUser['id'] ?? 0);
+    if ($accountId < 1) {
+        return false;
+    }
+
+    // 直近60秒以内に検証済みなら再検証しない（DB負荷抑制。account_core / lend_core と同方針）
+    $now = time();
+    $lastChecked = (int)($sessionUser['_revalidated_at'] ?? 0);
+    if ($lastChecked > 0 && ($now - $lastChecked) < 60) {
+        return true;
+    }
+
+    try {
+        $state = shared_accounts_session_state(mail_pdo('account'), $accountId, MAIL_APP_KEY);
+    } catch (Throwable $e) {
+        // 共通アカウントDBの一時障害時に全利用者を即時ログアウトさせない
+        return true;
+    }
+
+    // アカウント無効化、または mail ロール剥奪（INNER JOIN で該当なし → null）の場合は失効
+    if ($state === null || (int)($state['is_active'] ?? 0) !== 1) {
+        return false;
+    }
+    // account 管理画面での更新時に session_version が加算されるため、不一致＝失効
+    if ((int)($state['session_version'] ?? 1) !== (int)($sessionUser['session_version'] ?? -1)) {
+        return false;
+    }
+
+    // ロール変更（昇格・降格）を即時反映し、キャッシュされた権限を更新
+    $roleKeys = mail_normalize_role_keys((array)($state['role_keys'] ?? []));
+    $primary = mail_pick_primary_role($roleKeys);
+    $_SESSION['mail_user']['role_keys'] = $roleKeys;
+    $_SESSION['mail_user']['role_key'] = $primary;
+    $_SESSION['mail_user']['role_label'] = mail_role_label($primary);
+    $_SESSION['mail_user']['permissions'] = mail_permissions_for_roles($roleKeys);
+    $_SESSION['mail_user']['_revalidated_at'] = $now;
+
+    return true;
 }
 
 function mail_auth_is_logged_in(): bool

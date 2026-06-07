@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../apps/mail_core/bootstrap.php';
 require_once __DIR__ . '/../../apps/mail_core/auth.php';
+require_once __DIR__ . '/../../apps/response_limit.php';
 
 mail_auth_bootstrap();
 $csrfToken = mail_auth_get_csrf_token();
@@ -35,19 +36,28 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '') {
         $errorMessage = 'ログインIDまたはメールアドレスとパスワードを入力してください。';
     } else {
         try {
-            $user = mail_auth_attempt_login($accountPdo, $identifier, $password);
-            if ($user === null) {
-                $errorMessage = 'ログイン情報が正しくないか、mail アプリの権限がありません。';
-            } else {
-                mail_auth_login_user($user);
-                mail_auth_write_audit_log($accountPdo, $user, 'mail.login', 'account', (string)$user['id'], [
-                    'role_keys' => $user['role_keys'] ?? [],
-                ]);
-                header('Location: ' . $returnTo, true, 302);
-                exit;
+            rate_limit_or_throw(get_client_ip(), __DIR__ . '/../../apps/rate_limit_mail_login.json', 5, 300);
+        } catch (Throwable $rateLimitError) {
+            error_log('[mail login rate_limit] ' . $rateLimitError->getMessage());
+            $errorMessage = '短時間にログイン試行が多すぎます。時間をおいて再試行してください。';
+        }
+
+        if ($errorMessage === '') {
+            try {
+                $user = mail_auth_attempt_login($accountPdo, $identifier, $password);
+                if ($user === null) {
+                    $errorMessage = 'ログイン情報が正しくないか、mail アプリの権限がありません。';
+                } else {
+                    mail_auth_login_user($user);
+                    mail_auth_write_audit_log($accountPdo, $user, 'mail.login', 'account', (string)$user['id'], [
+                        'role_keys' => $user['role_keys'] ?? [],
+                    ]);
+                    header('Location: ' . $returnTo, true, 302);
+                    exit;
+                }
+            } catch (Throwable $e) {
+                $errorMessage = 'ログイン処理に失敗しました: ' . $e->getMessage();
             }
-        } catch (Throwable $e) {
-            $errorMessage = 'ログイン処理に失敗しました: ' . $e->getMessage();
         }
     }
 }
