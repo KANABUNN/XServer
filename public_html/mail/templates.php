@@ -75,7 +75,8 @@ mail_render_page_header('テンプレート', $user, 'templates.php');
       <label class="full"><span>件名 *</span><input type="text" name="subject_template" id="templateSubject" data-variable-insert-target value="<?php echo mail_h((string)$form['subject_template']); ?>" required></label>
       <input type="hidden" name="body_type" value="html">
       <label><span>状態</span><select name="is_active"><option value="1"<?php echo mail_selected($form['is_active'], 1); ?>>有効</option><option value="0"<?php echo mail_selected($form['is_active'], 0); ?>>無効</option></select></label>
-      <label class="full"><span>本文 * <small class="muted">HTML形式で保存されます</small></span>
+      <div class="full editor-field">
+        <span class="editor-field-label">本文 * <small class="muted">HTML形式で保存されます</small></span>
         <textarea name="body_template" id="templateBody" class="html-editor-source" data-html-editor-input required><?php echo mail_h((string)$form['body_template']); ?></textarea>
         <div class="html-editor-wrap">
           <div class="html-editor-toolbar" data-editor-toolbar="templateBodyEditor">
@@ -94,7 +95,7 @@ mail_render_page_header('テンプレート', $user, 'templates.php');
           </div>
           <div id="templateBodyEditor" class="html-editor" contenteditable="true" data-variable-insert-target data-html-editor="templateBody" data-placeholder="本文を入力してください。"><?php echo mail_admin_sanitize_editor_html((string)$form['body_template']); ?></div>
         </div>
-      </label>
+      </div>
       <div class="form-actions full">
         <button type="submit" class="primary"<?php echo mail_auth_has_permission($user, 'template.edit') ? '' : ' disabled'; ?>>保存</button>
         <?php if ($editTemplate): ?><button type="button" class="secondary link-button" data-nav-href="templates.php">新規入力へ戻る</button><?php endif; ?>

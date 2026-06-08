@@ -110,7 +110,8 @@ mail_render_page_header('メール作成', $user, 'compose.php');
 
         <label><span>件名 *</span><input type="text" name="custom_subject" id="composeSubject" data-variable-insert-target placeholder="例: 【学生自治会】{{団体名}}へのご連絡" required></label>
         <input type="hidden" name="custom_body_type" value="html">
-        <label class="full"><span>本文 * <small class="muted">HTML形式で保存されます</small></span>
+        <div class="full editor-field">
+          <span class="editor-field-label">本文 * <small class="muted">HTML形式で保存されます</small></span>
           <textarea name="custom_body" id="composeBody" class="html-editor-source" data-html-editor-input required></textarea>
           <div class="html-editor-wrap">
             <div class="html-editor-toolbar" data-editor-toolbar="composeBodyEditor">
@@ -129,7 +130,7 @@ mail_render_page_header('メール作成', $user, 'compose.php');
             </div>
             <div id="composeBodyEditor" class="html-editor" contenteditable="true" data-variable-insert-target data-html-editor="composeBody" data-placeholder="本文を入力してください。"></div>
           </div>
-        </label>
+        </div>
       </div>
 
       <aside class="compose-side">

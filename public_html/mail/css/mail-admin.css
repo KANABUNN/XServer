@@ -489,6 +489,9 @@ a,
   user-select: none !important;
 }
 
+.editor-field { display: grid; gap: 6px; }
+.editor-field > .editor-field-label { color: var(--muted); font-size: 13px; font-weight: 700; }
+
 /* kintone sync additions */
 .kintone-sync-layout {
   display: grid;
