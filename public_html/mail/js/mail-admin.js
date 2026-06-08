@@ -126,6 +126,105 @@
     editor.innerHTML = normalizeEditorHtml(input.value || '');
   }
 
+const editorSelectionStore = new WeakMap();
+
+function getEditorFromSelection() {
+  const selection = window.getSelection();
+
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  let node = selection.anchorNode;
+
+  if (!node) {
+    return null;
+  }
+
+  if (node.nodeType === Node.TEXT_NODE) {
+    node = node.parentElement;
+  }
+
+  if (!(node instanceof Element)) {
+    return null;
+  }
+
+  return node.closest('[data-html-editor]');
+}
+
+function selectionBelongsToEditor(editor, range) {
+  if (!editor || !range) {
+    return false;
+  }
+
+  return editor.contains(range.startContainer) && editor.contains(range.endContainer);
+}
+
+function saveEditorSelection(editor) {
+  if (!editor) {
+    return;
+  }
+
+  const selection = window.getSelection();
+
+  if (!selection || selection.rangeCount === 0) {
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+
+  if (!selectionBelongsToEditor(editor, range)) {
+    return;
+  }
+
+  editorSelectionStore.set(editor, range.cloneRange());
+}
+
+function focusEditorWithoutScroll(editor) {
+  try {
+    editor.focus({ preventScroll: true });
+  } catch (e) {
+    editor.focus();
+  }
+}
+
+function restoreEditorSelection(editor) {
+  if (!editor) {
+    return;
+  }
+
+  const selection = window.getSelection();
+
+  if (!selection) {
+    return;
+  }
+
+  focusEditorWithoutScroll(editor);
+
+  const savedRange = editorSelectionStore.get(editor);
+
+  selection.removeAllRanges();
+
+  if (savedRange && selectionBelongsToEditor(editor, savedRange)) {
+    selection.addRange(savedRange);
+    return;
+  }
+
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  range.collapse(false);
+  selection.addRange(range);
+  editorSelectionStore.set(editor, range.cloneRange());
+}
+
+document.addEventListener('selectionchange', function () {
+  const editor = getEditorFromSelection();
+
+  if (editor) {
+    saveEditorSelection(editor);
+  }
+});
+
   document.querySelectorAll('[data-html-editor]').forEach(editor => {
     syncEditorToInput(editor);
     editor.addEventListener('input', function () {
@@ -142,6 +241,17 @@
         document.execCommand('insertText', false, text);
       }
     });
+    ['focus', 'keyup', 'mouseup'].forEach(type => {
+      editor.addEventListener(type, function () {
+        saveEditorSelection(editor);
+      });
+    });
+
+    editor.addEventListener('touchend', function () {
+      setTimeout(function () {
+        saveEditorSelection(editor);
+      }, 0);
+    }); 
     const form = editor.closest('form');
     form?.addEventListener('submit', function (event) {
       syncEditorToInput(editor);
@@ -166,13 +276,27 @@
   }
 
   function runEditorCommand(editor, command, value) {
-    if (!editor) return;
-    editor.focus();
+    if (!editor || !command) {
+      return;
+    }
+
+    restoreEditorSelection(editor);
     document.execCommand(command, false, value ?? null);
+    saveEditorSelection(editor);
     syncEditorToInput(editor);
   }
 
   document.querySelectorAll('.html-editor-toolbar').forEach(toolbar => {
+    toolbar.addEventListener('mousedown', function (event) {
+      const editor = editorByToolbar(toolbar);
+      if (editor) {
+        saveEditorSelection(editor);
+      }
+      const commandButton = event.target.closest('[data-editor-command]');
+      if (commandButton) {
+        event.preventDefault();
+      }
+    });
     toolbar.addEventListener('click', function (event) {
       const button = event.target.closest('[data-editor-command]');
       if (!button) return;
