@@ -333,6 +333,60 @@ CREATE TABLE IF NOT EXISTS managed_form_submission_revisions (
 SQL);
 
     $pdo->exec(<<<SQL
+CREATE TABLE IF NOT EXISTS managed_form_submission_files (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    submission_id BIGINT UNSIGNED NOT NULL,
+    revision_id BIGINT UNSIGNED NOT NULL,
+    form_id BIGINT UNSIGNED NOT NULL,
+    file_order INT UNSIGNED NOT NULL DEFAULT 1,
+    original_name VARCHAR(255) NOT NULL,
+    stored_name VARCHAR(255) NOT NULL,
+    relative_path VARCHAR(500) NOT NULL,
+    file_size BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    mime_type VARCHAR(255) DEFAULT NULL,
+    sha256_hash CHAR(64) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_mfsf_revision_order (revision_id, file_order),
+    KEY idx_mfsf_submission_revision (submission_id, revision_id),
+    KEY idx_mfsf_form_created (form_id, created_at),
+    KEY idx_mfsf_hash (sha256_hash),
+    CONSTRAINT fk_mfsf_submission FOREIGN KEY (submission_id) REFERENCES managed_form_submissions (id) ON DELETE CASCADE,
+    CONSTRAINT fk_mfsf_revision FOREIGN KEY (revision_id) REFERENCES managed_form_submission_revisions (id) ON DELETE CASCADE,
+    CONSTRAINT fk_mfsf_form FOREIGN KEY (form_id) REFERENCES managed_forms (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SQL);
+
+    // FORMS_MULTI_UPLOAD_PATCHED_SCHEMA
+    $pdo->exec(<<<SQL
+INSERT IGNORE INTO managed_form_submission_files (
+    submission_id,
+    revision_id,
+    form_id,
+    file_order,
+    original_name,
+    stored_name,
+    relative_path,
+    file_size,
+    mime_type,
+    sha256_hash
+)
+SELECT
+    r.submission_id,
+    r.id,
+    r.form_id,
+    1,
+    r.uploaded_original_name,
+    r.uploaded_stored_name,
+    r.uploaded_relative_path,
+    0,
+    NULL,
+    NULL
+FROM managed_form_submission_revisions r
+WHERE r.uploaded_relative_path IS NOT NULL
+  AND r.uploaded_relative_path != '';
+SQL);
+    $pdo->exec(<<<SQL
 CREATE TABLE IF NOT EXISTS managed_form_submission_status_logs (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     submission_id BIGINT UNSIGNED NOT NULL,
@@ -490,6 +544,7 @@ function forms_default_settings(): array
         'file_label' => '添付ファイル',
         'allowed_extensions' => 'pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,zip',
         'max_upload_size_mb' => 5,
+        'max_upload_files' => 1,
         'distribution_enabled' => false,
         'distribution_title' => '',
         'distribution_body' => '',
@@ -784,6 +839,8 @@ function forms_save_form(array $formData, array $fields): array
     $settings['file_label'] = trim((string)($formData['file_label'] ?? $settings['file_label'])) ?: '添付ファイル';
     $settings['allowed_extensions'] = trim((string)($formData['allowed_extensions'] ?? $settings['allowed_extensions'])) ?: $settings['allowed_extensions'];
     $settings['max_upload_size_mb'] = max(1, min(30, (int)($formData['max_upload_size_mb'] ?? $settings['max_upload_size_mb'])));
+    // FORMS_MULTI_UPLOAD_PATCHED_SETTING
+    $settings['max_upload_files'] = max(1, min(10, (int)($formData['max_upload_files'] ?? $settings['max_upload_files'] ?? 1)));
     $settings['distribution_enabled'] = forms_normalize_boolean($formData['distribution_enabled'] ?? false);
     $settings['distribution_title'] = mb_substr(trim((string)($formData['distribution_title'] ?? '')), 0, 150, 'UTF-8');
     $settings['distribution_body'] = mb_substr(trim((string)($formData['distribution_body'] ?? '')), 0, 5000, 'UTF-8');
@@ -1045,8 +1102,227 @@ function forms_validate_uploaded_file(array $file, array $settings): void
     }
 }
 
+function forms_max_upload_files(array $settings): int
+{
+    // FORMS_MULTI_UPLOAD_PATCHED_HELPERS
+    return max(1, min(10, (int)($settings['max_upload_files'] ?? 1)));
+}
+
+function forms_max_total_upload_bytes(array $settings): int
+{
+    $maxFiles = forms_max_upload_files($settings);
+    $perFileMb = max(1, min(30, (int)($settings['max_upload_size_mb'] ?? 5)));
+    return min(100 * 1024 * 1024, $maxFiles * $perFileMb * 1024 * 1024);
+}
+
+function forms_normalize_uploaded_files(array $files): array
+{
+    $source = $files['uploaded_file'] ?? $files['uploaded_files'] ?? null;
+    if (!is_array($source)) {
+        return [];
+    }
+
+    if (!is_array($source['name'] ?? null)) {
+        $error = (int)($source['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($error === UPLOAD_ERR_NO_FILE && trim((string)($source['name'] ?? '')) === '') {
+            return [];
+        }
+        return [[
+            'name' => (string)($source['name'] ?? ''),
+            'type' => (string)($source['type'] ?? ''),
+            'tmp_name' => (string)($source['tmp_name'] ?? ''),
+            'error' => $error,
+            'size' => (int)($source['size'] ?? 0),
+        ]];
+    }
+
+    $result = [];
+    foreach ($source['name'] as $index => $name) {
+        $error = (int)($source['error'][$index] ?? UPLOAD_ERR_NO_FILE);
+        if ($error === UPLOAD_ERR_NO_FILE && trim((string)$name) === '') {
+            continue;
+        }
+        $result[] = [
+            'name' => (string)$name,
+            'type' => (string)($source['type'][$index] ?? ''),
+            'tmp_name' => (string)($source['tmp_name'][$index] ?? ''),
+            'error' => $error,
+            'size' => (int)($source['size'][$index] ?? 0),
+        ];
+    }
+    return $result;
+}
+
+function forms_delete_relative_uploads(array $storedFiles): void
+{
+    foreach ($storedFiles as $file) {
+        $relativePath = trim((string)($file['uploaded_relative_path'] ?? $file['relative_path'] ?? ''));
+        if ($relativePath === '') {
+            continue;
+        }
+        forms_delete_relative_file($relativePath);
+    }
+}
+
+function forms_insert_submission_file_records(PDO $pdo, int $submissionId, int $revisionId, int $formId, array $files): void
+{
+    if ($files === []) {
+        return;
+    }
+
+    $stmt = $pdo->prepare('
+        INSERT INTO managed_form_submission_files (
+            submission_id,
+            revision_id,
+            form_id,
+            file_order,
+            original_name,
+            stored_name,
+            relative_path,
+            file_size,
+            mime_type,
+            sha256_hash
+        ) VALUES (
+            :submission_id,
+            :revision_id,
+            :form_id,
+            :file_order,
+            :original_name,
+            :stored_name,
+            :relative_path,
+            :file_size,
+            :mime_type,
+            :sha256_hash
+        )
+    ');
+
+    foreach (array_values($files) as $index => $file) {
+        $stmt->execute([
+            ':submission_id' => $submissionId,
+            ':revision_id' => $revisionId,
+            ':form_id' => $formId,
+            ':file_order' => $index + 1,
+            ':original_name' => (string)($file['uploaded_original_name'] ?? $file['original_name'] ?? ''),
+            ':stored_name' => (string)($file['uploaded_stored_name'] ?? $file['stored_name'] ?? ''),
+            ':relative_path' => (string)($file['uploaded_relative_path'] ?? $file['relative_path'] ?? ''),
+            ':file_size' => (int)($file['file_size'] ?? 0),
+            ':mime_type' => ($file['mime_type'] ?? null) !== null ? (string)$file['mime_type'] : null,
+            ':sha256_hash' => ($file['sha256_hash'] ?? null) !== null ? (string)$file['sha256_hash'] : null,
+        ]);
+    }
+}
+
+function forms_fetch_revision_files(int $revisionId): array
+{
+    if ($revisionId <= 0) {
+        return [];
+    }
+    $stmt = forms_db()->prepare('
+        SELECT *
+        FROM managed_form_submission_files
+        WHERE revision_id = :revision_id
+        ORDER BY file_order ASC, id ASC
+    ');
+    $stmt->execute([':revision_id' => $revisionId]);
+    $result = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $result[] = [
+            'id' => (int)$row['id'],
+            'submission_id' => (int)$row['submission_id'],
+            'revision_id' => (int)$row['revision_id'],
+            'form_id' => (int)$row['form_id'],
+            'file_order' => (int)$row['file_order'],
+            'original_name' => (string)$row['original_name'],
+            'stored_name' => (string)$row['stored_name'],
+            'relative_path' => (string)$row['relative_path'],
+            'file_size' => (int)($row['file_size'] ?? 0),
+            'mime_type' => (string)($row['mime_type'] ?? ''),
+            'sha256_hash' => (string)($row['sha256_hash'] ?? ''),
+            'created_at' => (string)$row['created_at'],
+        ];
+    }
+    return $result;
+}
+
+function forms_resolve_upload_file_path(string $relativePath): ?array
+{
+    $relativePath = ltrim(trim($relativePath), '/');
+    if ($relativePath === '' || str_contains($relativePath, '..')) {
+        return null;
+    }
+
+    $path = forms_upload_root() . '/' . $relativePath;
+    if (is_file($path)) {
+        return ['path' => $path, 'from_archive' => false];
+    }
+
+    $cfg = forms_runtime_config();
+    $archivedPath = storage_maintenance_forms_extract_archived_upload($cfg, $relativePath);
+    if (is_string($archivedPath) && is_file($archivedPath)) {
+        return ['path' => $archivedPath, 'cleanup_path' => $archivedPath, 'from_archive' => true];
+    }
+
+    return null;
+}
+
+function forms_build_revision_zip_download(int $revisionId, array $files): ?array
+{
+    if (!class_exists('ZipArchive')) {
+        throw new RuntimeException('ZipArchive が利用できないため、複数添付ファイルをZIP化できません。');
+    }
+
+    $tmpPath = tempnam(sys_get_temp_dir(), 'forms_revision_zip_');
+    if ($tmpPath === false) {
+        throw new RuntimeException('一時ファイルを作成できません。');
+    }
+    $zipPath = $tmpPath . '.zip';
+    @rename($tmpPath, $zipPath);
+
+    $zip = new ZipArchive();
+    if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+        @unlink($zipPath);
+        throw new RuntimeException('ZIPファイルを作成できません。');
+    }
+
+    $cleanup = [];
+    try {
+        foreach ($files as $file) {
+            $resolved = forms_resolve_upload_file_path((string)($file['relative_path'] ?? ''));
+            if (!$resolved) {
+                continue;
+            }
+            if (!empty($resolved['cleanup_path'])) {
+                $cleanup[] = (string)$resolved['cleanup_path'];
+            }
+            $order = max(1, (int)($file['file_order'] ?? 1));
+            $original = forms_safe_download_name((string)($file['original_name'] ?? ''), 'attachment');
+            $zipName = sprintf('%02d_%s', $order, $original);
+            $zip->addFile((string)$resolved['path'], $zipName);
+        }
+    } finally {
+        $zip->close();
+        foreach ($cleanup as $path) {
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
+    }
+
+    if (!is_file($zipPath) || filesize($zipPath) <= 0) {
+        @unlink($zipPath);
+        return null;
+    }
+
+    return [
+        'path' => $zipPath,
+        'filename' => sprintf('revision_%d_attachments.zip', $revisionId),
+        'cleanup_path' => $zipPath,
+        'is_zip' => true,
+    ];
+}
 function forms_store_uploaded_file(array $file, array $settings): array
 {
+    // FORMS_MULTI_UPLOAD_PATCHED_forms_store_uploaded_file
     forms_validate_uploaded_file($file, $settings);
     $originalName = (string)($file['name'] ?? '');
     $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
@@ -1063,10 +1339,15 @@ function forms_store_uploaded_file(array $file, array $settings): array
         throw new RuntimeException('添付ファイルの保存に失敗しました。');
     }
 
+    $mime = forms_detect_uploaded_mime($targetPath);
+
     return [
         'uploaded_original_name' => $originalName,
         'uploaded_stored_name' => $stored,
         'uploaded_relative_path' => $subdir . '/' . $stored,
+        'file_size' => (int)filesize($targetPath),
+        'mime_type' => $mime,
+        'sha256_hash' => hash_file('sha256', $targetPath),
     ];
 }
 
@@ -1403,18 +1684,32 @@ function forms_validate_submission(array $form, array $post, array $files): arra
         $payload[$key] = $normalized;
     }
 
-    $uploadFile = null;
-    $file = $files['uploaded_file'] ?? null;
+    // FORMS_MULTI_UPLOAD_PATCHED_VALIDATION
+    $uploadFiles = [];
     if (!empty($settings['allow_file_upload'])) {
-        if (is_array($file) && (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE)) {
+        $uploadFiles = forms_normalize_uploaded_files($files);
+        $maxFiles = forms_max_upload_files($settings);
+
+        if (!empty($settings['file_required']) && count($uploadFiles) < 1) {
+            $addError('uploaded_file', '添付ファイルを選択してください。');
+        }
+
+        if (count($uploadFiles) > $maxFiles) {
+            $addError('uploaded_file', '添付できるファイルは最大 ' . $maxFiles . ' 個までです。');
+        }
+
+        $totalBytes = 0;
+        foreach ($uploadFiles as $index => $file) {
+            $totalBytes += (int)($file['size'] ?? 0);
             try {
                 forms_validate_uploaded_file($file, $settings);
-                $uploadFile = $file;
             } catch (Throwable $e) {
-                $addError('uploaded_file', $e->getMessage());
+                $addError('uploaded_file', ($index + 1) . '個目のファイル: ' . $e->getMessage());
             }
-        } elseif (!empty($settings['file_required'])) {
-            $addError('uploaded_file', '添付ファイルを選択してください。');
+        }
+
+        if ($totalBytes > forms_max_total_upload_bytes($settings)) {
+            $addError('uploaded_file', '添付ファイルの合計サイズが大きすぎます。');
         }
     }
 
@@ -1428,15 +1723,16 @@ function forms_validate_submission(array $form, array $post, array $files): arra
             'normalized_organization' => forms_normalize_organization($organization),
             'submitted_date' => $submittedDate,
             'payload' => $payload,
-            'upload_file' => $uploadFile,
+            'upload_files' => $uploadFiles,
         ],
     ];
 }
 
 function forms_save_submission(array $form, array $normalized): array
 {
+    // FORMS_MULTI_UPLOAD_PATCHED_forms_save_submission
     $pdo = forms_db();
-    $newUploadPath = null;
+    $storedUploadFiles = [];
     $pdo->beginTransaction();
     try {
         $currentForm = forms_lock_form_for_submission((int)$form['id']);
@@ -1450,17 +1746,22 @@ function forms_save_submission(array $form, array $normalized): array
         $form = $currentForm;
 
         $existing = forms_find_existing_submission((int)$form['id'], $normalized['normalized_email'], $normalized['normalized_organization'], true);
-        $uploadMeta = null;
-        if (is_array($normalized['upload_file'] ?? null)) {
-            $uploadMeta = forms_store_uploaded_file($normalized['upload_file'], $form['settings']);
-            $newUploadPath = forms_upload_root() . '/' . $uploadMeta['uploaded_relative_path'];
+        $incomingFiles = is_array($normalized['upload_files'] ?? null) ? $normalized['upload_files'] : [];
+        foreach ($incomingFiles as $incomingFile) {
+            $storedUploadFiles[] = forms_store_uploaded_file($incomingFile, $form['settings']);
         }
-        if ($existing && !$uploadMeta) {
+
+        $copyExistingLatestFiles = false;
+        $uploadMeta = null;
+        if ($storedUploadFiles !== []) {
+            $uploadMeta = $storedUploadFiles[0];
+        } elseif ($existing) {
             $uploadMeta = [
                 'uploaded_original_name' => $existing['uploaded_original_name'] ?: null,
                 'uploaded_stored_name' => $existing['uploaded_stored_name'] ?: null,
                 'uploaded_relative_path' => $existing['uploaded_relative_path'] ?: null,
             ];
+            $copyExistingLatestFiles = ((int)($existing['latest_revision_id'] ?? 0) > 0);
         }
 
         $payloadJson = forms_encode_json($normalized['payload']);
@@ -1521,6 +1822,13 @@ function forms_save_submission(array $form, array $normalized): array
         ]);
         $revisionId = (int)$pdo->lastInsertId();
 
+        if ($storedUploadFiles !== []) {
+            forms_insert_submission_file_records($pdo, $submissionId, $revisionId, (int)$form['id'], $storedUploadFiles);
+        } elseif ($copyExistingLatestFiles && (int)($existing['latest_revision_id'] ?? 0) > 0) {
+            $existingFiles = forms_fetch_revision_files((int)$existing['latest_revision_id']);
+            forms_insert_submission_file_records($pdo, $submissionId, $revisionId, (int)$form['id'], $existingFiles);
+        }
+
         $pdo->prepare('UPDATE managed_form_submissions SET latest_revision_id = :latest_revision_id WHERE id = :id')->execute([
             ':latest_revision_id' => $revisionId,
             ':id' => $submissionId,
@@ -1538,9 +1846,7 @@ function forms_save_submission(array $form, array $normalized): array
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        if ($newUploadPath && is_file($newUploadPath)) {
-            @unlink($newUploadPath);
-        }
+        forms_delete_relative_uploads($storedUploadFiles);
         throw $e;
     }
 }
@@ -1840,11 +2146,15 @@ function forms_build_status_summary(int $formId): array
 
 function forms_build_admin_entry_record(array $row, array $form): array
 {
+    // FORMS_MULTI_UPLOAD_PATCHED_forms_build_admin_entry_record
     $payload = json_decode((string)($row['payload_json'] ?? '{}'), true);
     if (!is_array($payload)) {
         $payload = [];
     }
     $status = forms_normalize_status((string)($row['status'] ?? 'new'));
+    $revisionId = (int)($row['latest_revision_id'] ?? 0);
+    $files = $revisionId > 0 ? forms_fetch_revision_files($revisionId) : [];
+    $firstFile = $files[0] ?? null;
 
     return [
         'id' => (int)$row['id'],
@@ -1854,9 +2164,11 @@ function forms_build_admin_entry_record(array $row, array $form): array
         'submitted_date' => (string)($row['submitted_date'] ?? ''),
         'payload' => $payload,
         'payload_preview' => forms_entry_preview($payload, $form),
-        'uploaded_original_name' => (string)($row['uploaded_original_name'] ?? ''),
-        'uploaded_relative_path' => (string)($row['uploaded_relative_path'] ?? ''),
-        'latest_revision_id' => (int)($row['latest_revision_id'] ?? 0),
+        'uploaded_original_name' => (string)($row['uploaded_original_name'] ?: ($firstFile['original_name'] ?? '')),
+        'uploaded_relative_path' => (string)($row['uploaded_relative_path'] ?: ($firstFile['relative_path'] ?? '')),
+        'uploaded_files' => $files,
+        'uploaded_file_count' => count($files),
+        'latest_revision_id' => $revisionId,
         'revision_count' => (int)($row['revision_count'] ?? 0),
         'status' => $status,
         'status_label' => forms_status_label($status),
@@ -2090,6 +2402,7 @@ function forms_delete_submission(int $submissionId, array $actor = []): array
 
 function forms_delete_submission_file(int $submissionId, array $actor = []): array
 {
+    // FORMS_MULTI_UPLOAD_PATCHED_forms_delete_submission_file
     forms_bootstrap();
 
     $submission = forms_get_submission($submissionId);
@@ -2097,8 +2410,8 @@ function forms_delete_submission_file(int $submissionId, array $actor = []): arr
         throw new InvalidArgumentException('対象の回答が見つかりません。');
     }
 
-    $relativePath = trim((string)($submission['uploaded_relative_path'] ?? ''));
-    if ($relativePath === '') {
+    $relativePaths = forms_collect_submission_file_paths($submissionId);
+    if ($relativePaths === []) {
         throw new InvalidArgumentException('この回答には削除対象の添付ファイルがありません。');
     }
 
@@ -2106,52 +2419,25 @@ function forms_delete_submission_file(int $submissionId, array $actor = []): arr
     $pdo->beginTransaction();
 
     try {
-        $stmt = $pdo->prepare('
+        $pdo->prepare('
             UPDATE managed_form_submissions
             SET uploaded_original_name = NULL,
                 uploaded_stored_name = NULL,
                 uploaded_relative_path = NULL,
-                latest_revision_id = NULL,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :id
-        ');
-        $stmt->execute([':id' => $submissionId]);
+        ')->execute([':id' => $submissionId]);
 
-        $revStmt = $pdo->prepare('
+        $pdo->prepare('
             UPDATE managed_form_submission_revisions
             SET uploaded_original_name = NULL,
                 uploaded_stored_name = NULL,
                 uploaded_relative_path = NULL
             WHERE submission_id = :submission_id
-              AND uploaded_relative_path = :relative_path
-        ');
-        $revStmt->execute([
-            ':submission_id' => $submissionId,
-            ':relative_path' => $relativePath,
-        ]);
+        ')->execute([':submission_id' => $submissionId]);
 
-        $latestStmt = $pdo->prepare('
-            SELECT id
-            FROM managed_form_submission_revisions
-            WHERE submission_id = :submission_id
-              AND uploaded_relative_path IS NOT NULL
-              AND uploaded_relative_path != ""
-            ORDER BY revision_number DESC, id DESC
-            LIMIT 1
-        ');
-        $latestStmt->execute([':submission_id' => $submissionId]);
-        $latestRevisionId = $latestStmt->fetchColumn();
-
-        if ($latestRevisionId) {
-            $pdo->prepare('
-                UPDATE managed_form_submissions
-                SET latest_revision_id = :latest_revision_id
-                WHERE id = :id
-            ')->execute([
-                ':latest_revision_id' => (int)$latestRevisionId,
-                ':id' => $submissionId,
-            ]);
-        }
+        $pdo->prepare('DELETE FROM managed_form_submission_files WHERE submission_id = :submission_id')
+            ->execute([':submission_id' => $submissionId]);
 
         $pdo->commit();
     } catch (Throwable $e) {
@@ -2161,12 +2447,13 @@ function forms_delete_submission_file(int $submissionId, array $actor = []): arr
         throw $e;
     }
 
-    forms_delete_relative_file($relativePath);
+    foreach ($relativePaths as $relativePath) {
+        forms_delete_relative_file($relativePath);
+    }
 
     forms_admin_audit_log('submission.file.delete', 'managed_form_submission', $submissionId, [
         'form_id' => (int)$submission['form_id'],
-        'filename' => (string)($submission['uploaded_original_name'] ?? ''),
-        'relative_path' => $relativePath,
+        'deleted_file_count' => count($relativePaths),
     ], $actor);
 
     $updated = forms_get_submission($submissionId);
@@ -2174,7 +2461,7 @@ function forms_delete_submission_file(int $submissionId, array $actor = []): arr
 
     return [
         'submission' => ($updated && $form) ? forms_build_admin_entry_record($updated, $form) : null,
-        'deleted_relative_path' => $relativePath,
+        'deleted_relative_paths' => $relativePaths,
         'form_id' => (int)$submission['form_id'],
     ];
 }
@@ -2320,6 +2607,25 @@ function forms_csv_rows(int $formId, array $rawFilters = []): array
 
 function forms_resolve_revision_download(int $revisionId): ?array
 {
+    // FORMS_MULTI_UPLOAD_PATCHED_forms_resolve_revision_download
+    $files = forms_fetch_revision_files($revisionId);
+    if (count($files) > 1) {
+        return forms_build_revision_zip_download($revisionId, $files);
+    }
+    if (count($files) === 1) {
+        $file = $files[0];
+        $resolved = forms_resolve_upload_file_path((string)$file['relative_path']);
+        if (!$resolved) {
+            return null;
+        }
+        return [
+            'path' => (string)$resolved['path'],
+            'filename' => (string)($file['original_name'] ?: basename((string)$file['relative_path'])),
+            'cleanup_path' => $resolved['cleanup_path'] ?? null,
+            'from_archive' => !empty($resolved['from_archive']),
+        ];
+    }
+
     $stmt = forms_db()->prepare('SELECT * FROM managed_form_submission_revisions WHERE id = :id LIMIT 1');
     $stmt->execute([':id' => $revisionId]);
     $row = $stmt->fetch();
@@ -2327,59 +2633,62 @@ function forms_resolve_revision_download(int $revisionId): ?array
         return null;
     }
 
-    $relativePath = ltrim((string)$row['uploaded_relative_path'], '/');
-    $path = forms_upload_root() . '/' . $relativePath;
-    if (is_file($path)) {
-        return [
-            'path' => $path,
-            'filename' => (string)($row['uploaded_original_name'] ?: basename($path)),
-        ];
-    }
-
-    $cfg = forms_runtime_config();
-    $archivedPath = storage_maintenance_forms_extract_archived_upload($cfg, $relativePath);
-    if (!is_string($archivedPath) || !is_file($archivedPath)) {
+    $resolved = forms_resolve_upload_file_path((string)$row['uploaded_relative_path']);
+    if (!$resolved) {
         return null;
     }
 
     return [
-        'path' => $archivedPath,
-        'filename' => (string)($row['uploaded_original_name'] ?: basename($relativePath)),
-        'cleanup_path' => $archivedPath,
-        'from_archive' => true,
+        'path' => (string)$resolved['path'],
+        'filename' => (string)($row['uploaded_original_name'] ?: basename((string)$row['uploaded_relative_path'])),
+        'cleanup_path' => $resolved['cleanup_path'] ?? null,
+        'from_archive' => !empty($resolved['from_archive']),
     ];
 }
 
-
 function forms_collect_latest_submission_attachments(int $formId, array $rawFilters = []): array
 {
+    // FORMS_MULTI_UPLOAD_PATCHED_forms_collect_latest_submission_attachments
     $result = forms_fetch_admin_entries($formId, $rawFilters, 0);
     $files = [];
     foreach ($result['entries'] as $entry) {
-        $relativePath = trim((string)($entry['uploaded_relative_path'] ?? ''));
-        if ($relativePath === '') {
-            continue;
-        }
-        $path = forms_upload_root() . '/' . ltrim($relativePath, '/');
-        if (!is_file($path)) {
-            continue;
+        $entryFiles = is_array($entry['uploaded_files'] ?? null) ? $entry['uploaded_files'] : [];
+        if ($entryFiles === [] && trim((string)($entry['uploaded_relative_path'] ?? '')) !== '') {
+            $entryFiles[] = [
+                'file_order' => 1,
+                'relative_path' => (string)$entry['uploaded_relative_path'],
+                'original_name' => (string)($entry['uploaded_original_name'] ?? ''),
+            ];
         }
 
-        $entryId = (int)($entry['id'] ?? 0);
-        $org = forms_safe_download_name((string)($entry['organization_name'] ?? ''), 'organization');
-        $email = forms_safe_download_name((string)($entry['submitter_email'] ?? ''), 'email');
-        $original = forms_safe_download_name((string)($entry['uploaded_original_name'] ?: basename($path)), 'attachment');
-        $zipName = sprintf('%03d_%s_%s_%s', $entryId, $org, $email, $original);
+        foreach ($entryFiles as $entryFile) {
+            $relativePath = trim((string)($entryFile['relative_path'] ?? ''));
+            if ($relativePath === '') {
+                continue;
+            }
+            $resolved = forms_resolve_upload_file_path($relativePath);
+            if (!$resolved || !is_file((string)$resolved['path'])) {
+                continue;
+            }
 
-        $files[] = [
-            'entry_id' => $entryId,
-            'path' => $path,
-            'filename' => $original,
-            'zip_name' => $zipName,
-            'organization_name' => (string)($entry['organization_name'] ?? ''),
-            'submitter_email' => (string)($entry['submitter_email'] ?? ''),
-            'updated_at' => (string)($entry['updated_at'] ?? ''),
-        ];
+            $entryId = (int)($entry['id'] ?? 0);
+            $fileOrder = max(1, (int)($entryFile['file_order'] ?? 1));
+            $org = forms_safe_download_name((string)($entry['organization_name'] ?? ''), 'organization');
+            $email = forms_safe_download_name((string)($entry['submitter_email'] ?? ''), 'email');
+            $original = forms_safe_download_name((string)($entryFile['original_name'] ?? basename((string)$resolved['path'])), 'attachment');
+            $zipName = sprintf('%03d_%02d_%s_%s_%s', $entryId, $fileOrder, $org, $email, $original);
+
+            $files[] = [
+                'entry_id' => $entryId,
+                'path' => (string)$resolved['path'],
+                'filename' => $original,
+                'zip_name' => $zipName,
+                'organization_name' => (string)($entry['organization_name'] ?? ''),
+                'submitter_email' => (string)($entry['submitter_email'] ?? ''),
+                'updated_at' => (string)($entry['updated_at'] ?? ''),
+                'cleanup_path' => $resolved['cleanup_path'] ?? null,
+            ];
+        }
     }
 
     return [

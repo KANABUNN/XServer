@@ -451,8 +451,10 @@ function renderActiveForm() {
         <span class="hint-bar__item">許可拡張子: <strong>${escapeHtml(settings.allowed_extensions || '指定なし')}</strong></span>
         <span class="hint-bar__sep" aria-hidden="true">/</span>
         <span class="hint-bar__item">上限 <strong>${escapeHtml(String(settings.max_upload_size_mb || 5))} MB</strong></span>
+        <span class="hint-bar__sep" aria-hidden="true">/</span>
+        <span class="hint-bar__item">最大 <strong>${escapeHtml(String(settings.max_upload_files || 1))} 個</strong></span>
       </div>
-      <input id="input-uploaded_file" type="file" name="uploaded_file" ${settings.file_required ? 'required aria-required="true"' : ''} aria-describedby="hint-uploaded_file err-uploaded_file">
+      <input id="input-uploaded_file" type="file" name="uploaded_file[]" ${Number(settings.max_upload_files || 1) > 1 ? 'multiple' : ''} ${settings.file_required ? 'required aria-required="true"' : ''} aria-describedby="hint-uploaded_file err-uploaded_file">
       <p class="field-error" data-field-error="uploaded_file" id="err-uploaded_file" role="alert" hidden></p>
     </label>
   ` : '';
@@ -555,7 +557,7 @@ function renderActiveForm() {
     let filled = 0;
     for (const key of requiredKeys) {
       if (key === 'uploaded_file') {
-        const fileInput = submitForm.querySelector('input[type="file"][name="uploaded_file"]');
+        const fileInput = submitForm.querySelector('input[type="file"][name="uploaded_file[]"]');
         if (fileInput && fileInput.files && fileInput.files.length > 0) filled += 1;
       } else {
         const v = data.get(key);

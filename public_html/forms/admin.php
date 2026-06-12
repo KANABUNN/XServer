@@ -207,6 +207,10 @@ page_header('フォーム管理', 'forms-admin-page');
                                 <span>最大ファイルサイズ (MB)</span>
                                 <input type="number" name="max_upload_size_mb" min="1" max="30" value="5">
                             </label>
+                            <label>
+                                <span>最大ファイル数</span>
+                                <input type="number" name="max_upload_files" min="1" max="10" value="1">
+                            </label>
                         </div>
                         <label>
                             <span>許可する拡張子</span>

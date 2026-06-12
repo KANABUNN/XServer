@@ -390,6 +390,7 @@ function fillEditor(form) {
   editor.elements.file_label.value = form?.settings?.file_label || '添付ファイル';
   editor.elements.allowed_extensions.value = form?.settings?.allowed_extensions || 'pdf,doc,docx,xls,xlsx,ppt,pptx,jpg,jpeg,png,zip';
   editor.elements.max_upload_size_mb.value = form?.settings?.max_upload_size_mb ?? 5;
+  if (editor.elements.max_upload_files) editor.elements.max_upload_files.value = form?.settings?.max_upload_files ?? 1;
   if (editor.elements.distribution_enabled) {
     editor.elements.distribution_enabled.checked = form?.settings?.distribution_enabled ?? false;
     editor.elements.distribution_title.value = form?.settings?.distribution_title || '';
@@ -459,7 +460,7 @@ function renderEntryList(entries = []) {
           </div>
           <div class="meta-line response-footer-line">
             <span class="pill">履歴 ${escapeHtml(String(entry.revision_count))}件</span>
-            ${entry.uploaded_original_name ? `<span class="pill">添付あり</span>` : ''}
+            ${(entry.uploaded_file_count || 0) > 0 ? `<span class="pill">添付 ${escapeHtml(String(entry.uploaded_file_count))}件</span>` : (entry.uploaded_original_name ? `<span class="pill">添付あり</span>` : '')}
             ${entry.admin_note ? '<span class="pill">管理メモあり</span>' : ''}
           </div>
         </button>
@@ -568,8 +569,8 @@ function renderEntryDetail(entry, history = null) {
         </div>
       </div>
       <div class="inline-actions">
-        ${entry.uploaded_original_name && entry.latest_revision_id ? `<a class="btn" href="api/download_revision.php?revision_id=${entry.latest_revision_id}&csrf_token=${encodeURIComponent(csrfToken)}">最新添付を取得</a>` : ''}
-        ${entry.uploaded_original_name ? `<button type="button" class="btn danger" id="delete-entry-file-button" data-entry-id="${entry.id}">提出ファイルを削除</button>` : ''}
+        ${((entry.uploaded_file_count || 0) > 0 || entry.uploaded_original_name) && entry.latest_revision_id ? `<a class="btn" href="api/download_revision.php?revision_id=${entry.latest_revision_id}&csrf_token=${encodeURIComponent(csrfToken)}">最新添付を取得</a>` : ''}
+        ${((entry.uploaded_file_count || 0) > 0 || entry.uploaded_original_name) ? `<button type="button" class="btn danger" id="delete-entry-file-button" data-entry-id="${entry.id}">提出ファイルを削除</button>` : ''}
         <button type="button" class="btn danger" id="delete-entry-button" data-entry-id="${entry.id}">回答を削除</button>
       </div>
     </div>
@@ -1167,6 +1168,7 @@ function bindEvents() {
         file_label: form.elements.file_label.value,
         allowed_extensions: form.elements.allowed_extensions.value,
         max_upload_size_mb: Number(form.elements.max_upload_size_mb.value || 5),
+        max_upload_files: Number(form.elements.max_upload_files?.value || 1),
         distribution_enabled: form.elements.distribution_enabled?.checked || false,
         distribution_title: form.elements.distribution_title?.value || '',
         distribution_body: form.elements.distribution_body?.value || '',
