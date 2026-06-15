@@ -27,51 +27,264 @@ function backup_column_exists(PDO $pdo, string $table, string $column): bool
     }
 }
 
-function backup_resolve_relative_file_path(string $relativePath, array $extraRoots = []): array
+function backup_integrity_path_is_absolute(string $path): bool
 {
-    $relativePath = trim(str_replace('\\', '/', $relativePath));
-    if ($relativePath === '') {
-        return ['exists' => false, 'path' => '', 'masked_path' => '', 'candidates' => []];
+    return $path !== '' && (str_starts_with($path, '/') || preg_match('/^[A-Za-z]:[\\\/]/', $path) === 1);
+}
+
+function backup_integrity_normalize_path(string $path): string
+{
+    $path = str_replace('\\', '/', trim($path));
+    $path = preg_replace('#/+#', '/', $path) ?? $path;
+    return rtrim($path, '/');
+}
+
+function backup_integrity_config_path(?string $path, string $baseDir = ''): ?string
+{
+    $path = backup_integrity_normalize_path((string)$path);
+    if ($path === '') {
+        return null;
+    }
+    if (backup_integrity_path_is_absolute($path)) {
+        return $path;
     }
 
-    $candidates = [];
-    if (str_starts_with($relativePath, '/')) {
-        $candidates[] = $relativePath;
-    } else {
-        $roots = array_values(array_unique(array_filter(array_merge([
-            backup_project_root(),
-            backup_apps_dir(),
-            backup_public_html_dir(),
-            backup_apps_dir() . '/storage',
+    $baseDir = $baseDir !== '' ? $baseDir : backup_apps_dir();
+    return backup_integrity_normalize_path(rtrim($baseDir, '/') . '/' . ltrim($path, '/'));
+}
+
+function backup_integrity_configured_roots(array $rawRoots): array
+{
+    $roots = [];
+    foreach ($rawRoots as $root) {
+        if (!is_string($root) || trim($root) === '') {
+            continue;
+        }
+        $resolved = backup_integrity_config_path($root, backup_apps_dir());
+        if ($resolved !== null) {
+            $roots[] = $resolved;
+        }
+        if (!backup_integrity_path_is_absolute($root)) {
+            $projectResolved = backup_integrity_config_path($root, backup_project_root());
+            if ($projectResolved !== null) {
+                $roots[] = $projectResolved;
+            }
+        }
+    }
+    return $roots;
+}
+
+function backup_integrity_default_roots(string $context = 'generic'): array
+{
+    $roots = [
+        backup_project_root(),
+        backup_apps_dir(),
+        backup_public_html_dir(),
+        backup_apps_dir() . '/storage',
+    ];
+
+    if ($context === 'forms') {
+        $roots = array_merge($roots, backup_integrity_configured_roots([
+            (string)backup_config_value('forms.upload_root', ''),
+            (string)backup_config_value('forms_storage.upload_root', ''),
+            (string)backup_config_value('storage_maintenance.forms_uploads.live_root', ''),
+            (string)backup_config_value('storage_maintenance.forms_uploads.archive_root', ''),
+        ]), [
+            backup_apps_dir() . '/forms_uploads',
+            backup_apps_dir() . '/storage/archives/forms_uploads',
             backup_apps_dir() . '/storage/forms',
             backup_apps_dir() . '/storage/forms/uploads',
+        ]);
+    } elseif ($context === 'mail') {
+        $roots = array_merge($roots, backup_integrity_configured_roots([
+            (string)backup_config_value('storage.attachments_dir', ''),
+            (string)backup_config_value('mail.storage.attachments_dir', ''),
+            (string)backup_config_value('backup_manager.integrity.mail_storage_root', ''),
+        ]), [
+            backup_apps_dir() . '/storage/mail_attachments',
             backup_apps_dir() . '/storage/mail',
             backup_apps_dir() . '/storage/mail/uploads',
+        ]);
+    } elseif ($context === 'switchbot' || $context === 'book') {
+        $roots = array_merge($roots, backup_integrity_configured_roots([
+            (string)backup_config_value('switchbot.storage_dir', ''),
+            (string)backup_config_value('storage.switchbot_dir', ''),
+        ]), [
             backup_apps_dir() . '/storage/switchbot',
-        ], $extraRoots), 'is_string')));
-        foreach ($roots as $root) {
-            $candidates[] = rtrim($root, '/') . '/' . ltrim($relativePath, '/');
+            backup_apps_dir() . '/storage/switchbot/events',
+            backup_apps_dir() . '/storage/switchbot_webhook',
+            backup_apps_dir() . '/storage/webhooks/switchbot',
+        ]);
+    }
+
+    $normalized = [];
+    foreach ($roots as $root) {
+        if (!is_string($root) || trim($root) === '') {
+            continue;
+        }
+        $normalized[backup_integrity_normalize_path($root)] = true;
+    }
+    return array_keys($normalized);
+}
+
+function backup_integrity_relative_variants(string $relativePath): array
+{
+    $raw = backup_integrity_normalize_path($relativePath);
+    $raw = ltrim($raw, '/');
+    $variants = [];
+    $add = static function (string $path) use (&$variants): void {
+        $path = ltrim(backup_integrity_normalize_path($path), '/');
+        if ($path !== '' && !isset($variants[$path])) {
+            $variants[$path] = true;
+        }
+    };
+
+    $add($raw);
+    foreach (['$ROOT/', 'apps/', 'public_html/', './'] as $prefix) {
+        if (str_starts_with($raw, $prefix)) {
+            $add(substr($raw, strlen($prefix)));
+        }
+    }
+    foreach ([
+        'forms_uploads/',
+        'storage/forms/uploads/',
+        'storage/forms/',
+        'storage/mail_attachments/',
+        'storage/mail/uploads/',
+        'storage/mail/',
+        'storage/switchbot/',
+        'storage/switchbot/events/',
+        'storage/switchbot_webhook/',
+    ] as $prefix) {
+        if (str_starts_with($raw, $prefix)) {
+            $add(substr($raw, strlen($prefix)));
         }
     }
 
+    return array_keys($variants);
+}
+
+function backup_integrity_forms_archive_lookup(string $relativePath): ?array
+{
+    if (!class_exists('ZipArchive')) {
+        return null;
+    }
+
+    $normalized = ltrim(backup_integrity_normalize_path($relativePath), '/');
+    if ($normalized === '' || str_contains('/' . $normalized . '/', '/../')) {
+        return null;
+    }
+
+    $archiveRoot = backup_integrity_config_path((string)backup_config_value('storage_maintenance.forms_uploads.archive_root', ''), backup_apps_dir());
+    if ($archiveRoot === null) {
+        $archiveRoot = backup_apps_dir() . '/storage/archives/forms_uploads';
+    }
+
+    if (preg_match('#^(\d{4})/(\d{2})/#', $normalized, $m) === 1) {
+        $zipPath = $archiveRoot . '/' . $m[1] . '/' . $m[2] . '/forms_revisions_' . $m[1] . '-' . $m[2] . '.zip';
+    } else {
+        $zipPath = $archiveRoot . '/misc/forms_revisions_misc.zip';
+    }
+
+    if (!is_file($zipPath)) {
+        return null;
+    }
+
+    $zip = new ZipArchive();
+    if ($zip->open($zipPath) !== true) {
+        return null;
+    }
+    try {
+        if ($zip->locateName($normalized) === false) {
+            return null;
+        }
+    } finally {
+        $zip->close();
+    }
+
+    return [
+        'exists' => true,
+        'path' => $zipPath,
+        'masked_path' => backup_mask_path($zipPath) . '#' . $normalized,
+        'candidates' => [backup_mask_path($zipPath) . '#' . $normalized],
+        'bytes' => (int)filesize($zipPath),
+        'mtime' => date('Y-m-d H:i:s', (int)filemtime($zipPath)),
+        'from_archive' => true,
+    ];
+}
+
+function backup_resolve_relative_file_path(string $relativePath, array $extraRoots = [], string $context = 'generic'): array
+{
+    $relativePath = backup_integrity_normalize_path($relativePath);
+    if ($relativePath === '') {
+        return ['exists' => false, 'path' => '', 'masked_path' => '', 'candidates' => []];
+    }
+    if (str_contains('/' . ltrim($relativePath, '/') . '/', '/../')) {
+        return [
+            'exists' => false,
+            'path' => '',
+            'masked_path' => '',
+            'candidates' => [],
+            'unsafe_path' => true,
+        ];
+    }
+
+    $candidates = [];
+    if (backup_integrity_path_is_absolute($relativePath)) {
+        $candidates[] = $relativePath;
+    } else {
+        $roots = array_merge(
+            backup_integrity_default_roots($context),
+            backup_integrity_configured_roots($extraRoots)
+        );
+        $roots = array_values(array_unique(array_filter($roots, 'is_string')));
+        foreach ($roots as $root) {
+            foreach (backup_integrity_relative_variants($relativePath) as $variant) {
+                $candidates[] = rtrim($root, '/') . '/' . ltrim($variant, '/');
+            }
+        }
+    }
+
+    $seen = [];
+    $uniqueCandidates = [];
     foreach ($candidates as $candidate) {
+        $candidate = backup_integrity_normalize_path($candidate);
+        if ($candidate === '' || isset($seen[$candidate])) {
+            continue;
+        }
+        $seen[$candidate] = true;
+        $uniqueCandidates[] = $candidate;
+    }
+
+    foreach ($uniqueCandidates as $candidate) {
         if (is_file($candidate)) {
             return [
                 'exists' => true,
                 'path' => $candidate,
                 'masked_path' => backup_mask_path($candidate),
-                'candidates' => array_map('backup_mask_path', array_slice($candidates, 0, 12)),
+                'candidates' => array_map('backup_mask_path', array_slice($uniqueCandidates, 0, 20)),
                 'bytes' => (int)filesize($candidate),
                 'mtime' => date('Y-m-d H:i:s', (int)filemtime($candidate)),
+                'from_archive' => false,
             ];
+        }
+    }
+
+    if ($context === 'forms') {
+        foreach (backup_integrity_relative_variants($relativePath) as $variant) {
+            $archived = backup_integrity_forms_archive_lookup($variant);
+            if ($archived !== null) {
+                $archived['candidates'] = array_merge($archived['candidates'], array_map('backup_mask_path', array_slice($uniqueCandidates, 0, 20)));
+                return $archived;
+            }
         }
     }
 
     return [
         'exists' => false,
-        'path' => $candidates[0] ?? $relativePath,
-        'masked_path' => backup_mask_path($candidates[0] ?? $relativePath),
-        'candidates' => array_map('backup_mask_path', array_slice($candidates, 0, 12)),
+        'path' => $uniqueCandidates[0] ?? $relativePath,
+        'masked_path' => backup_mask_path($uniqueCandidates[0] ?? $relativePath),
+        'candidates' => array_map('backup_mask_path', array_slice($uniqueCandidates, 0, 20)),
     ];
 }
 
@@ -109,6 +322,7 @@ function backup_integrity_collect_forms(PDO $backupPdo, int $checkId): array
     }
 
     $targets = [
+        ['table' => 'managed_form_submission_files', 'id' => 'id', 'path' => 'relative_path'],
         ['table' => 'managed_form_submissions', 'id' => 'id', 'path' => 'uploaded_relative_path'],
         ['table' => 'managed_form_submission_revisions', 'id' => 'id', 'path' => 'uploaded_relative_path'],
     ];
@@ -122,7 +336,7 @@ function backup_integrity_collect_forms(PDO $backupPdo, int $checkId): array
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
             $counts['checked']++;
             $relative = (string)($row['path'] ?? '');
-            $resolved = backup_resolve_relative_file_path($relative, (array)backup_config_value('backup_manager.integrity.forms_file_roots', []));
+            $resolved = backup_resolve_relative_file_path($relative, (array)backup_config_value('backup_manager.integrity.forms_file_roots', []), 'forms');
             if ($resolved['exists']) {
                 $counts['ok']++;
                 continue;
@@ -166,7 +380,7 @@ function backup_integrity_collect_mail(PDO $backupPdo, int $checkId): array
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
         $counts['checked']++;
         $relative = (string)($row['relative_path'] ?? '');
-        $resolved = backup_resolve_relative_file_path($relative, (array)backup_config_value('backup_manager.integrity.mail_file_roots', []));
+        $resolved = backup_resolve_relative_file_path($relative, (array)backup_config_value('backup_manager.integrity.mail_file_roots', []), 'mail');
         if ($resolved['exists']) {
             $counts['ok']++;
             continue;
@@ -207,7 +421,7 @@ function backup_integrity_collect_book(PDO $backupPdo, int $checkId): array
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
         $counts['checked']++;
         $relative = (string)($row['detail_json_path'] ?? '');
-        $resolved = backup_resolve_relative_file_path($relative, (array)backup_config_value('backup_manager.integrity.switchbot_file_roots', []));
+        $resolved = backup_resolve_relative_file_path($relative, (array)backup_config_value('backup_manager.integrity.switchbot_file_roots', []), 'switchbot');
         if ($resolved['exists']) {
             $counts['ok']++;
             continue;
