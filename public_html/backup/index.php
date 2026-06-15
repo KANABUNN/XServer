@@ -9,6 +9,7 @@ $jobs = $manager->latestJobs(8);
 $latest = $jobs[0] ?? null;
 $alerts = $manager->unresolvedAlerts(8);
 $items = is_array($latest) ? $manager->listItems((int)$latest['id']) : [];
+$snapshot = $manager->latestStorageSnapshot();
 backup_web_header('ダッシュボード', $user);
 ?>
 <section class="grid">
@@ -31,6 +32,11 @@ backup_web_header('ダッシュボード', $user);
     <h2>未解決警告</h2>
     <div class="metric"><?= count($alerts) ?></div>
     <p class="muted">失敗・検証エラーはここに残ります。</p>
+  </div>
+  <div class="card">
+    <h2>ストレージ収集</h2>
+    <div class="metric"><?= $snapshot ? backup_web_status_badge((string)$snapshot['status']) : '未収集' ?></div>
+    <p class="muted"><?= $snapshot ? backup_h((string)$snapshot['collected_at']) . ' / ' . backup_h(backup_format_bytes((int)$snapshot['backup_root_bytes'])) : 'backup_status_collect.php を実行してください。' ?></p>
   </div>
 </section>
 

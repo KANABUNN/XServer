@@ -74,6 +74,51 @@ CREATE TABLE IF NOT EXISTS backup_alerts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL);
 
+
+
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS backup_storage_snapshots (
+  id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  collected_at datetime NOT NULL,
+  status enum('success','warning','failed') NOT NULL DEFAULT 'success',
+  source varchar(120) NOT NULL,
+  total_bytes bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  forms_live_bytes bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  forms_archive_bytes bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  switchbot_bytes bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  report_bytes bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  tmp_bytes bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  backup_root_bytes bigint(20) UNSIGNED NOT NULL DEFAULT 0,
+  payload_json longtext DEFAULT NULL,
+  cleanup_log_path varchar(500) DEFAULT NULL,
+  cleanup_log_mtime datetime DEFAULT NULL,
+  cleanup_log_tail mediumtext DEFAULT NULL,
+  created_at datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (id),
+  KEY idx_backup_storage_snapshots_collected (collected_at),
+  KEY idx_backup_storage_snapshots_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS backup_reports (
+  id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  report_key varchar(120) NOT NULL,
+  report_type enum('monthly','manual') NOT NULL DEFAULT 'monthly',
+  generated_at datetime NOT NULL,
+  report_path varchar(500) NOT NULL,
+  report_sha256 char(64) DEFAULT NULL,
+  status enum('success','warning','failed') NOT NULL DEFAULT 'success',
+  summary_json longtext DEFAULT NULL,
+  created_at datetime NOT NULL DEFAULT current_timestamp(),
+  updated_at datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_backup_reports_report_key (report_key),
+  KEY idx_backup_reports_generated (generated_at),
+  KEY idx_backup_reports_type (report_type, generated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+
     $pdo->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS backup_settings (
   setting_key varchar(120) NOT NULL,

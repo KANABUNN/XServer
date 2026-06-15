@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/schema.php';
+require_once __DIR__ . '/storage_status.php';
 
 final class FitScBackupManager
 {
@@ -148,6 +149,185 @@ final class FitScBackupManager
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    public function collectStorageStatus(string $triggerType = 'cron'): array
+    {
+        $payload = backup_collect_storage_status();
+        $snapshotId = $this->insertStorageSnapshot($payload);
+
+        $status = (string)($payload['status'] ?? 'success');
+        $message = $status === 'success'
+            ? 'ストレージ状態を収集しました。'
+            : 'ストレージ状態の収集に警告があります: ' . (string)($payload['maintenance_error'] ?? '');
+
+        if ($status !== 'success') {
+            $this->createAlert('warning', 'storage_status_collect_warning', mb_substr($message, 0, 1000, 'UTF-8'));
+            backup_notify_on_failure('[FIT-SC Backup] ストレージ状態収集に警告があります', $message);
+        }
+
+        $disk = is_array($payload['disk'] ?? null) ? $payload['disk'] : [];
+        $usedRatio = $disk['used_ratio'] ?? null;
+        if (is_float($usedRatio) || is_int($usedRatio)) {
+            $warning = (float)backup_config_value('backup_manager.disk_warning_ratio', 0.80);
+            $critical = (float)backup_config_value('backup_manager.disk_critical_ratio', 0.90);
+            if ((float)$usedRatio >= $critical) {
+                $this->createAlert('critical', 'disk_usage_critical', 'ディスク使用率が危険域です: ' . round((float)$usedRatio * 100, 1) . '%');
+            } elseif ((float)$usedRatio >= $warning) {
+                $this->createAlert('warning', 'disk_usage_warning', 'ディスク使用率が警告域です: ' . round((float)$usedRatio * 100, 1) . '%');
+            }
+        }
+
+        backup_write_log('info', 'storage status collected', ['snapshot_id' => $snapshotId, 'status' => $status]);
+        return $this->getStorageSnapshot($snapshotId) ?: [];
+    }
+
+    public function latestStorageSnapshots(int $limit = 20): array
+    {
+        $limit = max(1, min(200, $limit));
+        $stmt = $this->pdo->prepare('SELECT * FROM backup_storage_snapshots ORDER BY id DESC LIMIT :limit');
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    public function latestStorageSnapshot(): ?array
+    {
+        $rows = $this->latestStorageSnapshots(1);
+        return $rows[0] ?? null;
+    }
+
+    public function getStorageSnapshot(int $id): ?array
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM backup_storage_snapshots WHERE id = :id');
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return is_array($row) ? $row : null;
+    }
+
+    public function latestReports(int $limit = 20): array
+    {
+        $limit = max(1, min(200, $limit));
+        $stmt = $this->pdo->prepare('SELECT * FROM backup_reports ORDER BY id DESC LIMIT :limit');
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    public function generateMonthlyReport(string $triggerType = 'cron'): array
+    {
+        $now = backup_now();
+        $reportKey = 'backup_report_' . $now->format('Y-m');
+        $snapshot = $this->latestStorageSnapshot();
+        if (!$snapshot) {
+            $snapshot = $this->collectStorageStatus($triggerType);
+        }
+
+        $jobs = $this->latestJobs(80);
+        $alerts = $this->unresolvedAlerts(50);
+        $backupRootStats = backup_directory_stats(backup_root_dir());
+        $payload = [
+            'generated_at' => $now->format('Y-m-d H:i:s'),
+            'month' => $now->format('Y-m'),
+            'summary' => [
+                'backup_root_bytes' => (int)($backupRootStats['bytes'] ?? 0),
+                'job_count' => count($jobs),
+                'unresolved_alerts' => count($alerts),
+            ],
+            'jobs' => array_map(static function (array $job): array {
+                return [
+                    'id' => (int)$job['id'],
+                    'job_type' => (string)$job['job_type'],
+                    'status' => (string)$job['status'],
+                    'started_at' => (string)$job['started_at'],
+                    'finished_at' => (string)($job['finished_at'] ?? ''),
+                    'total_bytes' => (int)$job['total_bytes'],
+                    'message' => (string)($job['message'] ?? ''),
+                ];
+            }, $jobs),
+            'storage_snapshot' => $snapshot,
+            'backup_root_stats' => $backupRootStats,
+            'alerts' => $alerts,
+        ];
+
+        $dir = backup_state_dir() . '/reports';
+        backup_ensure_dir($dir, 0700);
+        $path = $dir . '/' . $reportKey . '.md';
+        $markdown = backup_render_backup_monthly_report($payload);
+        file_put_contents($path, $markdown, LOCK_EX);
+        @chmod($path, 0600);
+        $sha = hash_file('sha256', $path) ?: null;
+
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO backup_reports (report_key, report_type, generated_at, report_path, report_sha256, status, summary_json) ' .
+            'VALUES (:report_key, :report_type, :generated_at, :report_path, :report_sha256, :status, :summary_json) ' .
+            'ON DUPLICATE KEY UPDATE generated_at = VALUES(generated_at), report_path = VALUES(report_path), report_sha256 = VALUES(report_sha256), status = VALUES(status), summary_json = VALUES(summary_json)'
+        );
+        $stmt->execute([
+            ':report_key' => $reportKey,
+            ':report_type' => 'monthly',
+            ':generated_at' => $now->format('Y-m-d H:i:s'),
+            ':report_path' => $path,
+            ':report_sha256' => $sha,
+            ':status' => 'success',
+            ':summary_json' => backup_json_encode($payload['summary']),
+        ]);
+
+        if ((bool)backup_config_value('backup_manager.send_monthly_report_mail', false)) {
+            backup_notify_on_failure('[FIT-SC Backup] 月次バックアップレポート ' . $now->format('Y-m'), $markdown);
+        }
+
+        backup_write_log('info', 'monthly backup report generated', ['report_key' => $reportKey, 'path' => $path]);
+        return [
+            'report_key' => $reportKey,
+            'path' => $path,
+            'sha256' => $sha,
+            'summary' => $payload['summary'],
+        ];
+    }
+
+    public function runRetentionCleanup(string $triggerType = 'cron'): array
+    {
+        $this->startJob('cleanup', $triggerType, 'cleanup_' . backup_now()->format('Ymd_His'));
+        backup_write_log('info', 'backup retention cleanup started', ['job_id' => $this->jobId]);
+
+        try {
+            $deletedDirs = $this->cleanupBackupFilesByRetention();
+            $deletedMeta = $this->cleanupMetadataByRetention();
+            $this->insertItem([
+                'item_type' => 'cleanup',
+                'target_key' => 'backup_retention',
+                'target_label' => 'バックアップ保持期間整理',
+                'source_path' => backup_root_dir(),
+                'backup_path' => null,
+                'file_count' => $deletedDirs['deleted_dirs'],
+                'total_bytes' => $deletedDirs['deleted_bytes'],
+                'sha256' => null,
+                'status' => 'success',
+                'error_message' => null,
+            ]);
+            $this->insertItem([
+                'item_type' => 'cleanup',
+                'target_key' => 'metadata_retention',
+                'target_label' => 'バックアップ管理DB整理',
+                'source_path' => 'fitsc_backup',
+                'backup_path' => null,
+                'file_count' => $deletedMeta,
+                'total_bytes' => 0,
+                'sha256' => null,
+                'status' => 'success',
+                'error_message' => null,
+            ]);
+
+            $message = sprintf('保持期間整理完了: ディレクトリ %d 件 / %s, 管理行 %d 件', $deletedDirs['deleted_dirs'], backup_format_bytes((int)$deletedDirs['deleted_bytes']), $deletedMeta);
+            $this->finishJob('success', $message);
+            return $this->jobSummary();
+        } catch (Throwable $e) {
+            $this->finishJob('failed', $e->getMessage());
+            $this->createAlert('critical', 'backup_cleanup_exception', $e->getMessage());
+            backup_notify_on_failure('[FIT-SC Backup] バックアップ保持期間整理が失敗しました', $e->getMessage());
+            throw $e;
+        }
     }
 
     private function runBackup(string $jobType, string $triggerType): array
@@ -521,6 +701,119 @@ final class FitScBackupManager
             ':alert_key' => $key,
             ':message' => mb_substr($message, 0, 1000, 'UTF-8'),
         ]);
+    }
+
+    private function insertStorageSnapshot(array $payload): int
+    {
+        $dirs = is_array($payload['directories'] ?? null) ? $payload['directories'] : [];
+        $dirBytes = static function (string $key) use ($dirs): int {
+            return is_array($dirs[$key] ?? null) ? (int)($dirs[$key]['bytes'] ?? 0) : 0;
+        };
+        $log = is_array($payload['cleanup_log'] ?? null) ? $payload['cleanup_log'] : [];
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO backup_storage_snapshots (collected_at, status, source, total_bytes, forms_live_bytes, forms_archive_bytes, switchbot_bytes, report_bytes, tmp_bytes, backup_root_bytes, payload_json, cleanup_log_path, cleanup_log_mtime, cleanup_log_tail) ' .
+            'VALUES (:collected_at, :status, :source, :total_bytes, :forms_live_bytes, :forms_archive_bytes, :switchbot_bytes, :report_bytes, :tmp_bytes, :backup_root_bytes, :payload_json, :cleanup_log_path, :cleanup_log_mtime, :cleanup_log_tail)'
+        );
+        $stmt->execute([
+            ':collected_at' => (string)($payload['collected_at'] ?? backup_now()->format('Y-m-d H:i:s')),
+            ':status' => (string)($payload['status'] ?? 'success'),
+            ':source' => (string)($payload['source'] ?? 'unknown'),
+            ':total_bytes' => (int)($payload['total_bytes'] ?? 0),
+            ':forms_live_bytes' => $dirBytes('forms_live'),
+            ':forms_archive_bytes' => $dirBytes('forms_archive'),
+            ':switchbot_bytes' => $dirBytes('switchbot_storage'),
+            ':report_bytes' => $dirBytes('report_dir'),
+            ':tmp_bytes' => $dirBytes('tmp_dir'),
+            ':backup_root_bytes' => $dirBytes('backup_root'),
+            ':payload_json' => backup_json_encode($payload),
+            ':cleanup_log_path' => (string)($log['path'] ?? ''),
+            ':cleanup_log_mtime' => ($log['mtime'] ?? null) ?: null,
+            ':cleanup_log_tail' => mb_substr((string)($log['tail'] ?? ''), 0, 60000, 'UTF-8'),
+        ]);
+        return (int)$this->pdo->lastInsertId();
+    }
+
+    private function cleanupBackupFilesByRetention(): array
+    {
+        $rules = [
+            'daily' => ['days' => (int)backup_config_value('backup_manager.retention.daily_days', 60)],
+            'weekly' => ['days' => (int)backup_config_value('backup_manager.retention.weekly_days', 84)],
+            'monthly' => ['days' => (int)backup_config_value('backup_manager.retention.monthly_days', 730)],
+        ];
+        $backupRoot = realpath(backup_root_dir()) ?: backup_root_dir();
+        $deletedDirs = 0;
+        $deletedBytes = 0;
+
+        foreach ($rules as $type => $rule) {
+            $days = max(1, (int)$rule['days']);
+            $cutoff = backup_now()->modify('-' . $days . ' days')->format('Y-m-d H:i:s');
+            $stmt = $this->pdo->prepare('SELECT id, backup_root FROM backup_jobs WHERE job_type = :type AND started_at < :cutoff AND backup_root IS NOT NULL AND backup_root != "" ORDER BY id ASC');
+            $stmt->execute([':type' => $type, ':cutoff' => $cutoff]);
+            foreach ($stmt as $row) {
+                $path = (string)($row['backup_root'] ?? '');
+                if ($path === '' || !is_dir($path)) {
+                    continue;
+                }
+                $real = realpath($path);
+                if ($real === false || !str_starts_with($real, rtrim($backupRoot, '/') . '/')) {
+                    $this->createAlert('warning', 'backup_cleanup_skipped_path', '保持期間整理で安全確認に失敗したパスをスキップしました: ' . backup_mask_path($path));
+                    continue;
+                }
+                $stats = backup_directory_stats($real);
+                $deletedBytes += (int)($stats['bytes'] ?? 0);
+                $this->deleteTree($real);
+                $deletedDirs++;
+            }
+        }
+
+        return ['deleted_dirs' => $deletedDirs, 'deleted_bytes' => $deletedBytes];
+    }
+
+    private function cleanupMetadataByRetention(): int
+    {
+        $deleted = 0;
+        $snapshotDays = max(30, (int)backup_config_value('backup_manager.storage_snapshot_retention_days', 1461));
+        $reportDays = max(30, (int)backup_config_value('backup_manager.report_retention_days', 1461));
+        $verifyDays = max(7, (int)backup_config_value('backup_manager.retention.verify_days', 30));
+        $cleanupDays = max(30, (int)backup_config_value('backup_manager.retention.cleanup_days', 365));
+
+        $stmt = $this->pdo->prepare('DELETE FROM backup_storage_snapshots WHERE collected_at < :cutoff');
+        $stmt->execute([':cutoff' => backup_now()->modify('-' . $snapshotDays . ' days')->format('Y-m-d H:i:s')]);
+        $deleted += $stmt->rowCount();
+
+        $stmt = $this->pdo->prepare('DELETE FROM backup_reports WHERE generated_at < :cutoff');
+        $stmt->execute([':cutoff' => backup_now()->modify('-' . $reportDays . ' days')->format('Y-m-d H:i:s')]);
+        $deleted += $stmt->rowCount();
+
+        $stmt = $this->pdo->prepare('DELETE FROM backup_jobs WHERE job_type = :type AND started_at < :cutoff');
+        $stmt->execute([':type' => 'verify', ':cutoff' => backup_now()->modify('-' . $verifyDays . ' days')->format('Y-m-d H:i:s')]);
+        $deleted += $stmt->rowCount();
+
+        $stmt = $this->pdo->prepare('DELETE FROM backup_jobs WHERE job_type = :type AND started_at < :cutoff');
+        $stmt->execute([':type' => 'cleanup', ':cutoff' => backup_now()->modify('-' . $cleanupDays . ' days')->format('Y-m-d H:i:s')]);
+        $deleted += $stmt->rowCount();
+
+        return $deleted;
+    }
+
+    private function deleteTree(string $path): void
+    {
+        if (!is_dir($path)) {
+            return;
+        }
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $item) {
+            $itemPath = $item->getPathname();
+            if ($item->isDir()) {
+                @rmdir($itemPath);
+            } else {
+                @unlink($itemPath);
+            }
+        }
+        @rmdir($path);
     }
 
     private function calculateSummary(): array
