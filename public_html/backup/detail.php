@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_init.php';
-$user = backup_web_require_admin();
+$user = backup_web_require_user();
 $manager = backup_web_manager();
 $id = max(0, (int)($_GET['id'] ?? 0));
 $job = $id > 0 ? $manager->getJob($id) : null;

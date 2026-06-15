@@ -232,6 +232,12 @@ function backup_status_label(string $status): string
         'failed' => '失敗',
         'partial' => '一部失敗',
         'warning' => '警告',
+        'missing' => '欠損',
+        'ok' => '正常',
+        'skipped' => 'スキップ',
+        'critical' => '重大',
+        'error' => 'エラー',
+        'info' => '情報',
         default => $status,
     };
 }

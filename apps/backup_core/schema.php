@@ -119,6 +119,89 @@ CREATE TABLE IF NOT EXISTS backup_reports (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL);
 
+
+
+    // Stage 3 additions: integrity checks, operator audit log, and richer alerts.
+    foreach ([
+        "ALTER TABLE backup_alerts ADD COLUMN IF NOT EXISTS detail_json LONGTEXT DEFAULT NULL AFTER message",
+        "ALTER TABLE backup_alerts ADD COLUMN IF NOT EXISTS first_seen_at DATETIME DEFAULT NULL AFTER detail_json",
+        "ALTER TABLE backup_alerts ADD COLUMN IF NOT EXISTS last_seen_at DATETIME DEFAULT NULL AFTER first_seen_at",
+        "ALTER TABLE backup_alerts ADD COLUMN IF NOT EXISTS occurrence_count INT UNSIGNED NOT NULL DEFAULT 1 AFTER last_seen_at",
+        "ALTER TABLE backup_alerts ADD COLUMN IF NOT EXISTS resolved_by_account_id BIGINT UNSIGNED DEFAULT NULL AFTER resolved_at",
+        "ALTER TABLE backup_alerts ADD COLUMN IF NOT EXISTS resolved_by_login_id VARCHAR(100) DEFAULT NULL AFTER resolved_by_account_id",
+        "ALTER TABLE backup_alerts ADD COLUMN IF NOT EXISTS resolve_note VARCHAR(1000) DEFAULT NULL AFTER resolved_by_login_id",
+        "ALTER TABLE backup_alerts ADD KEY IF NOT EXISTS idx_backup_alerts_key_resolved (alert_key, is_resolved)",
+    ] as $sql) {
+        try {
+            $pdo->exec($sql);
+        } catch (Throwable $e) {
+            // Older MySQL/MariaDB variants may not support IF NOT EXISTS for ALTER.
+            // The stage SQL file performs the same migration for normal installs.
+        }
+    }
+
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS backup_integrity_checks (
+  id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  check_key varchar(120) NOT NULL,
+  trigger_type enum('cron','manual','system') NOT NULL DEFAULT 'cron',
+  started_at datetime NOT NULL,
+  finished_at datetime DEFAULT NULL,
+  status enum('running','success','warning','failed') NOT NULL DEFAULT 'running',
+  checked_items int(10) UNSIGNED NOT NULL DEFAULT 0,
+  ok_items int(10) UNSIGNED NOT NULL DEFAULT 0,
+  missing_items int(10) UNSIGNED NOT NULL DEFAULT 0,
+  warning_items int(10) UNSIGNED NOT NULL DEFAULT 0,
+  summary_json longtext DEFAULT NULL,
+  created_at datetime NOT NULL DEFAULT current_timestamp(),
+  updated_at datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_backup_integrity_checks_key (check_key),
+  KEY idx_backup_integrity_checks_started (started_at),
+  KEY idx_backup_integrity_checks_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS backup_integrity_items (
+  id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  check_id bigint(20) UNSIGNED NOT NULL,
+  app_key varchar(64) NOT NULL,
+  source_table varchar(120) NOT NULL,
+  source_id varchar(191) DEFAULT NULL,
+  relative_path varchar(500) DEFAULT NULL,
+  resolved_path varchar(500) DEFAULT NULL,
+  item_status enum('ok','missing','warning','skipped') NOT NULL DEFAULT 'ok',
+  message varchar(1000) DEFAULT NULL,
+  detail_json longtext DEFAULT NULL,
+  created_at datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (id),
+  KEY idx_backup_integrity_items_check (check_id, item_status),
+  KEY idx_backup_integrity_items_app (app_key, source_table),
+  CONSTRAINT fk_backup_integrity_items_check FOREIGN KEY (check_id) REFERENCES backup_integrity_checks (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS backup_operation_logs (
+  id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  actor_account_id bigint(20) UNSIGNED DEFAULT NULL,
+  actor_login_id varchar(100) DEFAULT NULL,
+  actor_display_name varchar(100) DEFAULT NULL,
+  action varchar(100) NOT NULL,
+  target_type varchar(100) DEFAULT NULL,
+  target_id varchar(191) DEFAULT NULL,
+  detail_json longtext DEFAULT NULL,
+  ip_address varchar(64) DEFAULT NULL,
+  user_agent varchar(255) DEFAULT NULL,
+  created_at datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (id),
+  KEY idx_backup_operation_logs_created (created_at),
+  KEY idx_backup_operation_logs_actor (actor_account_id),
+  KEY idx_backup_operation_logs_action (action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+
     $pdo->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS backup_settings (
   setting_key varchar(120) NOT NULL,

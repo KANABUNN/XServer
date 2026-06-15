@@ -3,34 +3,33 @@
 declare(strict_types=1);
 
 $projectRoot = dirname(__DIR__, 2);
-require_once $projectRoot . '/apps/admin_auth.php';
-require_once $projectRoot . '/apps/backup_core/bootstrap.php';
+require_once $projectRoot . '/apps/backup_core/auth.php';
 
-admin_auth_bootstrap();
+backup_auth_bootstrap();
 if (!headers_sent()) {
     header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
     header('X-Robots-Tag: noindex, nofollow, noarchive');
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 }
 
-$returnTo = admin_auth_normalize_return_to((string)($_GET['return_to'] ?? 'index.php'));
+$returnTo = backup_auth_normalize_return_to((string)($_GET['return_to'] ?? 'index.php'));
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $returnTo = admin_auth_normalize_return_to((string)($_POST['return_to'] ?? 'index.php'));
-    if (!admin_auth_validate_csrf_token((string)($_POST['_csrf'] ?? ''))) {
+    $returnTo = backup_auth_normalize_return_to((string)($_POST['return_to'] ?? 'index.php'));
+    if (!backup_auth_verify_csrf((string)($_POST['_csrf'] ?? ''))) {
         $error = 'CSRF トークンが無効です。ページを再読み込みしてください。';
     } else {
         $loginId = trim((string)($_POST['login_id'] ?? ''));
         $password = (string)($_POST['password'] ?? '');
         try {
-            $user = admin_auth_attempt_login(admin_auth_db_connect(), $loginId, $password);
+            $user = backup_auth_attempt_login($loginId, $password);
             if (is_array($user)) {
-                admin_auth_login_user($user);
+                backup_auth_login_user($user);
                 header('Location: ' . $returnTo, true, 302);
                 exit;
             }
-            $error = 'ログインIDまたはパスワードが違います。';
+            $error = 'ログインIDまたはパスワードが違います。backup アプリ権限が付与されているかも確認してください。';
         } catch (Throwable $e) {
             $error = 'ログイン処理に失敗しました。';
             backup_write_log('warning', 'backup login failed', ['error' => $e->getMessage()]);
@@ -38,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$csrf = admin_auth_get_csrf_token();
+$csrf = backup_auth_csrf_token();
 ?>
 <!doctype html>
 <html lang="ja">
@@ -63,7 +62,7 @@ $csrf = admin_auth_get_csrf_token();
     <label for="password">パスワード</label>
     <input id="password" name="password" type="password" autocomplete="current-password" required>
     <button class="primary" type="submit">ログイン</button>
-    <p class="small">既存の共通アカウントを使用します。バックアップ管理画面は管理者権限が必要です。</p>
+    <p class="small">共通アカウントの backup アプリ権限を使用します。閲覧のみは viewer、操作は admin が必要です。</p>
   </form>
 </div>
 </body>

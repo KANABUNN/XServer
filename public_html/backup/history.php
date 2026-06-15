@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_init.php';
-$user = backup_web_require_admin();
+$user = backup_web_require_user();
 $manager = backup_web_manager();
 $jobs = $manager->latestJobs(100);
 backup_web_header('実行履歴', $user);

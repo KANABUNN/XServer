@@ -66,6 +66,13 @@ function account_site_app_definitions(): array
                 'admin' => '管理者',
             ],
         ],
+        'backup' => [
+            'label' => 'バックアップ管理',
+            'roles' => [
+                'viewer' => '閲覧者',
+                'admin' => '管理者',
+            ],
+        ],
         'admin_book' => [
             'label' => '予約管理',
             'roles' => [
