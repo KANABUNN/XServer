@@ -29,7 +29,7 @@ function backup_column_exists(PDO $pdo, string $table, string $column): bool
 
 function backup_integrity_path_is_absolute(string $path): bool
 {
-    return $path !== '' && (str_starts_with($path, '/') || preg_match('/^[A-Za-z]:[\\\/]/', $path) === 1);
+    return $path !== '' && (str_starts_with($path, '/') || preg_match('~^[A-Za-z]:[\\\\/]~', $path) === 1);
 }
 
 function backup_integrity_normalize_path(string $path): string
