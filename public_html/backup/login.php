@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 $projectRoot = dirname(__DIR__, 2);
 require_once $projectRoot . '/apps/backup_core/auth.php';
+require_once $projectRoot . '/apps/response_limit.php';
 
 backup_auth_bootstrap();
 if (!headers_sent()) {
@@ -22,17 +23,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $loginId = trim((string)($_POST['login_id'] ?? ''));
         $password = (string)($_POST['password'] ?? '');
+
         try {
-            $user = backup_auth_attempt_login($loginId, $password);
-            if (is_array($user)) {
-                backup_auth_login_user($user);
-                header('Location: ' . $returnTo, true, 302);
-                exit;
+            rate_limit_or_throw(get_client_ip(), $projectRoot . '/apps/rate_limit_backup_login.json', 5, 300);
+        } catch (Throwable $rateLimitError) {
+            error_log('[backup login rate_limit] ' . $rateLimitError->getMessage());
+            $error = '短時間にログイン試行が多すぎます。時間をおいて再試行してください。';
+        }
+
+        if ($error === '') {
+            try {
+                $user = backup_auth_attempt_login($loginId, $password);
+                if (is_array($user)) {
+                    backup_auth_login_user($user);
+                    header('Location: ' . $returnTo, true, 302);
+                    exit;
+                }
+                $error = 'ログインIDまたはパスワードが違います。backup アプリ権限が付与されているかも確認してください。';
+            } catch (Throwable $e) {
+                $error = 'ログイン処理に失敗しました。';
+                backup_write_log('warning', 'backup login failed', ['error' => $e->getMessage()]);
             }
-            $error = 'ログインIDまたはパスワードが違います。backup アプリ権限が付与されているかも確認してください。';
-        } catch (Throwable $e) {
-            $error = 'ログイン処理に失敗しました。';
-            backup_write_log('warning', 'backup login failed', ['error' => $e->getMessage()]);
         }
     }
 }
