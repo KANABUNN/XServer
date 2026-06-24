@@ -91,10 +91,10 @@ $stats = [
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>共通アカウント管理</title>
-    <link rel="stylesheet" href="assets/common/tokens.css?v=20260624b">
+    <link rel="stylesheet" href="assets/common/tokens.css?v=20260624c">
     <link rel="stylesheet" href="assets/css/account.css">
     <link rel="stylesheet" href="assets/css/account-responsive.css">
-    <link rel="stylesheet" href="assets/common/fit-sc-skin.css?v=20260624b">
+    <link rel="stylesheet" href="assets/common/fit-sc-skin.css?v=20260624c">
     <script src="assets/js/account.js" defer></script>
 </head>
 <body class="account-app-body">

@@ -2,11 +2,13 @@
    FIT-SC common skin
    既存クラス名へ共通トークンを流し込む後段CSS。
 
-   v4方針:
+   v5方針:
    - 添付モックアップ準拠: 差し色は琥珀 #B5722A。
    - 主操作色は brand blue のまま維持する。
    - 差し色は「見出しアイブロウ + 主要KPI」に絞る。
+       CSS生成テキストは使わず、装飾バーのみ生成する。
    - サイドバーにはCSS maskのインラインSVGアイコンを付与し、外部依存を増やさない。
+   - 未割当項目はデフォルトアイコンへフォールバックし、mask非対応環境ではアイコンを非表示にする。
    - button[type="submit"] の属性ヒューリスティックは使わず、塗る対象を明示クラスへ限定する。
    - 汎用 .container はここでは触らず、book 固有CSS側でスコープする。
    ============================================================ */
@@ -53,7 +55,8 @@ body {
 
 /* Sidebar icons: CSS-only, CSP friendly, no external icon font. */
 .sidebar-link {
-  --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='8' y1='7' x2='20' y2='7'/%3E%3Cline x1='8' y1='12' x2='20' y2='12'/%3E%3Cline x1='8' y1='17' x2='20' y2='17'/%3E%3Ccircle cx='4' cy='7' r='1'/%3E%3Ccircle cx='4' cy='12' r='1'/%3E%3Ccircle cx='4' cy='17' r='1'/%3E%3C/svg%3E");
+  --nav-icon-default: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='8' y1='7' x2='20' y2='7'/%3E%3Cline x1='8' y1='12' x2='20' y2='12'/%3E%3Cline x1='8' y1='17' x2='20' y2='17'/%3E%3Ccircle cx='4' cy='7' r='1'/%3E%3Ccircle cx='4' cy='12' r='1'/%3E%3Ccircle cx='4' cy='17' r='1'/%3E%3C/svg%3E");
+  --nav-icon: var(--nav-icon-default);
   position: relative;
   display: flex !important;
   align-items: center;
@@ -74,6 +77,7 @@ body {
 }
 .sidebar-link::after {
   content: "";
+  display: none;
   position: absolute;
   left: 14px;
   top: 50%;
@@ -82,8 +86,13 @@ body {
   transform: translateY(-50%);
   background: currentColor;
   opacity: .92;
-  -webkit-mask: var(--nav-icon) center / contain no-repeat;
-  mask: var(--nav-icon) center / contain no-repeat;
+}
+@supports ((-webkit-mask: url("") center / contain no-repeat) or (mask: url("") center / contain no-repeat)) {
+  .sidebar-link::after {
+    display: block;
+    -webkit-mask: var(--nav-icon, var(--nav-icon-default)) center / contain no-repeat;
+    mask: var(--nav-icon, var(--nav-icon-default)) center / contain no-repeat;
+  }
 }
 .sidebar-link[data-view-target="dashboardView"],
 .sidebar-link[data-sidebar-href="index.php"],
@@ -189,10 +198,10 @@ th { background: var(--surface-2) !important; }
 .mini-stat-card.kpi-card,
 .kpi-card,
 .kpi-flag,
-.summary-card:has(#summarySwitchbotIssueCount),
-.summary-card:has(#summaryMailIssueCount),
-.summary-card:has(#summaryPendingCount),
-.summary-card:has(#summaryReviewCount) {
+.summary-card:has(> #summarySwitchbotIssueCount),
+.summary-card:has(> #summaryMailIssueCount),
+.summary-card:has(> #summaryPendingCount),
+.summary-card:has(> #summaryReviewCount) {
   background: var(--ui-accent-soft) !important;
   border-color: var(--ui-accent-line) !important;
 }
@@ -201,14 +210,14 @@ th { background: var(--surface-2) !important; }
 .mini-stat-card.kpi-card strong,
 .kpi-card strong,
 .kpi-flag strong,
-.summary-card:has(#summarySwitchbotIssueCount) strong,
-.summary-card:has(#summaryMailIssueCount) strong,
-.summary-card:has(#summaryPendingCount) strong,
-.summary-card:has(#summaryReviewCount) strong,
-.summary-card:has(#summarySwitchbotIssueCount) [id^="summary"],
-.summary-card:has(#summaryMailIssueCount) [id^="summary"],
-.summary-card:has(#summaryPendingCount) [id^="summary"],
-.summary-card:has(#summaryReviewCount) [id^="summary"] {
+.summary-card:has(> #summarySwitchbotIssueCount) strong,
+.summary-card:has(> #summaryMailIssueCount) strong,
+.summary-card:has(> #summaryPendingCount) strong,
+.summary-card:has(> #summaryReviewCount) strong,
+.summary-card:has(> #summarySwitchbotIssueCount) [id^="summary"],
+.summary-card:has(> #summaryMailIssueCount) [id^="summary"],
+.summary-card:has(> #summaryPendingCount) [id^="summary"],
+.summary-card:has(> #summaryReviewCount) [id^="summary"] {
   color: var(--ui-accent) !important;
 }
 .summary-card.kpi-card .pill,
@@ -231,13 +240,13 @@ th { background: var(--surface-2) !important; }
 }
 .page-head > div:first-child::before,
 .section-head > div:first-child::before {
-  content: "FIT-SC";
+  content: "";
   display: block;
-  margin: 0 0 4px;
-  color: var(--ui-accent-strong);
-  font-size: 12px;
-  font-weight: var(--fw-bold);
-  letter-spacing: .06em;
+  width: 36px;
+  height: 4px;
+  margin: 0 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--ui-accent);
 }
 
 /* テーブル */

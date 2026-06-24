@@ -162,9 +162,9 @@ function mail_render_page_header(string $title, array $user, string $activeHref)
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="mail-csrf-token" content="<?php echo mail_h($csrfToken); ?>">
   <title><?php echo mail_h($title); ?> | mail.fit-sc.jp</title>
-  <link rel="stylesheet" href="./assets/common/tokens.css?v=20260624b">
+  <link rel="stylesheet" href="./assets/common/tokens.css?v=20260624c">
   <link rel="stylesheet" href="./css/mail-admin.css">
-  <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260624b">
+  <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260624c">
 </head>
 <body>
   <div class="admin-shell">
