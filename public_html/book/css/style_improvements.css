@@ -1,5 +1,5 @@
-@import url("../assets/common/tokens.css?v=20260624");
-@import url("../assets/common/fit-sc-skin.css?v=20260624");
+@import url("../assets/common/tokens.css?v=20260624a");
+@import url("../assets/common/fit-sc-skin.css?v=20260624a");
 
 /* =========================================================================
    貸し部屋予約 UI 改善パッチ (v=20260502b)
@@ -19,25 +19,44 @@
 
 
 /* -------------------------------------------------------------------------
-   共通スキンv2: book公開画面専用の .container スコープ
+   共通スキンv3: book公開画面専用の .container スコープ
    common skin では汎用 .container を触らないため、book側だけで明示する。
    ------------------------------------------------------------------------- */
 body {
   background:
-    radial-gradient(circle at top left, rgba(27,79,176,.12), transparent 34%),
+    radial-gradient(circle at top left, rgba(var(--ui-accent-rgb), .14), transparent 32%),
+    radial-gradient(circle at top right, rgba(var(--brand-rgb), .12), transparent 34%),
     var(--bg) !important;
 }
 
 body > .container {
-  background: var(--surface) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: var(--radius-xl) !important;
-  box-shadow: var(--shadow-lg) !important;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
 }
 
-.submit-btn {
+.submit-btn,
+.result-back-btn {
   background: var(--brand) !important;
   color: var(--brand-contrast) !important;
+  border-color: var(--brand) !important;
+}
+
+.terms-link-btn.hero-action-btn {
+  background: var(--ui-accent-soft) !important;
+  color: var(--ui-accent-strong) !important;
+  border-color: var(--ui-accent-line) !important;
+}
+
+.result-secondary-link {
+  color: var(--text-muted) !important;
+  border-color: var(--line) !important;
+}
+
+.passcode-card {
+  border-color: var(--ui-accent-line) !important;
+  box-shadow: 0 0 0 4px var(--ui-accent-soft), var(--shadow-md) !important;
 }
 
 

@@ -2,8 +2,10 @@
    FIT-SC common skin
    既存クラス名へ共通トークンを流し込む後段CSS。
 
-   v2方針:
+   v3方針:
    - same-origin 配置を前提にする。
+   - 主操作色は brand blue のまま維持する。
+   - 差し色は --ui-accent として、カード上端・選択インジケータ・補助CTAへ限定適用する。
    - button[type="submit"] の属性ヒューリスティックは使わず、塗る対象を明示クラスへ限定する。
    - 汎用 .container はここでは触らず、book 固有CSS側でスコープする。
    ============================================================ */
@@ -17,6 +19,10 @@
   --accent: var(--brand);
   --accent-dark: var(--brand-strong);
   --accent-soft: var(--brand-soft);
+  --accent-warm: var(--ui-accent);
+  --accent-warm-strong: var(--ui-accent-strong);
+  --accent-warm-soft: var(--ui-accent-soft);
+  --accent-warm-line: var(--ui-accent-line);
   --warn: var(--warning);
   --warn-soft: var(--warning-soft);
   --shadow: var(--shadow-md);
@@ -26,11 +32,9 @@
 body {
   font-family: var(--font-base) !important;
   color: var(--text);
-  background: var(--bg) !important;
+  background: linear-gradient(180deg, rgba(var(--brand-rgb), .035) 0%, var(--bg) 280px) !important;
   line-height: var(--lh-body);
 }
-
-a { color: var(--brand); }
 
 .admin-shell { background: var(--bg); }
 .sidebar {
@@ -43,7 +47,7 @@ a { color: var(--brand); }
 .sidebar-brand p,
 .sidebar-user-card span { color: var(--sidebar-muted) !important; }
 .brand-kicker,
-.auth-kicker { color: var(--brand) !important; font-weight: var(--fw-bold); letter-spacing: .04em; }
+.auth-kicker { color: var(--ui-accent) !important; font-weight: var(--fw-bold); letter-spacing: .04em; }
 .sidebar .brand-kicker { color: #93C5FD !important; }
 .sidebar-link {
   position: relative;
@@ -61,11 +65,11 @@ a { color: var(--brand); }
 }
 .sidebar-link:hover,
 .sidebar-link.is-active {
-  background: var(--sidebar-active-bg) !important;
+  background: linear-gradient(90deg, rgba(var(--ui-accent-rgb), .18), rgba(96,165,250,.12)) !important;
   color: #fff !important;
   border-color: var(--sidebar-active-border) !important;
 }
-.sidebar-link.is-active::before { background: var(--sidebar-active-border); }
+.sidebar-link.is-active::before { background: var(--ui-accent); }
 .sidebar-user-card {
   background: var(--sidebar-card-bg) !important;
   border: 1px solid rgba(255,255,255,.14) !important;
@@ -122,6 +126,27 @@ h3 { font-size: var(--fs-h3); line-height: 1.45; }
 .auth-card,
 .account-login-card,
 .public-hero-card { border-radius: var(--radius-xl) !important; }
+.summary-card,
+.stat-card,
+.mini-stat-card,
+.public-hero-card,
+.auth-card,
+.account-login-card {
+  position: relative;
+  overflow: hidden;
+}
+.summary-card::before,
+.stat-card::before,
+.mini-stat-card::before,
+.public-hero-card::before,
+.auth-card::before,
+.account-login-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--ui-accent) 0%, rgba(var(--brand-rgb), .72) 100%);
+}
 .glass-card { backdrop-filter: none !important; }
 .surface-2,
 .preview-snippet,
@@ -146,6 +171,38 @@ th { background: var(--surface-2) !important; }
 .summary-card.kpi-card,
 .kpi-card { border-color: var(--line-strong) !important; }
 
+/* 差し色を使うが、情報階層を壊さないため面全体は淡色に留める。 */
+.accent-surface,
+.accent-card,
+.form-panel-emphasis {
+  background: linear-gradient(180deg, var(--ui-accent-soft) 0%, var(--surface) 46%) !important;
+  border-color: var(--ui-accent-line) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+/* 見出し横の小さなアクセントバー。h要素全体ではなく既存の見出し行に限定。 */
+.section-head h2,
+.section-title-row h2,
+.page-head h1,
+.auth-card-head h1,
+.brand-block h1 {
+  position: relative;
+}
+.section-head h2::after,
+.section-title-row h2::after,
+.page-head h1::after,
+.auth-card-head h1::after,
+.brand-block h1::after {
+  content: "";
+  display: block;
+  width: 42px;
+  height: 3px;
+  margin-top: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--ui-accent);
+}
+
+/* テーブル */
 table { border-color: var(--line); }
 th,
 td { border-color: var(--line) !important; }
@@ -154,7 +211,7 @@ th {
   font-weight: var(--fw-bold) !important;
 }
 tbody tr { transition: background var(--dur) var(--ease); }
-tbody tr:hover { background: #EFF6FF !important; }
+tbody tr:hover { background: var(--brand-soft) !important; }
 .is-selected-row { background: var(--brand-soft) !important; }
 .needs-review-row { background: var(--warning-soft) !important; }
 
@@ -168,13 +225,20 @@ tbody tr:hover { background: #EFF6FF !important; }
   color: var(--brand-strong) !important;
   font-weight: var(--fw-bold);
 }
+.accent-badge,
+.badge-accent,
+.badge.is-accent {
+  background: var(--ui-accent-soft) !important;
+  color: var(--ui-accent-strong) !important;
+  border-color: var(--ui-accent-line) !important;
+}
 
 .primary,
 .button.primary,
 .btn.primary,
 .auth-primary,
-.hero-action-btn,
 .submit-btn,
+.result-back-btn,
 .link-button.primary {
   background: var(--brand) !important;
   color: var(--brand-contrast) !important;
@@ -193,8 +257,8 @@ input[type="file"]::file-selector-button {
 .button.primary:hover,
 .btn.primary:hover,
 .auth-primary:hover,
-.hero-action-btn:hover,
 .submit-btn:hover,
+.result-back-btn:hover,
 .link-button.primary:hover {
   background: var(--brand-strong) !important;
   border-color: var(--brand-strong) !important;
@@ -204,6 +268,21 @@ input[type="file"]::file-selector-button {
 input[type="file"]::file-selector-button:hover {
   background: var(--brand-strong) !important;
   border-color: var(--brand-strong) !important;
+}
+/* 補助CTAは差し色にして、主CTAと競合しないようにする。 */
+.hero-action-btn {
+  background: var(--ui-accent-soft) !important;
+  color: var(--ui-accent-strong) !important;
+  border: 1px solid var(--ui-accent-line) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.hero-action-btn:hover {
+  background: var(--ui-accent) !important;
+  color: var(--ui-accent-contrast) !important;
+  border-color: var(--ui-accent) !important;
+  transform: translateY(-1px);
 }
 .secondary,
 .button.ghost,
@@ -224,9 +303,10 @@ input[type="file"]::file-selector-button:hover {
 /* forms の縦型フォーム選択タブは、全面 brand 塗りではなく薄い選択面に留める。 */
 .public-form-nav-item.is-active,
 .public-form-nav-item[aria-selected="true"] {
-  background: var(--brand-soft) !important;
+  background: linear-gradient(90deg, var(--ui-accent-soft), var(--brand-soft)) !important;
   color: var(--brand-strong) !important;
   border-color: var(--brand) !important;
+  border-left: 4px solid var(--ui-accent) !important;
   box-shadow: none !important;
 }
 
@@ -270,17 +350,13 @@ textarea:focus {
 
 .auth-shell,
 .account-login-body {
-  background: radial-gradient(circle at top left, rgba(27,79,176,.10), transparent 34%), var(--bg) !important;
+  background:
+    radial-gradient(circle at top left, rgba(var(--ui-accent-rgb), .12), transparent 32%),
+    radial-gradient(circle at top right, rgba(var(--brand-rgb), .10), transparent 34%),
+    var(--bg) !important;
 }
 .public-site-header,
 .topbar { background: transparent !important; }
-.accent-surface,
-.accent-card,
-.form-panel-emphasis {
-  background: var(--surface) !important;
-  border-color: var(--line) !important;
-  box-shadow: var(--shadow-md) !important;
-}
 
 @media (max-width: 760px) {
   body { line-height: 1.65; }
