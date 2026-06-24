@@ -2,7 +2,9 @@
    FIT-SC common design tokens
    primitive -> semantic の2層に整理。各サブシステムはこれを参照する。
 
-   v3: 主操作色とは別に、視線誘導用の暖色アクセントを追加。
+   v4: 添付モックアップ準拠。
+       主操作色は brand blue、差し色は琥珀 #B5722A。
+       差し色は見出しアイブロウと主要KPIに限定する。
    ============================================================ */
 :root {
   color-scheme: light;
@@ -16,14 +18,14 @@
   --brand-glow:     rgba(27,79,176,.16);
 
   /* ---- UI Accent / Warm highlight ----
-     主CTAではなく、見出し・カード・選択状態の視線誘導に使う差し色。 */
-  --ui-accent:          #C96B1C;
-  --ui-accent-rgb:      201, 107, 28;
-  --ui-accent-strong:   #8A4612;
-  --ui-accent-soft:     #FFF3E6;
-  --ui-accent-line:     #F0BF86;
+     主CTAではなく、見出しアイブロウ・主要KPIなど少数箇所の視線誘導に使う。 */
+  --ui-accent:          #B5722A;
+  --ui-accent-rgb:      181, 114, 42;
+  --ui-accent-strong:   #7A4A12;
+  --ui-accent-soft:     #F7EFE3;
+  --ui-accent-line:     #E7D4B8;
   --ui-accent-contrast: #FFFFFF;
-  --ui-accent-glow:     rgba(201,107,28,.18);
+  --ui-accent-glow:     rgba(181,114,42,.16);
 
   /* ---- Neutrals ---- */
   --bg:             #E9EDF4;

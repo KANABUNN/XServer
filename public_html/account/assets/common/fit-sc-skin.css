@@ -2,10 +2,11 @@
    FIT-SC common skin
    既存クラス名へ共通トークンを流し込む後段CSS。
 
-   v3方針:
-   - same-origin 配置を前提にする。
+   v4方針:
+   - 添付モックアップ準拠: 差し色は琥珀 #B5722A。
    - 主操作色は brand blue のまま維持する。
-   - 差し色は --ui-accent として、カード上端・選択インジケータ・補助CTAへ限定適用する。
+   - 差し色は「見出しアイブロウ + 主要KPI」に絞る。
+   - サイドバーにはCSS maskのインラインSVGアイコンを付与し、外部依存を増やさない。
    - button[type="submit"] の属性ヒューリスティックは使わず、塗る対象を明示クラスへ限定する。
    - 汎用 .container はここでは触らず、book 固有CSS側でスコープする。
    ============================================================ */
@@ -47,10 +48,18 @@ body {
 .sidebar-brand p,
 .sidebar-user-card span { color: var(--sidebar-muted) !important; }
 .brand-kicker,
-.auth-kicker { color: var(--ui-accent) !important; font-weight: var(--fw-bold); letter-spacing: .04em; }
+.auth-kicker { color: var(--brand) !important; font-weight: var(--fw-bold); letter-spacing: .06em; }
 .sidebar .brand-kicker { color: #93C5FD !important; }
+
+/* Sidebar icons: CSS-only, CSP friendly, no external icon font. */
 .sidebar-link {
+  --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='8' y1='7' x2='20' y2='7'/%3E%3Cline x1='8' y1='12' x2='20' y2='12'/%3E%3Cline x1='8' y1='17' x2='20' y2='17'/%3E%3Ccircle cx='4' cy='7' r='1'/%3E%3Ccircle cx='4' cy='12' r='1'/%3E%3Ccircle cx='4' cy='17' r='1'/%3E%3C/svg%3E");
   position: relative;
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding-left: 42px !important;
   color: var(--sidebar-link) !important;
   border-radius: var(--radius-md) !important;
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
@@ -63,13 +72,41 @@ body {
   border-radius: var(--radius-pill);
   background: transparent;
 }
+.sidebar-link::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  background: currentColor;
+  opacity: .92;
+  -webkit-mask: var(--nav-icon) center / contain no-repeat;
+  mask: var(--nav-icon) center / contain no-repeat;
+}
+.sidebar-link[data-view-target="dashboardView"],
+.sidebar-link[data-sidebar-href="index.php"],
+.sidebar-link:nth-child(1) { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='8' y1='7' x2='20' y2='7'/%3E%3Cline x1='8' y1='12' x2='20' y2='12'/%3E%3Cline x1='8' y1='17' x2='20' y2='17'/%3E%3Ccircle cx='4' cy='7' r='1'/%3E%3Ccircle cx='4' cy='12' r='1'/%3E%3Ccircle cx='4' cy='17' r='1'/%3E%3C/svg%3E"); }
+.sidebar-link[data-view-target="calendarView"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cline x1='3' y1='9' x2='21' y2='9'/%3E%3Cline x1='8' y1='3' x2='8' y2='6'/%3E%3Cline x1='16' y1='3' x2='16' y2='6'/%3E%3C/svg%3E"); }
+.sidebar-link[data-view-target="passcodeView"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='8' cy='14' r='4'/%3E%3Cline x1='11' y1='11' x2='20' y2='4'/%3E%3Cline x1='17' y1='7' x2='20' y2='10'/%3E%3C/svg%3E"); }
+.sidebar-link[data-view-target="adminView"],
+.sidebar-link[data-sidebar-href="settings.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='4' y1='8' x2='20' y2='8'/%3E%3Ccircle cx='15' cy='8' r='2.4'/%3E%3Cline x1='4' y1='16' x2='20' y2='16'/%3E%3Ccircle cx='9' cy='16' r='2.4'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="compose.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="batches.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='8' y1='7' x2='20' y2='7'/%3E%3Cline x1='8' y1='12' x2='20' y2='12'/%3E%3Cline x1='8' y1='17' x2='20' y2='17'/%3E%3Ccircle cx='4' cy='7' r='1'/%3E%3Ccircle cx='4' cy='12' r='1'/%3E%3Ccircle cx='4' cy='17' r='1'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="drafts.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='14' rx='2'/%3E%3Cpath d='m3 7 9 6 9-6'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="attachments.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.4 11.6-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 1 1-2.8-2.8l8.5-8.5'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="templates.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z'/%3E%3Cpath d='M14 2v6h6'/%3E%3Cline x1='8' y1='13' x2='16' y2='13'/%3E%3Cline x1='8' y1='17' x2='16' y2='17'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="organizations.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M22 21v-2a4 4 0 0 0-3-3.9'/%3E%3Cpath d='M16 3.1a4 4 0 0 1 0 7.8'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="send_logs.php"],
+.sidebar-link[data-sidebar-href="logs.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 3v18h18'/%3E%3Cpath d='M7 14l3-3 3 2 5-6'/%3E%3C/svg%3E"); }
 .sidebar-link:hover,
 .sidebar-link.is-active {
-  background: linear-gradient(90deg, rgba(var(--ui-accent-rgb), .18), rgba(96,165,250,.12)) !important;
+  background: var(--sidebar-active-bg) !important;
   color: #fff !important;
   border-color: var(--sidebar-active-border) !important;
 }
-.sidebar-link.is-active::before { background: var(--ui-accent); }
+.sidebar-link.is-active::before { background: rgba(96,165,250,.72); }
 .sidebar-user-card {
   background: var(--sidebar-card-bg) !important;
   border: 1px solid rgba(255,255,255,.14) !important;
@@ -126,27 +163,6 @@ h3 { font-size: var(--fs-h3); line-height: 1.45; }
 .auth-card,
 .account-login-card,
 .public-hero-card { border-radius: var(--radius-xl) !important; }
-.summary-card,
-.stat-card,
-.mini-stat-card,
-.public-hero-card,
-.auth-card,
-.account-login-card {
-  position: relative;
-  overflow: hidden;
-}
-.summary-card::before,
-.stat-card::before,
-.mini-stat-card::before,
-.public-hero-card::before,
-.auth-card::before,
-.account-login-card::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 4px;
-  background: linear-gradient(90deg, var(--ui-accent) 0%, rgba(var(--brand-rgb), .72) 100%);
-}
 .glass-card { backdrop-filter: none !important; }
 .surface-2,
 .preview-snippet,
@@ -169,37 +185,59 @@ th { background: var(--surface-2) !important; }
   letter-spacing: -.03em;
 }
 .summary-card.kpi-card,
-.kpi-card { border-color: var(--line-strong) !important; }
-
-/* 差し色を使うが、情報階層を壊さないため面全体は淡色に留める。 */
-.accent-surface,
-.accent-card,
-.form-panel-emphasis {
-  background: linear-gradient(180deg, var(--ui-accent-soft) 0%, var(--surface) 46%) !important;
+.stat-card.kpi-card,
+.mini-stat-card.kpi-card,
+.kpi-card,
+.kpi-flag,
+.summary-card:has(#summarySwitchbotIssueCount),
+.summary-card:has(#summaryMailIssueCount),
+.summary-card:has(#summaryPendingCount),
+.summary-card:has(#summaryReviewCount) {
+  background: var(--ui-accent-soft) !important;
   border-color: var(--ui-accent-line) !important;
-  box-shadow: var(--shadow-md) !important;
+}
+.summary-card.kpi-card strong,
+.stat-card.kpi-card strong,
+.mini-stat-card.kpi-card strong,
+.kpi-card strong,
+.kpi-flag strong,
+.summary-card:has(#summarySwitchbotIssueCount) strong,
+.summary-card:has(#summaryMailIssueCount) strong,
+.summary-card:has(#summaryPendingCount) strong,
+.summary-card:has(#summaryReviewCount) strong,
+.summary-card:has(#summarySwitchbotIssueCount) [id^="summary"],
+.summary-card:has(#summaryMailIssueCount) [id^="summary"],
+.summary-card:has(#summaryPendingCount) [id^="summary"],
+.summary-card:has(#summaryReviewCount) [id^="summary"] {
+  color: var(--ui-accent) !important;
+}
+.summary-card.kpi-card .pill,
+.kpi-card .pill,
+.kpi-flag .pill {
+  background: var(--surface) !important;
+  color: var(--ui-accent-strong) !important;
+  border-color: var(--ui-accent-line) !important;
 }
 
-/* 見出し横の小さなアクセントバー。h要素全体ではなく既存の見出し行に限定。 */
-.section-head h2,
-.section-title-row h2,
-.page-head h1,
-.auth-card-head h1,
-.brand-block h1 {
-  position: relative;
+/* 添付モックアップに合わせ、差し色は小さなアイブロウに限定する。 */
+.eyebrow,
+.page-eyebrow,
+.section-eyebrow,
+.public-hero-meta,
+.public-hero-meta strong {
+  color: var(--ui-accent-strong) !important;
+  font-weight: var(--fw-bold);
+  letter-spacing: .06em;
 }
-.section-head h2::after,
-.section-title-row h2::after,
-.page-head h1::after,
-.auth-card-head h1::after,
-.brand-block h1::after {
-  content: "";
+.page-head > div:first-child::before,
+.section-head > div:first-child::before {
+  content: "FIT-SC";
   display: block;
-  width: 42px;
-  height: 3px;
-  margin-top: 8px;
-  border-radius: var(--radius-pill);
-  background: var(--ui-accent);
+  margin: 0 0 4px;
+  color: var(--ui-accent-strong);
+  font-size: 12px;
+  font-weight: var(--fw-bold);
+  letter-spacing: .06em;
 }
 
 /* テーブル */
@@ -219,11 +257,23 @@ tbody tr:hover { background: var(--brand-soft) !important; }
 .pill,
 .status-badge,
 .required-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border-radius: var(--radius-pill) !important;
   border: 1px solid var(--line) !important;
   background: var(--brand-soft) !important;
   color: var(--brand-strong) !important;
   font-weight: var(--fw-bold);
+}
+.badge::before,
+.status-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .72;
 }
 .accent-badge,
 .badge-accent,
@@ -279,8 +329,8 @@ input[type="file"]::file-selector-button:hover {
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .hero-action-btn:hover {
-  background: var(--ui-accent) !important;
-  color: var(--ui-accent-contrast) !important;
+  background: #fff !important;
+  color: var(--ui-accent-strong) !important;
   border-color: var(--ui-accent) !important;
   transform: translateY(-1px);
 }
@@ -303,10 +353,10 @@ input[type="file"]::file-selector-button:hover {
 /* forms の縦型フォーム選択タブは、全面 brand 塗りではなく薄い選択面に留める。 */
 .public-form-nav-item.is-active,
 .public-form-nav-item[aria-selected="true"] {
-  background: linear-gradient(90deg, var(--ui-accent-soft), var(--brand-soft)) !important;
+  background: var(--brand-soft) !important;
   color: var(--brand-strong) !important;
   border-color: var(--brand) !important;
-  border-left: 4px solid var(--ui-accent) !important;
+  border-left: 4px solid rgba(96,165,250,.72) !important;
   box-shadow: none !important;
 }
 
@@ -351,8 +401,7 @@ textarea:focus {
 .auth-shell,
 .account-login-body {
   background:
-    radial-gradient(circle at top left, rgba(var(--ui-accent-rgb), .12), transparent 32%),
-    radial-gradient(circle at top right, rgba(var(--brand-rgb), .10), transparent 34%),
+    radial-gradient(circle at top left, rgba(var(--brand-rgb), .10), transparent 34%),
     var(--bg) !important;
 }
 .public-site-header,
@@ -365,4 +414,6 @@ textarea:focus {
   .summary-card,
   .auth-card,
   .account-login-card { border-radius: var(--radius-lg) !important; }
+  .sidebar-link { padding-left: 38px !important; }
+  .sidebar-link::after { left: 12px; }
 }

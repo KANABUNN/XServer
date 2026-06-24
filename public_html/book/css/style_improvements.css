@@ -1,5 +1,5 @@
-@import url("../assets/common/tokens.css?v=20260624a");
-@import url("../assets/common/fit-sc-skin.css?v=20260624a");
+@import url("../assets/common/tokens.css?v=20260624b");
+@import url("../assets/common/fit-sc-skin.css?v=20260624b");
 
 /* =========================================================================
    貸し部屋予約 UI 改善パッチ (v=20260502b)
@@ -19,13 +19,13 @@
 
 
 /* -------------------------------------------------------------------------
-   共通スキンv3: book公開画面専用の .container スコープ
+   共通スキンv4: book公開画面専用の .container スコープ
    common skin では汎用 .container を触らないため、book側だけで明示する。
+   添付モックアップに合わせ、差し色は少数箇所へ限定する。
    ------------------------------------------------------------------------- */
 body {
   background:
-    radial-gradient(circle at top left, rgba(var(--ui-accent-rgb), .14), transparent 32%),
-    radial-gradient(circle at top right, rgba(var(--brand-rgb), .12), transparent 34%),
+    radial-gradient(circle at top left, rgba(var(--brand-rgb), .10), transparent 34%),
     var(--bg) !important;
 }
 
@@ -55,8 +55,8 @@ body > .container {
 }
 
 .passcode-card {
-  border-color: var(--ui-accent-line) !important;
-  box-shadow: 0 0 0 4px var(--ui-accent-soft), var(--shadow-md) !important;
+  border-color: var(--line) !important;
+  box-shadow: var(--shadow-md) !important;
 }
 
 
