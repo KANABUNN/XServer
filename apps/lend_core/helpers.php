@@ -166,7 +166,7 @@ function page_header(string $title, string $bodyClass = ''): void
     $stylesUrl = h(asset_url('assets/css/styles.css'));
     $responsiveUrl = h(asset_url('assets/css/responsive.css'));
     $commonTokensUrl = h(asset_url('assets/common/tokens.css'));
-    $commonSkinUrl = h(asset_url('assets/common/fit-sc-skin.css'));
+    $commonSkinUrl = h(asset_url('assets/common/fit-sc-skin.css?v=20260625a'));
     echo <<<HTML
 <!DOCTYPE html>
 <html lang="ja">
