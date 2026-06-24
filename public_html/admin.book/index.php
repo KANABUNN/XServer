@@ -44,8 +44,10 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
       'csrfToken' => $csrfToken,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
   </script>
+  <link rel="stylesheet" href="https://fit-sc.jp/assets/common/tokens.css?v=20260622">
   <link rel="stylesheet" href="./css/reservation-admin.css?v=20260415b">
   <link rel="stylesheet" href="./css/reservation-admin-responsive.css?v=20260415b">
+  <link rel="stylesheet" href="https://fit-sc.jp/assets/common/fit-sc-skin.css?v=20260622">
 </head>
 <body>
   <div class="admin-shell">

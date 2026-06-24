@@ -165,6 +165,8 @@ function page_header(string $title, string $bodyClass = ''): void
     $appName = h(app_config('app_name', '備品貸出システム'));
     $stylesUrl = h(asset_url('assets/css/styles.css'));
     $responsiveUrl = h(asset_url('assets/css/responsive.css'));
+    $commonTokensUrl = 'https://fit-sc.jp/assets/common/tokens.css?v=20260622';
+    $commonSkinUrl = 'https://fit-sc.jp/assets/common/fit-sc-skin.css?v=20260622';
     echo <<<HTML
 <!DOCTYPE html>
 <html lang="ja">
@@ -173,8 +175,10 @@ function page_header(string $title, string $bodyClass = ''): void
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{$title} | {$appName}</title>
     <meta name="csrf-token" content="{$csrf}">
+    <link rel="stylesheet" href="{$commonTokensUrl}">
     <link rel="stylesheet" href="{$stylesUrl}">
     <link rel="stylesheet" href="{$responsiveUrl}">
+    <link rel="stylesheet" href="{$commonSkinUrl}">
 </head>
 <body class="{$bodyClass}">
 HTML;

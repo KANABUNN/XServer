@@ -71,7 +71,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ログイン | mail.fit-sc.jp</title>
+  <link rel="stylesheet" href="https://fit-sc.jp/assets/common/tokens.css?v=20260622">
   <link rel="stylesheet" href="./css/admin-auth.css">
+  <link rel="stylesheet" href="https://fit-sc.jp/assets/common/fit-sc-skin.css?v=20260622">
 </head>
 <body>
   <main class="auth-shell">

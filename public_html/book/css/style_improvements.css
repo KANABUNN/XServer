@@ -1,3 +1,6 @@
+@import url("https://fit-sc.jp/assets/common/tokens.css?v=20260622");
+@import url("https://fit-sc.jp/assets/common/fit-sc-skin.css?v=20260622");
+
 /* =========================================================================
    貸し部屋予約 UI 改善パッチ (v=20260502b)
    既存 style.css を上書きする形で動作させるため、本ファイルを後ろから読み込む。
