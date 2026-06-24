@@ -41,8 +41,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>アカウント管理ログイン</title>
+    <link rel="stylesheet" href="assets/common/tokens.css?v=20260624">
     <link rel="stylesheet" href="assets/css/account.css">
     <link rel="stylesheet" href="assets/css/account-responsive.css">
+    <link rel="stylesheet" href="assets/common/fit-sc-skin.css?v=20260624">
 </head>
 <body class="account-login-body">
 <div class="account-login-card">

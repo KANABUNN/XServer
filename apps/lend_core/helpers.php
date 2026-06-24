@@ -165,8 +165,8 @@ function page_header(string $title, string $bodyClass = ''): void
     $appName = h(app_config('app_name', '備品貸出システム'));
     $stylesUrl = h(asset_url('assets/css/styles.css'));
     $responsiveUrl = h(asset_url('assets/css/responsive.css'));
-    $commonTokensUrl = 'https://fit-sc.jp/assets/common/tokens.css?v=20260622';
-    $commonSkinUrl = 'https://fit-sc.jp/assets/common/fit-sc-skin.css?v=20260622';
+    $commonTokensUrl = h(asset_url('assets/common/tokens.css'));
+    $commonSkinUrl = h(asset_url('assets/common/fit-sc-skin.css'));
     echo <<<HTML
 <!DOCTYPE html>
 <html lang="ja">
