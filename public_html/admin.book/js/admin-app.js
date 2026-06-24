@@ -664,3 +664,36 @@
 
   init();
 })();
+
+/* ========================================================================
+   モバイル用: 各テーブルの <td> に列見出しを data-label として自動付与。
+   reservation-admin-responsive.css のカード変換(<=768px)が ::before で参照する。
+   ======================================================================== */
+(function setupResponsiveTableLabels() {
+  function stamp(table) {
+    const heads = Array.from(table.querySelectorAll('thead th')).map((th) => th.textContent.trim());
+    if (!heads.length) return;
+    table.querySelectorAll('tbody tr').forEach((tr) => {
+      const cells = tr.children;
+      if (cells.length !== heads.length) return;   // colspan のプレースホルダ行はスキップ
+      for (let i = 0; i < cells.length; i++) {
+        cells[i].setAttribute('data-label', heads[i]);
+      }
+    });
+  }
+  function stampAll() {
+    document.querySelectorAll('.table-wrap table').forEach(stamp);
+  }
+  function init() {
+    stampAll();
+    const observer = new MutationObserver(stampAll);
+    document.querySelectorAll('.table-wrap table tbody').forEach((tbody) => {
+      observer.observe(tbody, { childList: true });
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();

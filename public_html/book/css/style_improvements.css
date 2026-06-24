@@ -659,3 +659,26 @@ body > .container {
   font-size: 14px;
   color: #1e3a8a;
 }
+
+/* ===== スマホ最適化: 月カレンダーのセル密度を下げる (<=640px) ===== */
+@media (max-width: 640px) {
+  .calendar-grid { gap: 5px; }
+
+  .calendar-day {
+    min-height: 60px;          /* タップ確保しつつ高さを圧縮 */
+    padding: 6px 4px;
+    gap: 2px;
+    border-radius: 10px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .calendar-day-number { font-size: 15px; line-height: 1.1; }
+
+  /* 注記と部屋チップは省略。空き状況はセル背景色＋凡例で表現。
+     部屋内訳はステップ3、SR向けには各ボタンの aria-label が保持。 */
+  .calendar-day-note,
+  .calendar-room-chips { display: none; }
+
+  .calendar-weekday { font-size: 12px; }
+}

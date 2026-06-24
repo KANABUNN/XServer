@@ -426,3 +426,25 @@ textarea:focus {
   .sidebar-link { padding-left: 38px !important; }
   .sidebar-link::after { left: 12px; }
 }
+
+/* === forms 利用者ヘッダー見出しの不可視化 修正 ===
+   .public-site-header は styles.css で「濃紺背景＋白文字(#f4f8ff)」前提。
+   本skinで background:transparent にした際に color を戻し忘れ、
+   h1 が白文字のまま明色背景に溶けていた。帯透明化に合わせ本文色へ戻す。
+   muted / eyebrow は上位ルールで既に暗色化済み、ghostボタンも .btn.ghost で対応済み。 */
+.public-site-header { color: var(--text) !important; }
+.public-site-header h1,
+.public-site-header h2 { color: var(--text) !important; }
+
+.public-site-header {
+  background: rgba(255, 255, 255, .72) !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+
+/* ===== モバイル: iOSの入力ズーム抑止＋タップ領域確保 (<=760px) ===== */
+@media (max-width: 760px) {
+  input, select, textarea { font-size: 16px !important; }   /* 16px未満だと iOS が自動でズームする */
+  .btn, button,
+  .workspace-tab-button, .tab-button,
+  .public-form-nav-item { min-height: 44px; }
+}

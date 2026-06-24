@@ -46,7 +46,7 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
   </script>
   <link rel="stylesheet" href="./assets/common/tokens.css?v=20260624c">
   <link rel="stylesheet" href="./css/reservation-admin.css?v=20260415b">
-  <link rel="stylesheet" href="./css/reservation-admin-responsive.css?v=20260415b">
+  <link rel="stylesheet" href="./css/reservation-admin-responsive.css?v=20260625">
   <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260624c">
 </head>
 <body>
@@ -495,6 +495,6 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
     </main>
   </div>
 
-  <script src="./js/admin-app.js?v=20260415b" defer></script>
+  <script src="./js/admin-app.js?v=20260625" defer></script>
 </body>
 </html>
