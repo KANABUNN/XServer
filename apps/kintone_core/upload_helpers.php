@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
-require_once kintone_apps_dir() . '/forms_module.php';
 
 function kintone_upload_error_message(int $errorCode, string $label = 'ファイル'): string
 {

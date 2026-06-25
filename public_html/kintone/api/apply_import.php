@@ -17,7 +17,14 @@ try {
         $changeIds = [];
     }
     $result = kintone_apply_import($batchId, $changeIds, $user);
-    kintone_set_flash('success', sprintf('反映しました。新規%d件、更新%d件、mail同期%d件。', $result['created'], $result['updated'], $result['mail_synced']));
+    
+    $message = sprintf('反映しました。新規%d件、更新%d件、mail同期%d件。', $result['created'], $result['updated'], $result['mail_synced']);
+    if (!empty($result['mail_sync_failed'])) {
+        $message .= ' mail同期失敗: ' . implode(', ', array_map('strval', $result['mail_sync_failed'])) . '。';
+        kintone_set_flash('warn', $message);
+    } else {
+        kintone_set_flash('success', $message);
+    }
 } catch (InvalidArgumentException $e) {
     kintone_set_flash('error', $e->getMessage());
 } catch (PDOException $e) {

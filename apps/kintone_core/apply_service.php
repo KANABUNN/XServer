@@ -13,9 +13,19 @@ function kintone_apply_import(int $batchId, array $changeIds, array $actor): arr
     if ($changeIds === []) {
         throw new InvalidArgumentException('反映対象が選択されていません。');
     }
-    $batchStmt = $pdo->prepare('SELECT * FROM roster_import_batches WHERE id = :id FOR UPDATE');
+
+    $appliedCodes = [];
+    $result = [
+        'created' => 0,
+        'updated' => 0,
+        'mail_synced' => 0,
+        'mail_sync_failed' => [],
+        'high_risk_codes' => [],
+    ];
+
     $pdo->beginTransaction();
     try {
+        $batchStmt = $pdo->prepare('SELECT * FROM roster_import_batches WHERE id = :id FOR UPDATE');
         $batchStmt->execute([':id' => $batchId]);
         $batch = $batchStmt->fetch();
         if (!$batch) {
@@ -27,10 +37,12 @@ function kintone_apply_import(int $batchId, array $changeIds, array $actor): arr
         if (!in_array((string)$batch['status'], ['validated', 'needs_review', 'approved'], true)) {
             throw new RuntimeException('このバッチは反映可能な状態ではありません。');
         }
+
         $pdo->prepare('UPDATE roster_import_batches SET status = "approved", approved_by_account_id = :uid, approved_at = NOW() WHERE id = :id')->execute([
             ':uid' => (int)($actor['id'] ?? 0) ?: null,
             ':id' => $batchId,
         ]);
+
         $ph = implode(',', array_fill(0, count($changeIds), '?'));
         $stmt = $pdo->prepare('SELECT * FROM organization_change_logs WHERE batch_id = ? AND id IN (' . $ph . ') AND applied_at IS NULL ORDER BY organization_code, id');
         $stmt->execute(array_merge([$batchId], $changeIds));
@@ -38,13 +50,20 @@ function kintone_apply_import(int $batchId, array $changeIds, array $actor): arr
         if (count($changes) !== count($changeIds)) {
             throw new RuntimeException('反映対象の一部が見つからない、または反映済みです。');
         }
+
         $byCode = [];
         foreach ($changes as $change) {
-            $byCode[(string)$change['organization_code']][] = $change;
+            $code = (string)$change['organization_code'];
+            if ($code === '') {
+                continue;
+            }
+            $byCode[$code][] = $change;
         }
-        $result = ['created' => 0, 'updated' => 0, 'mail_synced' => 0, 'high_risk_codes' => []];
+
+        $existingStmt = $pdo->prepare('SELECT * FROM organizations WHERE organization_code = :code LIMIT 1');
+        $memberStmt = $pdo->prepare('SELECT organization_name, normalized_organization_name, category FROM organization_members WHERE import_batch_id = :batch_id AND organization_code = :code LIMIT 1');
+
         foreach ($byCode as $code => $items) {
-            $existingStmt = $pdo->prepare('SELECT * FROM organizations WHERE organization_code = :code LIMIT 1');
             $existingStmt->execute([':code' => $code]);
             $existing = $existingStmt->fetch() ?: null;
             $values = [];
@@ -54,10 +73,10 @@ function kintone_apply_import(int $batchId, array $changeIds, array $actor): arr
                     $result['high_risk_codes'][$code] = $code;
                 }
             }
-            if (!isset($values['organization_name'])) {
-                $nameStmt = $pdo->prepare('SELECT organization_name, normalized_organization_name, category FROM organization_members WHERE import_batch_id = :batch_id AND organization_code = :code LIMIT 1');
-                $nameStmt->execute([':batch_id' => $batchId, ':code' => $code]);
-                $row = $nameStmt->fetch() ?: [];
+
+            if (!isset($values['organization_name']) || !isset($values['normalized_organization_name'])) {
+                $memberStmt->execute([':batch_id' => $batchId, ':code' => $code]);
+                $row = $memberStmt->fetch() ?: [];
                 $values += [
                     'organization_name' => (string)($existing['organization_name'] ?? $row['organization_name'] ?? $code),
                     'normalized_organization_name' => (string)($existing['normalized_organization_name'] ?? $row['normalized_organization_name'] ?? $code),
@@ -73,6 +92,7 @@ function kintone_apply_import(int $batchId, array $changeIds, array $actor): arr
                 'member_count' => (string)($existing['member_count'] ?? 0),
                 'category' => (string)($values['category'] ?? $existing['category'] ?? ''),
             ];
+
             if ($existing) {
                 $update = $pdo->prepare('UPDATE organizations SET organization_name=:organization_name, normalized_organization_name=:normalized_organization_name, category=:category, representative_name=:representative_name, representative_email=:representative_email, rep_source=:rep_source, activity_status=:activity_status, activity_status_source=:activity_status_source, member_count=:member_count, last_roster_import_batch_id=:batch_id, updated_at=NOW() WHERE id=:id');
                 $update->execute([
@@ -108,6 +128,7 @@ function kintone_apply_import(int $batchId, array $changeIds, array $actor): arr
                 $orgId = (int)$pdo->lastInsertId();
                 $result['created']++;
             }
+
             $idParams = [];
             $idBinds = [];
             foreach (array_values($items) as $idx => $item) {
@@ -122,19 +143,12 @@ function kintone_apply_import(int $batchId, array $changeIds, array $actor): arr
                 ':batch_id' => $batchId,
                 ':code' => $code,
             ], $idBinds));
-            $orgStmt = $pdo->prepare('SELECT * FROM organizations WHERE id = :id');
-            $orgStmt->execute([':id' => $orgId]);
-            $org = $orgStmt->fetch();
-            if ($org) {
-                kintone_mail_sync_organization($org);
-                $result['mail_synced']++;
-            }
+
+            $appliedCodes[$code] = $code;
         }
+
         $pdo->prepare('UPDATE roster_import_batches SET status="applied", applied_at=NOW(), file_purge_at=DATE_ADD(NOW(), INTERVAL 14 DAY), retention_purge_at=DATE_ADD(NOW(), INTERVAL 30 DAY), updated_at=NOW() WHERE id=:id')->execute([':id' => $batchId]);
         $pdo->commit();
-        $result['high_risk_codes'] = array_values($result['high_risk_codes']);
-        kintone_write_audit_log('kintone.roster.apply', 'roster_import_batch', (string)$batchId, $result, $actor);
-        return $result;
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
@@ -146,4 +160,26 @@ function kintone_apply_import(int $batchId, array $changeIds, array $actor): arr
         }
         throw $e;
     }
+
+    // mail_organizations は投影/キャッシュであり、org正本とは別DB接続である。
+    // 正本コミット後に同期し、mail側失敗で正本を巻き戻さない。
+    $mailResult = kintone_mail_sync_organizations_by_codes(array_values($appliedCodes));
+    $result['mail_synced'] = (int)$mailResult['synced'];
+    $result['mail_sync_failed'] = $mailResult['failed'];
+    $result['high_risk_codes'] = array_values($result['high_risk_codes']);
+
+    kintone_write_audit_log('kintone.roster.apply', 'roster_import_batch', (string)$batchId, $result, $actor);
+    if ($result['mail_sync_failed'] !== []) {
+        kintone_write_audit_log('kintone.mail_sync.write', 'roster_import_batch', (string)$batchId, [
+            'result' => 'partial_failed',
+            'failed_codes' => $result['mail_sync_failed'],
+        ], $actor);
+    } else {
+        kintone_write_audit_log('kintone.mail_sync.write', 'roster_import_batch', (string)$batchId, [
+            'result' => 'success',
+            'synced' => $result['mail_synced'],
+        ], $actor);
+    }
+
+    return $result;
 }

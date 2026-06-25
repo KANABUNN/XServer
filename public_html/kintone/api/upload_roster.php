@@ -23,7 +23,7 @@ try {
     $pdo = kintone_pdo('org');
     $pdo->beginTransaction();
     $batchKey = 'ros_' . date('YmdHis') . '_' . bin2hex(random_bytes(4));
-    $stmt = $pdo->prepare('INSERT INTO roster_import_batches (batch_key, original_name, stored_name, relative_path, file_size, mime_type, encoding, sha256_hash, status, total_rows, valid_rows, warning_rows, error_rows, created_by_account_id, created_by_login_id, summary_json) VALUES (:batch_key,:original_name,:stored_name,:relative_path,:file_size,:mime_type,:encoding,:sha256_hash,"parsed",:total_rows,:valid_rows,:warning_rows,:error_rows,:created_by_account_id,:created_by_login_id,:summary_json)');
+    $stmt = $pdo->prepare('INSERT INTO roster_import_batches (batch_key, original_name, stored_name, relative_path, file_size, mime_type, encoding, sha256_hash, status, total_rows, valid_rows, warning_rows, error_rows, created_by_account_id, created_by_login_id, file_purge_at, summary_json) VALUES (:batch_key,:original_name,:stored_name,:relative_path,:file_size,:mime_type,:encoding,:sha256_hash,"parsed",:total_rows,:valid_rows,:warning_rows,:error_rows,:created_by_account_id,:created_by_login_id,DATE_ADD(NOW(), INTERVAL 14 DAY),:summary_json)');
     $stmt->execute([
         ':batch_key' => $batchKey,
         ':original_name' => $stored['original_name'],

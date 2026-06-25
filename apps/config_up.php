@@ -322,4 +322,21 @@ return [
             ],
         ],
     ],
+    'kintone' => [
+        'storage_root' => __DIR__ . '/kintone_core/storage',
+        'crypto_key_file' => __DIR__ . '/kintone_core/config/kintone_crypto.key',
+        'max_roster_upload_mb' => 10,
+        'role_rank_map' => [
+            '代表' => 100,
+            '代表者' => 100,
+            '部長' => 90,
+            '会長' => 90,
+            '代表幹事' => 90,
+            '委員長' => 80,
+            '副代表' => 70,
+            '副部長' => 70,
+            '会計' => 50,
+            '書記' => 50,
+        ],
+    ],
 ];

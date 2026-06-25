@@ -66,10 +66,24 @@ function kintone_fetch_existing_orgs(array $codes): array
     return $result;
 }
 
+
+function kintone_pick_first_non_empty(array $rows, string $key): string
+{
+    foreach ($rows as $row) {
+        $value = trim((string)($row[$key] ?? ''));
+        if ($value !== '') {
+            return $value;
+        }
+    }
+    return '';
+}
+
 function kintone_diff_generate_for_batch(int $batchId): array
 {
     $pdo = kintone_pdo('org');
     $groups = kintone_diff_batch_rows($batchId);
+    // CSVに登場したorganization_codeのみを処理する。
+    // 既存団体がCSVに未登場でも、ここでは差分・無効化を生成しない。
     $existing = kintone_fetch_existing_orgs(array_keys($groups));
     $pdo->prepare('DELETE FROM organization_change_logs WHERE batch_id = :batch_id AND applied_at IS NULL')->execute([':batch_id' => $batchId]);
     $insert = $pdo->prepare('INSERT INTO organization_change_logs (organization_id, organization_code, batch_id, field_name, old_value, new_value, change_type, risk_level) VALUES (:organization_id, :organization_code, :batch_id, :field_name, :old_value, :new_value, :change_type, :risk_level)');
@@ -78,11 +92,10 @@ function kintone_diff_generate_for_batch(int $batchId): array
         $current = $existing[$code] ?? null;
         $rep = kintone_resolve_representative($rows);
         $activity = kintone_resolve_activity($rows, $rep);
-        $first = $rows[0];
         $candidate = [
-            'organization_name' => (string)($first['organization_name'] ?? ''),
-            'normalized_organization_name' => (string)($first['normalized_organization_name'] ?? ''),
-            'category' => (string)($first['category'] ?? ''),
+            'organization_name' => kintone_pick_first_non_empty($rows, 'organization_name'),
+            'normalized_organization_name' => kintone_pick_first_non_empty($rows, 'normalized_organization_name'),
+            'category' => kintone_pick_first_non_empty($rows, 'category'),
             'representative_name' => $rep['status'] === 'decided' ? (string)($rep['member']['member_name'] ?? '') : null,
             'representative_email' => $rep['status'] === 'decided' ? (string)($rep['member']['member_email'] ?? '') : null,
             'rep_source' => (string)($rep['source'] ?? 'unresolved'),
