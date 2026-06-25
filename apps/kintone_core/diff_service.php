@@ -1,0 +1,133 @@
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/representative_resolver.php';
+require_once __DIR__ . '/activity_resolver.php';
+
+function kintone_risk_for_change(string $field, ?string $old, ?string $new): string
+{
+    if ($field === 'representative_email') {
+        return 'high';
+    }
+    if ($field === 'activity_status' && $old === 'active' && $new === 'inactive') {
+        return 'high';
+    }
+    if (in_array($field, ['representative_name', 'organization_name', 'category'], true)) {
+        return 'medium';
+    }
+    return 'low';
+}
+
+function kintone_change_type_for(string $field, ?string $old, ?string $new): string
+{
+    if ($field === 'representative_name') {
+        return 'rep_change';
+    }
+    if ($field === 'representative_email') {
+        return 'email_change';
+    }
+    if ($field === 'activity_status' && $old === 'active' && $new === 'inactive') {
+        return 'deactivate';
+    }
+    if ($field === 'activity_status' && $old === 'inactive' && $new === 'active') {
+        return 'reactivate';
+    }
+    return $old === null ? 'create' : 'update';
+}
+
+function kintone_diff_batch_rows(int $batchId): array
+{
+    $stmt = kintone_pdo('org')->prepare('SELECT * FROM organization_members WHERE import_batch_id = :batch_id ORDER BY organization_code, id');
+    $stmt->execute([':batch_id' => $batchId]);
+    $groups = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $code = (string)($row['organization_code'] ?? '');
+        if ($code === '') {
+            continue;
+        }
+        $groups[$code][] = $row;
+    }
+    return $groups;
+}
+
+function kintone_fetch_existing_orgs(array $codes): array
+{
+    if ($codes === []) {
+        return [];
+    }
+    $placeholders = implode(',', array_fill(0, count($codes), '?'));
+    $stmt = kintone_pdo('org')->prepare('SELECT * FROM organizations WHERE organization_code IN (' . $placeholders . ')');
+    $stmt->execute(array_values($codes));
+    $result = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $result[(string)$row['organization_code']] = $row;
+    }
+    return $result;
+}
+
+function kintone_diff_generate_for_batch(int $batchId): array
+{
+    $pdo = kintone_pdo('org');
+    $groups = kintone_diff_batch_rows($batchId);
+    $existing = kintone_fetch_existing_orgs(array_keys($groups));
+    $pdo->prepare('DELETE FROM organization_change_logs WHERE batch_id = :batch_id AND applied_at IS NULL')->execute([':batch_id' => $batchId]);
+    $insert = $pdo->prepare('INSERT INTO organization_change_logs (organization_id, organization_code, batch_id, field_name, old_value, new_value, change_type, risk_level) VALUES (:organization_id, :organization_code, :batch_id, :field_name, :old_value, :new_value, :change_type, :risk_level)');
+    $summary = ['low' => 0, 'medium' => 0, 'high' => 0, 'organizations' => count($groups), 'needs_review' => 0];
+    foreach ($groups as $code => $rows) {
+        $current = $existing[$code] ?? null;
+        $rep = kintone_resolve_representative($rows);
+        $activity = kintone_resolve_activity($rows, $rep);
+        $first = $rows[0];
+        $candidate = [
+            'organization_name' => (string)($first['organization_name'] ?? ''),
+            'normalized_organization_name' => (string)($first['normalized_organization_name'] ?? ''),
+            'category' => (string)($first['category'] ?? ''),
+            'representative_name' => $rep['status'] === 'decided' ? (string)($rep['member']['member_name'] ?? '') : null,
+            'representative_email' => $rep['status'] === 'decided' ? (string)($rep['member']['member_email'] ?? '') : null,
+            'rep_source' => (string)($rep['source'] ?? 'unresolved'),
+            'activity_status' => (string)($activity['status'] ?? 'needs_review'),
+            'activity_status_source' => (string)($activity['source'] ?? 'unresolved'),
+            'member_count' => (string)count($rows),
+        ];
+        if (($rep['status'] ?? '') !== 'decided' || ($activity['status'] ?? '') === 'needs_review') {
+            $summary['needs_review']++;
+        }
+        foreach ($candidate as $field => $newValue) {
+            if ($newValue === null || $newValue === '') {
+                continue;
+            }
+            $oldValue = $current[$field] ?? null;
+            $oldComparable = $oldValue === null ? null : (string)$oldValue;
+            if ($oldComparable === (string)$newValue) {
+                continue;
+            }
+            $risk = kintone_risk_for_change($field, $oldComparable, (string)$newValue);
+            $summary[$risk]++;
+            $insert->execute([
+                ':organization_id' => $current ? (int)$current['id'] : null,
+                ':organization_code' => $code,
+                ':batch_id' => $batchId,
+                ':field_name' => $field,
+                ':old_value' => $oldComparable,
+                ':new_value' => (string)$newValue,
+                ':change_type' => kintone_change_type_for($field, $oldComparable, (string)$newValue),
+                ':risk_level' => $risk,
+            ]);
+        }
+    }
+    $status = $summary['high'] > 0 || $summary['needs_review'] > 0 ? 'needs_review' : 'validated';
+    $pdo->prepare('UPDATE roster_import_batches SET status = :status, summary_json = :summary_json, updated_at = NOW() WHERE id = :id')->execute([
+        ':status' => $status,
+        ':summary_json' => kintone_json_encode($summary),
+        ':id' => $batchId,
+    ]);
+    return $summary;
+}
+
+function kintone_fetch_batch_changes(int $batchId): array
+{
+    $stmt = kintone_pdo('org')->prepare('SELECT * FROM organization_change_logs WHERE batch_id = :batch_id ORDER BY risk_level DESC, organization_code ASC, id ASC');
+    $stmt->execute([':batch_id' => $batchId]);
+    return $stmt->fetchAll() ?: [];
+}

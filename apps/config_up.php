@@ -23,7 +23,7 @@ return [
             'port' => $mysqlPort,
             'dbname' => 'fitsc_account',
             'charset' => $mysqlCharset,
-            'user' => 'fitsc_admin',
+            'user' => 'fitsc_account',
             'password' => '',
         ],
         'book' => [
@@ -53,6 +53,34 @@ return [
             'user' => 'fitsc_lend',
             'password' => '',
         ],
+        'mail' => [
+            'driver' => 'mysql',
+            'host' => 'localhost',
+            'port' => 3306,
+            'dbname' => 'fitsc_mail',
+            'charset' => 'utf8mb4',
+            'user' => 'fitsc_mail',
+            'password' => '',
+        ],
+        'backup' => [
+            'driver' => 'mysql',
+            'host' => 'localhost',
+            'port' => 3306,
+            'dbname' => 'fitsc_backup',
+            'charset' => 'utf8mb4',
+            'user' => 'fitsc_backup',
+            'password' => '',
+        ],  
+        //kintone用  
+        'org' => [
+            'driver' => 'mysql',
+            'host' => 'localhost',
+            'port' => 3306,
+            'dbname' => 'fitsc_org',
+            'charset' => 'utf8mb4',
+            'user' => 'fitsc_org',
+            'password' => '',
+        ]
     ],
 
     // 既存コード互換: 予約システム(book)の既定接続
@@ -70,7 +98,7 @@ return [
         'port' => $mysqlPort,
         'dbname' => 'fitsc_account',
         'charset' => $mysqlCharset,
-        'user' => 'fitsc_admin',
+        'user' => 'fitsc_account',
         'pass' => '',
     ],
 
@@ -99,12 +127,12 @@ return [
     'smtp_host'   => 'sv16171.xserver.jp',
     'smtp_port'   => 465,
     'smtp_secure' => 'ssl',
-    'smtp_user'   => 'info@fit-sc.jp',
+    'smtp_user'   => 'info@',
     'smtp_pass'   => '',
 
-    'from_addr'   => 'info@fit-sc.jp',
+    'from_addr'   => 'info@',
     'from_name'   => '貸し部屋予約システム',
-    'reservation_admin_notify_to' => 'sogokanri@bene.fit.ac.jp',
+    'reservation_admin_notify_to' => '',
 
     'timezone' => 'Asia/Tokyo',
 
@@ -121,7 +149,7 @@ return [
 
     'google_calendar' => [
         'enabled' => true,
-        'gas_url' => 'https://script.google.com/a/macros/fit-sc.jp/s/AKfycbyjUhRHiX_ROqCGDvqOVty1P2ocSsu3kaywRX8fu355CgSWgESDrr_EgEI1tvWRH4kOdA/exec',
+        'gas_url' => '',
         'shared_secret' => '',
         'timezone' => 'Asia/Tokyo',
         'connect_timeout' => 5,
@@ -213,6 +241,84 @@ return [
                 'date_column' => 'created_at',
                 'retention_days' => 180,
                 'label' => 'fitsc_book.reservation_mail_logs',
+            ],
+        ],
+    ],
+
+    'backup_manager' => [
+        'enabled' => true,
+        'timezone' => 'Asia/Tokyo',
+        'backup_root' => dirname(__DIR__) . '/private_backups',
+        'state_dir' => __DIR__ . '/storage/backup_logs',
+        'alert_mail_to' => 'jyohokanri@fit-sc.jp',
+
+        // 容量警告。disk_total_space / disk_free_space から計算します。
+        'disk_warning_ratio' => 0.80,
+        'disk_critical_ratio' => 0.90,
+
+        // 月次バックアップレポートをメール送信する場合のみ true。
+        // 通常の失敗通知は alert_mail_to へ送られます。
+        'send_monthly_report_mail' => false,
+
+        // アラート判定しきい値。cron遅延を考慮してやや余裕を持たせています。
+        'alerts' => [
+            'daily_success_hours' => 36,
+            'weekly_success_hours' => 192,
+            'verify_success_hours' => 36,
+        ],
+
+        // 整合性チェック時に相対パス探索へ追加するディレクトリ。
+        // 標準候補で見つからない場合のみ、実環境のアップロード保存先を追加してください。
+        'integrity' => [
+            'forms_file_roots' => [],
+            'mail_file_roots' => [],
+            'switchbot_file_roots' => [],
+        ],
+
+        // 保持期間。バックアップ本体と管理メタデータを分けて整理します。
+        'retention' => [
+            'daily_days' => 60,
+            'weekly_days' => 84,
+            'monthly_days' => 730,
+            'verify_days' => 30,
+            'cleanup_days' => 365,
+        ],
+        'storage_snapshot_retention_days' => 1461,
+        'report_retention_days' => 1461,
+
+        // 第一段階と同じくDBをdumpする
+        'db_targets' => [
+            ['key' => 'account', 'connection' => 'account', 'dbname' => 'fitsc_account', 'required' => true],
+            ['key' => 'book',    'connection' => 'book',    'dbname' => 'fitsc_book',    'required' => true],
+            ['key' => 'forms',   'connection' => 'forms',   'dbname' => 'fitsc_forms',   'required' => true],
+            ['key' => 'lend',    'connection' => 'lend',    'dbname' => 'fitsc_lend',    'required' => false],
+            ['key' => 'mail',    'connection' => 'mail',    'dbname' => 'fitsc_mail',    'required' => false],
+        ],
+
+        // Web非公開領域に tar.gz として保存する
+        'file_targets' => [
+            [
+                'key' => 'apps',
+                'label' => 'apps',
+                'path' => __DIR__,
+                'required' => true,
+                'exclude' => [
+                    'apps/storage/maintenance/tmp',
+                    'apps/storage/backup_logs/tmp',
+                    'apps/storage/backups',
+                    'apps/vendor',
+                    'apps/node_modules',
+                ],
+            ],
+            [
+                'key' => 'public_html',
+                'label' => 'public_html',
+                'path' => dirname(__DIR__) . '/public_html',
+                'required' => true,
+                'exclude' => [
+                    'public_html/cache',
+                    'public_html/node_modules',
+                ],
             ],
         ],
     ],
