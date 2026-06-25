@@ -4,6 +4,22 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/organization_normalizer.php';
 
+function kintone_normalize_requested_csv_encoding(?string $encoding): string
+{
+    $encoding = trim((string)($encoding ?? 'auto'));
+    if ($encoding === '' || strtolower($encoding) === 'auto') {
+        return 'auto';
+    }
+    $upper = strtoupper($encoding);
+    if (in_array($upper, ['UTF-8', 'UTF8'], true)) {
+        return 'UTF-8';
+    }
+    if (in_array($upper, ['SJIS-WIN', 'SHIFT_JIS', 'SHIFT-JIS', 'CP932', 'SJIS'], true)) {
+        return 'SJIS-win';
+    }
+    throw new InvalidArgumentException('文字コード指定が不正です。自動、UTF-8、Shift_JIS/CP932 のいずれかを選択してください。');
+}
+
 function kintone_detect_csv_encoding(string $bytes): string
 {
     if (str_starts_with($bytes, "\xEF\xBB\xBF")) {
@@ -66,7 +82,7 @@ function kintone_csv_flag_is_true(string $value): bool
     return preg_match('/\A(1|true|yes|on|代表|○|有|はい)\z/iu', $v) === 1;
 }
 
-function kintone_parse_roster_csv(string $path): array
+function kintone_parse_roster_csv(string $path, ?string $requestedEncoding = 'auto'): array
 {
     if (!is_file($path)) {
         throw new RuntimeException('部員名簿CSVが見つかりません。');
@@ -75,7 +91,8 @@ function kintone_parse_roster_csv(string $path): array
     if (!is_string($raw)) {
         throw new RuntimeException('部員名簿CSVを読み込めません。');
     }
-    $encoding = kintone_detect_csv_encoding($raw);
+    $requestedEncoding = kintone_normalize_requested_csv_encoding($requestedEncoding);
+    $encoding = $requestedEncoding === 'auto' ? kintone_detect_csv_encoding($raw) : $requestedEncoding;
     $utf8 = mb_convert_encoding($raw, 'UTF-8', $encoding);
     $utf8 = preg_replace('/^\xEF\xBB\xBF/u', '', $utf8) ?? $utf8;
     $fp = fopen('php://temp', 'r+');

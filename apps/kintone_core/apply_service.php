@@ -21,6 +21,7 @@ function kintone_apply_import(int $batchId, array $changeIds, array $actor): arr
         'mail_synced' => 0,
         'mail_sync_failed' => [],
         'high_risk_codes' => [],
+        'remaining_changes' => 0,
     ];
 
     $pdo->beginTransaction();
@@ -147,7 +148,14 @@ function kintone_apply_import(int $batchId, array $changeIds, array $actor): arr
             $appliedCodes[$code] = $code;
         }
 
-        $pdo->prepare('UPDATE roster_import_batches SET status="applied", applied_at=NOW(), file_purge_at=DATE_ADD(NOW(), INTERVAL 14 DAY), retention_purge_at=DATE_ADD(NOW(), INTERVAL 30 DAY), updated_at=NOW() WHERE id=:id')->execute([':id' => $batchId]);
+        $remainingStmt = $pdo->prepare('SELECT COUNT(*) FROM organization_change_logs WHERE batch_id = :batch_id AND applied_at IS NULL');
+        $remainingStmt->execute([':batch_id' => $batchId]);
+        $result['remaining_changes'] = (int)$remainingStmt->fetchColumn();
+        if ($result['remaining_changes'] > 0) {
+            $pdo->prepare('UPDATE roster_import_batches SET status="needs_review", retention_purge_at=COALESCE(retention_purge_at, DATE_ADD(NOW(), INTERVAL 30 DAY)), updated_at=NOW() WHERE id=:id')->execute([':id' => $batchId]);
+        } else {
+            $pdo->prepare('UPDATE roster_import_batches SET status="applied", applied_at=NOW(), file_purge_at=DATE_ADD(NOW(), INTERVAL 14 DAY), retention_purge_at=DATE_ADD(NOW(), INTERVAL 30 DAY), updated_at=NOW() WHERE id=:id')->execute([':id' => $batchId]);
+        }
         $pdo->commit();
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) {

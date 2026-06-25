@@ -19,7 +19,8 @@ try {
         throw new InvalidArgumentException('部員名簿CSVが選択されていません。');
     }
     $stored = kintone_store_roster_upload($file);
-    $parsed = kintone_parse_roster_csv((string)$stored['full_path']);
+    $requestedEncoding = (string)($_POST['encoding'] ?? 'auto');
+    $parsed = kintone_parse_roster_csv((string)$stored['full_path'], $requestedEncoding);
     $pdo = kintone_pdo('org');
     $pdo->beginTransaction();
     $batchKey = 'ros_' . date('YmdHis') . '_' . bin2hex(random_bytes(4));
@@ -39,7 +40,7 @@ try {
         ':error_rows' => 0,
         ':created_by_account_id' => (int)($user['id'] ?? 0) ?: null,
         ':created_by_login_id' => (string)($user['login_id'] ?? ''),
-        ':summary_json' => kintone_json_encode(['parse_errors' => array_slice($parsed['errors'], 0, 100)]),
+        ':summary_json' => kintone_json_encode(['parse_errors' => array_slice($parsed['errors'], 0, 100), 'requested_encoding' => $requestedEncoding]),
     ]);
     $batchId = (int)$pdo->lastInsertId();
     $ins = $pdo->prepare('INSERT INTO organization_members (organization_code, organization_name, normalized_organization_name, category, activity_hint, import_batch_id, member_identifier, member_name, member_email, role_name, role_rank, member_status, is_representative_candidate, raw_json) VALUES (:organization_code,:organization_name,:normalized_organization_name,:category,:activity_hint,:import_batch_id,:member_identifier,:member_name,:member_email,:role_name,:role_rank,:member_status,:is_representative_candidate,NULL)');

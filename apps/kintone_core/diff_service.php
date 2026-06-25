@@ -144,3 +144,59 @@ function kintone_fetch_batch_changes(int $batchId): array
     $stmt->execute([':batch_id' => $batchId]);
     return $stmt->fetchAll() ?: [];
 }
+
+
+function kintone_fetch_changes_by_ids(int $batchId, array $changeIds): array
+{
+    $changeIds = array_values(array_unique(array_filter(array_map('intval', $changeIds), static fn(int $id): bool => $id > 0)));
+    if ($changeIds === []) {
+        return [];
+    }
+    $ph = implode(',', array_fill(0, count($changeIds), '?'));
+    $stmt = kintone_pdo('org')->prepare('SELECT * FROM organization_change_logs WHERE batch_id = ? AND id IN (' . $ph . ') AND applied_at IS NULL ORDER BY risk_level DESC, organization_code ASC, id ASC');
+    $stmt->execute(array_merge([$batchId], $changeIds));
+    return $stmt->fetchAll() ?: [];
+}
+
+function kintone_fetch_safe_change_ids(int $batchId): array
+{
+    $stmt = kintone_pdo('org')->prepare('SELECT id FROM organization_change_logs WHERE batch_id = :batch_id AND applied_at IS NULL AND risk_level != "high" ORDER BY risk_level DESC, organization_code ASC, id ASC');
+    $stmt->execute([':batch_id' => $batchId]);
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+}
+
+function kintone_change_summary(array $changes): array
+{
+    $summary = [
+        'high' => 0,
+        'medium' => 0,
+        'low' => 0,
+        'email_changes' => 0,
+        'active_to_inactive' => 0,
+        'total' => count($changes),
+    ];
+    foreach ($changes as $change) {
+        $risk = (string)($change['risk_level'] ?? 'low');
+        if (isset($summary[$risk])) {
+            $summary[$risk]++;
+        }
+        if ((string)($change['field_name'] ?? '') === 'representative_email') {
+            $summary['email_changes']++;
+        }
+        if ((string)($change['field_name'] ?? '') === 'activity_status' && (string)($change['old_value'] ?? '') === 'active' && (string)($change['new_value'] ?? '') === 'inactive') {
+            $summary['active_to_inactive']++;
+        }
+    }
+    return $summary;
+}
+
+function kintone_batch_has_high_risk_selected(int $batchId, array $changeIds): bool
+{
+    $changes = kintone_fetch_changes_by_ids($batchId, $changeIds);
+    foreach ($changes as $change) {
+        if ((string)($change['risk_level'] ?? '') === 'high') {
+            return true;
+        }
+    }
+    return false;
+}
