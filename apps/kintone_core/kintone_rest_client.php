@@ -22,19 +22,65 @@ final class KintoneRestException extends RuntimeException
     }
 }
 
+function kintone_normalize_app_key(string $appKey): string
+{
+    $appKey = trim($appKey);
+    if ($appKey === '' || preg_match('/\A[a-zA-Z0-9_-]{1,100}\z/', $appKey) !== 1) {
+        throw new InvalidArgumentException('app_key は半角英数字・アンダースコア・ハイフン100文字以内で指定してください。');
+    }
+    return $appKey;
+}
+
+function kintone_credentials_for(string $appKey): array
+{
+    $appKey = kintone_normalize_app_key($appKey);
+    $stmt = kintone_pdo('org')->prepare(
+        'SELECT c.*, a.kintone_subdomain AS app_subdomain, a.kintone_app_id AS app_app_id, a.is_active AS app_is_active, a.status AS app_status ' .
+        'FROM kintone_credentials c LEFT JOIN kintone_apps a ON a.app_key = c.connection_key ' .
+        'WHERE c.connection_key = :app_key LIMIT 1'
+    );
+    $stmt->execute([':app_key' => $appKey]);
+    $row = $stmt->fetch();
+    if (!is_array($row)) {
+        throw new RuntimeException('kintone接続情報が登録されていません: ' . $appKey);
+    }
+    if ((string)($row['auth_type'] ?? 'api_token') !== 'api_token') {
+        throw new RuntimeException('現在対応しているkintone認証方式はAPIトークンのみです: ' . $appKey);
+    }
+    if ((int)($row['app_is_active'] ?? 1) !== 1) {
+        throw new RuntimeException('対象kintoneアプリは無効化されています: ' . $appKey);
+    }
+    if (trim((string)($row['kintone_subdomain'] ?? '')) === '' && trim((string)($row['app_subdomain'] ?? '')) !== '') {
+        $row['kintone_subdomain'] = $row['app_subdomain'];
+    }
+    if ((int)($row['kintone_app_id'] ?? 0) < 1 && (int)($row['app_app_id'] ?? 0) > 0) {
+        $row['kintone_app_id'] = (int)$row['app_app_id'];
+    }
+    return $row;
+}
+
 function kintone_credentials_default(): ?array
 {
-    $stmt = kintone_pdo('org')->prepare('SELECT * FROM kintone_credentials WHERE connection_key = :key LIMIT 1');
-    $stmt->execute([':key' => 'default']);
-    $row = $stmt->fetch();
-    return is_array($row) ? $row : null;
+    try {
+        return kintone_credentials_for('organizations');
+    } catch (Throwable $e) {
+        // Phase 2 多アプリ化前の未移行環境だけの保険。通常は差分SQLで organizations に改名される。
+        try {
+            $stmt = kintone_pdo('org')->prepare('SELECT * FROM kintone_credentials WHERE connection_key = :key LIMIT 1');
+            $stmt->execute([':key' => 'default']);
+            $row = $stmt->fetch();
+            return is_array($row) ? $row : null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
 }
 
 function kintone_credentials_require_default(): array
 {
     $credentials = kintone_credentials_default();
     if (!is_array($credentials)) {
-        throw new RuntimeException('kintone接続情報が登録されていません。');
+        throw new RuntimeException('団体マスタ用kintone接続情報が登録されていません。');
     }
     if ((string)($credentials['auth_type'] ?? 'api_token') !== 'api_token') {
         throw new RuntimeException('現在対応しているkintone認証方式はAPIトークンのみです。');
@@ -195,11 +241,11 @@ function kintone_rest_request(string $method, string $path, array $payload = [],
 
 function kintone_rest_get_records(int $appId, array $fields, string $query, ?array $credentials = null): array
 {
-    return kintone_rest_request('GET', '/k/v1/records.json', [
-        'app' => $appId,
-        'fields' => array_values($fields),
-        'query' => $query,
-    ], $credentials);
+    $payload = ['app' => $appId, 'query' => $query];
+    if ($fields !== []) {
+        $payload['fields'] = array_values($fields);
+    }
+    return kintone_rest_request('GET', '/k/v1/records.json', $payload, $credentials);
 }
 
 function kintone_rest_add_records(int $appId, array $records, ?array $credentials = null): array
@@ -213,13 +259,107 @@ function kintone_rest_add_records(int $appId, array $records, ?array $credential
     ], $credentials);
 }
 
-function kintone_rest_update_records(int $appId, array $records, ?array $credentials = null): array
+function kintone_rest_update_records(int $appId, array $records, ?array $credentials = null, bool $upsert = false): array
 {
     if (count($records) > 100) {
         throw new InvalidArgumentException('kintoneへ一度に更新できるレコードは100件までです。');
     }
-    return kintone_rest_request('PUT', '/k/v1/records.json', [
+    $payload = [
         'app' => $appId,
         'records' => array_values($records),
-    ], $credentials);
+    ];
+    if ($upsert) {
+        $payload['upsert'] = true;
+    }
+    return kintone_rest_request('PUT', '/k/v1/records.json', $payload, $credentials);
+}
+
+function kintone_rest_create_cursor(int $appId, array $fields, string $query, ?array $credentials = null, int $size = 500): array
+{
+    $size = max(1, min(500, $size));
+    $payload = [
+        'app' => $appId,
+        'query' => $query,
+        'size' => $size,
+    ];
+    if ($fields !== []) {
+        $payload['fields'] = array_values($fields);
+    }
+    return kintone_rest_request('POST', '/k/v1/records/cursor.json', $payload, $credentials);
+}
+
+function kintone_rest_get_cursor(string $cursorId, ?array $credentials = null): array
+{
+    return kintone_rest_request('GET', '/k/v1/records/cursor.json', ['id' => $cursorId], $credentials);
+}
+
+function kintone_rest_delete_cursor(string $cursorId, ?array $credentials = null): void
+{
+    if ($cursorId === '') {
+        return;
+    }
+    try {
+        kintone_rest_request('DELETE', '/k/v1/records/cursor.json', ['id' => $cursorId], $credentials, 0);
+    } catch (Throwable $e) {
+        kintone_write_log('warning', 'kintone cursor delete failed', ['error' => $e->getMessage()]);
+    }
+}
+
+function kintone_rest_iterate_records(int $appId, array $fields, string $query, callable $onChunk, ?array $credentials = null, bool $preferCursor = true): array
+{
+    $credentials = $credentials ?? kintone_credentials_require_default();
+    $count = 0;
+    $chunks = 0;
+    $cursorId = '';
+    if ($preferCursor) {
+        try {
+            $cursor = kintone_rest_create_cursor($appId, $fields, $query, $credentials, 500);
+            $cursorId = (string)($cursor['id'] ?? '');
+            if ($cursorId === '') {
+                throw new RuntimeException('kintoneカーソルIDが返されませんでした。');
+            }
+            do {
+                $page = kintone_rest_get_cursor($cursorId, $credentials);
+                $records = is_array($page['records'] ?? null) ? $page['records'] : [];
+                if ($records !== []) {
+                    $onChunk($records);
+                    $count += count($records);
+                    $chunks++;
+                }
+                $next = (bool)($page['next'] ?? false);
+                if ($next) {
+                    usleep((int)kintone_config_value('kintone.api_chunk_pause_ms', 200) * 1000);
+                }
+            } while ($next);
+            kintone_rest_delete_cursor($cursorId, $credentials);
+            return ['count' => $count, 'chunks' => $chunks, 'mode' => 'cursor'];
+        } catch (Throwable $e) {
+            if ($cursorId !== '') {
+                kintone_rest_delete_cursor($cursorId, $credentials);
+            }
+            throw $e;
+        }
+    }
+
+    $offset = 0;
+    $limit = 500;
+    while (true) {
+        if ($offset + $limit > 10000) {
+            throw new RuntimeException('kintoneのoffset取得上限10,000件に達するため、カーソルAPIでの取得が必要です。');
+        }
+        $pageQuery = trim($query . ' limit ' . $limit . ' offset ' . $offset);
+        $response = kintone_rest_get_records($appId, $fields, $pageQuery, $credentials);
+        $records = is_array($response['records'] ?? null) ? $response['records'] : [];
+        if ($records !== []) {
+            $onChunk($records);
+            $count += count($records);
+            $chunks++;
+        }
+        if (count($records) < $limit) {
+            break;
+        }
+        $offset += $limit;
+        usleep((int)kintone_config_value('kintone.api_chunk_pause_ms', 200) * 1000);
+    }
+    return ['count' => $count, 'chunks' => $chunks, 'mode' => 'offset'];
 }

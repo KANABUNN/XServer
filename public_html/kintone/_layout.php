@@ -14,7 +14,7 @@ function kintone_page_header(string $title, array $user): void
         'organizations.php' => '団体マスタ',
         'sync.php' => 'kintone同期',
         'logs.php' => 'ログ',
-        'settings.php' => '接続設定',
+        'settings.php' => 'アプリ設定',
     ];
     $current = basename((string)($_SERVER['SCRIPT_NAME'] ?? '')) ?: 'index.php';
     ?><!doctype html>
@@ -38,7 +38,7 @@ function kintone_page_header(string $title, array $user): void
   <p><a class="nav-link" href="logout.php">ログアウト</a></p>
 </aside>
 <main class="main-content">
-<header class="page-header"><div><h1><?= kintone_h($title) ?></h1><p class="page-subtitle">団体マスタ・名簿取込・kintone同期を一元管理します。</p></div></header>
+<header class="page-header"><div><h1><?= kintone_h($title) ?></h1><p class="page-subtitle">団体マスタ・名簿取込・kintone多アプリ連携を一元管理します。</p></div></header>
 <?php
 }
 
