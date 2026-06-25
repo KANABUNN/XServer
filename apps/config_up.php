@@ -326,6 +326,11 @@ return [
         'storage_root' => __DIR__ . '/kintone_core/storage',
         'crypto_key_file' => __DIR__ . '/kintone_core/config/kintone_crypto.key',
         'max_roster_upload_mb' => 10,
+        'api_timeout_seconds' => 45,
+        'api_connect_timeout_seconds' => 15,
+        'api_max_retries' => 3,
+        'api_chunk_pause_ms' => 200,
+
         'role_rank_map' => [
             '代表' => 100,
             '代表者' => 100,
@@ -337,6 +342,22 @@ return [
             '副部長' => 70,
             '会計' => 50,
             '書記' => 50,
+        ],
+        
+        'field_map' => [
+            'organization_code' => 'organization_code',
+            'organization_name' => 'organization_name',
+            'organization_kana' => 'organization_kana',
+            'category' => 'category',
+            'representative_name' => 'representative_name',
+            'representative_email' => 'representative_email',
+            'activity_status' => 'activity_status',
+            'member_count' => 'member_count',
+            'last_roster_imported_at' => 'last_roster_imported_at',
+            'last_sync_source' => 'last_sync_source',
+            'last_sync_status' => 'last_sync_status',
+            'xserver_org_id' => 'xserver_org_id',
+            'notes' => 'notes',
         ],
     ],
 ];
