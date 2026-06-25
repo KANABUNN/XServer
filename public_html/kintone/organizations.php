@@ -13,6 +13,7 @@ if ($q !== '') {
     $rows = kintone_pdo('org')->query('SELECT * FROM organizations ORDER BY organization_name ASC, id ASC LIMIT 200')->fetchAll() ?: [];
 }
 kintone_page_header('団体マスタ', $user);
+kintone_render_flash();
 ?>
 <section class="card"><form method="get"><label for="q">検索</label><input id="q" name="q" value="<?= kintone_h($q) ?>"><button class="btn" type="submit">検索</button></form></section>
 <section class="card"><table><thead><tr><th>団体ID</th><th>団体名</th><th>代表者</th><th>メール</th><th>活動状態</th><th>部員数</th></tr></thead><tbody><?php foreach ($rows as $r): ?><tr><td><?= kintone_h($r['organization_code']) ?></td><td><?= kintone_h($r['organization_name']) ?></td><td><?= kintone_h($r['representative_name'] ?? '') ?></td><td><?= kintone_h($r['representative_email'] ?? '') ?></td><td><?= kintone_h($r['activity_status']) ?></td><td><?= (int)$r['member_count'] ?></td></tr><?php endforeach; ?></tbody></table></section>
