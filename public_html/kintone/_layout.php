@@ -12,6 +12,7 @@ function kintone_page_header(string $title, array $user): void
         'diff.php' => '差分・承認',
         'review.php' => 'レビュー待ち',
         'organizations.php' => '団体マスタ',
+        'sync.php' => 'kintone同期',
         'logs.php' => 'ログ',
         'settings.php' => '接続設定',
     ];
