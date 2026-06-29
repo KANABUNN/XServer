@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/apps/kintone_core/auth.php';
+require_once dirname(__DIR__, 2) . '/apps/kintone_core/audit.php';
 
 function kintone_page_header(string $title, array $user): void
 {
