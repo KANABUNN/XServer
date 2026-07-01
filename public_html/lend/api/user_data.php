@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../../apps/lend_core/bootstrap.php';
+require_once __DIR__ . '/../../../apps/kintone_registry_integration.php';
 $user = api_require_login();
 
 $assetSets = db()->query('SELECT id, asset_code, name, category, storage_location FROM asset_sets WHERE is_active = 1 ORDER BY category, name')->fetchAll();
@@ -24,9 +25,18 @@ $stmt = db()->prepare('
 $stmt->execute([':user_id' => $user['id']]);
 $reservations = $stmt->fetchAll();
 
+$kintoneAssets = fitsc_kintone_option_list('assets', 'asset_name', 'asset_code', 500);
+$kintoneAssetStatus = fitsc_kintone_cache_status('assets', 24 * 7);
+
 json_response([
     'ok' => true,
     'user' => $user,
     'asset_sets' => $assetSets,
     'reservations' => $reservations,
+    'kintone_cache' => [
+        'assets' => $kintoneAssetStatus,
+    ],
+    'kintone_reference' => [
+        'assets' => $kintoneAssets,
+    ],
 ]);

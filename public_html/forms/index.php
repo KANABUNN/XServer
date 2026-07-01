@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../../apps/forms_core/bootstrap.php';
+require_once __DIR__ . '/../../apps/kintone_registry_integration.php';
 forms_bootstrap();
+$kintoneBridgePayload = fitsc_kintone_public_payload(['categories'], 500);
 page_header('汎用フォーム', 'forms-public-page');
 ?>
 <header class="public-site-header">
@@ -55,6 +57,7 @@ page_header('汎用フォーム', 'forms-public-page');
             <ul class="helper-list allow-select">
                 <li>メールアドレスと団体名は必須です。</li>
                 <li>フォームごとに日付欄や添付欄の有無が異なります。</li>
+                <li>団体名候補が表示される場合がありますが、候補に無い団体でも送信は止めません。</li>
             </ul>
         </section>
     </aside>
@@ -85,4 +88,7 @@ page_header('汎用フォーム', 'forms-public-page');
     </section>
 </main>
 
-<?php page_footer(['assets/js/common.js', 'assets/js/public_period_guard.js', 'assets/js/public.js', 'assets/js/distribution_multi_public.js']); ?>
+<script>
+window.FITSC_KINTONE_BRIDGE = <?= json_encode($kintoneBridgePayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+</script>
+<?php page_footer(['assets/js/common.js', 'assets/js/public_period_guard.js', 'assets/js/public.js', 'assets/js/distribution_multi_public.js', 'assets/js/kintone_public_hints.js']); ?>

@@ -22,6 +22,7 @@ page_header('利用者ダッシュボード', 'dashboard-page');
 <main class="page-grid">
     <section class="card">
         <h2>新規申請</h2>
+        <div id="kintone-lend-cache-notice" class="alert info hidden" role="status"></div>
         <form id="reservation-form" class="stack-form">
             <label>
                 <span>件名</span>
@@ -48,7 +49,9 @@ page_header('利用者ダッシュボード', 'dashboard-page');
             <label>
                 <span>貸出セット</span>
                 <select name="asset_set_id" id="asset-set-select" required></select>
+                <small class="small-note allow-select">kintone備品マスタのキャッシュがある場合は、下に参考情報を表示します。申請可否は従来DBの貸出セットで判定します。</small>
             </label>
+            <div id="kintone-asset-reference" class="stack-list"></div>
             <button type="submit" class="btn primary">申請する</button>
         </form>
         <div id="reservation-message" class="alert hidden"></div>
