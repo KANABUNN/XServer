@@ -72,6 +72,55 @@ function kintone_settings_parse_allowlist(string $text): ?string
     return $values !== [] ? kintone_json_encode($values) : null;
 }
 
+function kintone_settings_parse_lookup_map_text(string $text): ?string
+{
+    $text = trim($text);
+    if ($text === '') {
+        return null;
+    }
+
+    $decoded = json_decode($text, true);
+    if (is_array($decoded)) {
+        $out = [];
+        foreach ($decoded as $logicalKey => $target) {
+            if (!is_array($target)) {
+                continue;
+            }
+            $targetAppKey = trim((string)($target['target_app_key'] ?? ''));
+            $targetLogicalKey = trim((string)($target['target_logical_key'] ?? ''));
+            if (trim((string)$logicalKey) !== '' && $targetAppKey !== '' && $targetLogicalKey !== '') {
+                $out[trim((string)$logicalKey)] = [
+                    'target_app_key' => $targetAppKey,
+                    'target_logical_key' => $targetLogicalKey,
+                ];
+            }
+        }
+        return $out !== [] ? kintone_json_encode($out) : null;
+    }
+
+    $out = [];
+    foreach (preg_split('/\R/u', $text) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#')) {
+            continue;
+        }
+        $parts = preg_split('/\s*(?:=>|=|:)\s*/u', $line, 2);
+        if (!is_array($parts) || count($parts) !== 2) {
+            throw new InvalidArgumentException('ルックアップマップは JSON、または logical_key: target_app_key.target_logical_key の行形式で入力してください。');
+        }
+        [$logicalKey, $target] = array_map('trim', $parts);
+        $targetParts = explode('.', $target, 2);
+        if ($logicalKey === '' || count($targetParts) !== 2 || trim($targetParts[0]) === '' || trim($targetParts[1]) === '') {
+            throw new InvalidArgumentException('ルックアップマップの値は target_app_key.target_logical_key の形式にしてください: ' . $line);
+        }
+        $out[$logicalKey] = [
+            'target_app_key' => trim($targetParts[0]),
+            'target_logical_key' => trim($targetParts[1]),
+        ];
+    }
+    return $out !== [] ? kintone_json_encode($out) : null;
+}
+
 function kintone_settings_mask_token(?string $encrypted): string
 {
     if (trim((string)$encrypted) === '') {
@@ -108,6 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fieldMapJson = kintone_settings_parse_key_value_text((string)($_POST['field_map_text'] ?? ''));
             $containsPii = !empty($_POST['contains_pii']) ? 1 : 0;
             $allowlistJson = kintone_settings_parse_allowlist((string)($_POST['cache_field_allowlist_text'] ?? ''));
+            $lookupMapJson = kintone_settings_parse_lookup_map_text((string)($_POST['lookup_map_text'] ?? ''));
             $token = trim((string)($_POST['api_token'] ?? ''));
             if ($displayName === '' || $subdomain === '' || $appId < 1) {
                 throw new InvalidArgumentException('表示名・サブドメイン・アプリIDを入力してください。');
@@ -123,9 +173,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $stmt = $pdo->prepare(
-                'INSERT INTO kintone_apps (app_key, display_name, kintone_subdomain, kintone_app_id, app_role, update_key_field, field_map_json, contains_pii, cache_field_allowlist_json, is_active, status) ' .
-                'VALUES (:app_key, :display_name, :subdomain, :app_id, :role, :update_key, :field_map, :contains_pii, :allowlist, 1, "not_connected") ' .
-                'ON DUPLICATE KEY UPDATE display_name=VALUES(display_name), kintone_subdomain=VALUES(kintone_subdomain), kintone_app_id=VALUES(kintone_app_id), app_role=VALUES(app_role), update_key_field=VALUES(update_key_field), field_map_json=VALUES(field_map_json), contains_pii=VALUES(contains_pii), cache_field_allowlist_json=VALUES(cache_field_allowlist_json), is_active=1, updated_at=NOW()'
+                'INSERT INTO kintone_apps (app_key, display_name, kintone_subdomain, kintone_app_id, app_role, update_key_field, field_map_json, lookup_map_json, contains_pii, cache_field_allowlist_json, is_active, status) ' .
+                'VALUES (:app_key, :display_name, :subdomain, :app_id, :role, :update_key, :field_map, :lookup_map, :contains_pii, :allowlist, 1, "not_connected") ' .
+                'ON DUPLICATE KEY UPDATE display_name=VALUES(display_name), kintone_subdomain=VALUES(kintone_subdomain), kintone_app_id=VALUES(kintone_app_id), app_role=VALUES(app_role), update_key_field=VALUES(update_key_field), field_map_json=VALUES(field_map_json), lookup_map_json=VALUES(lookup_map_json), contains_pii=VALUES(contains_pii), cache_field_allowlist_json=VALUES(cache_field_allowlist_json), is_active=1, updated_at=NOW()'
             );
             $stmt->execute([
                 ':app_key' => $appKey,
@@ -135,6 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':role' => $role,
                 ':update_key' => $updateKeyField !== '' ? $updateKeyField : null,
                 ':field_map' => $fieldMapJson,
+                ':lookup_map' => $lookupMapJson,
                 ':contains_pii' => $containsPii,
                 ':allowlist' => $allowlistJson,
             ]);
@@ -210,6 +261,7 @@ if (!is_array($selected)) {
         'app_role' => 'pull',
         'update_key_field' => '',
         'field_map_json' => '',
+        'lookup_map_json' => '',
         'contains_pii' => 0,
         'cache_field_allowlist_json' => '',
         'is_active' => 1,
@@ -237,6 +289,19 @@ if ($allowlistText !== '') {
     $decoded = json_decode($allowlistText, true);
     if (is_array($decoded)) {
         $allowlistText = implode("\n", array_map('strval', $decoded));
+    }
+}
+$lookupMapText = trim((string)($selected['lookup_map_json'] ?? ''));
+if ($lookupMapText !== '') {
+    $decoded = json_decode($lookupMapText, true);
+    if (is_array($decoded)) {
+        $lines = [];
+        foreach ($decoded as $logicalKey => $target) {
+            if (is_array($target)) {
+                $lines[] = $logicalKey . ': ' . ($target['target_app_key'] ?? '') . '.' . ($target['target_logical_key'] ?? '');
+            }
+        }
+        $lookupMapText = implode("\n", $lines);
     }
 }
 
@@ -269,16 +334,17 @@ if ($error !== ''): ?><div class="alert alert-danger"><?= kintone_h($error) ?></
     <?= kintone_auth_csrf_field() ?>
     <input type="hidden" name="action" value="save_app">
     <input type="hidden" name="original_app_key" value="<?= kintone_h($selected['app_key'] ?? '') ?>">
-    <label>app_key</label><input name="app_key" value="<?= kintone_h($selected['app_key'] ?? '') ?>" <?= ($selected['app_key'] ?? '') !== '' ? 'readonly' : '' ?> placeholder="例: organizations / rooms / assets">
+    <label>app_key</label><input name="app_key" value="<?= kintone_h($selected['app_key'] ?? '') ?>" <?= ($selected['app_key'] ?? '') !== '' ? 'readonly' : '' ?> placeholder="例: organizations / members / officers">
     <label>表示名</label><input name="display_name" value="<?= kintone_h($selected['display_name'] ?? '') ?>" placeholder="例: 団体マスタ">
     <label>サブドメイン</label><input name="kintone_subdomain" value="<?= kintone_h($selected['kintone_subdomain'] ?? '') ?>" placeholder="example または https://example.cybozu.com">
     <label>アプリID</label><input name="kintone_app_id" type="number" value="<?= kintone_h($selected['kintone_app_id'] ?? '') ?>">
     <label>同期ロール</label><select name="app_role"><option value="push" <?= ($selected['app_role'] ?? '') === 'push' ? 'selected' : '' ?>>push: XServer正本→kintone</option><option value="pull" <?= ($selected['app_role'] ?? '') === 'pull' ? 'selected' : '' ?>>pull: kintone→XServerキャッシュ</option><option value="manual" <?= ($selected['app_role'] ?? '') === 'manual' ? 'selected' : '' ?>>manual: 手動管理</option></select>
-    <label>update_key_field</label><input name="update_key_field" value="<?= kintone_h($selected['update_key_field'] ?? '') ?>" placeholder="例: organization_code / room_code">
+    <label>update_key_field</label><input name="update_key_field" value="<?= kintone_h($selected['update_key_field'] ?? '') ?>" placeholder="例: organization_code / student_id / belongs_org_code">
     <label>APIトークン</label><input name="api_token" type="password" autocomplete="new-password" placeholder="既存トークンを維持する場合は空欄">
     <label>PIIを含む</label><label class="check-row"><input type="checkbox" name="contains_pii" value="1" <?= (int)($selected['contains_pii'] ?? 0) === 1 ? 'checked' : '' ?>> pull時はallowlist未設定なら取り込み拒否</label>
     <label>フィールドマップ</label><textarea name="field_map_text" rows="8" placeholder="logical_key: kintone_field_code&#10;JSONも可"><?= kintone_h($fieldMapText) ?></textarea>
     <label>キャッシュ許可フィールド</label><textarea name="cache_field_allowlist_text" rows="6" placeholder="pull時にrecord_jsonへ保存するフィールドコードを1行1件で指定"><?= kintone_h($allowlistText) ?></textarea>
+    <label>ルックアップマップ</label><textarea name="lookup_map_text" rows="6" placeholder="logical_key: target_app_key.target_logical_key&#10;例: organization_code: organizations.organization_code&#10;例: student_id: members.student_id&#10;JSONも可"><?= kintone_h($lookupMapText) ?></textarea>
     <div class="form-actions"><button class="primary" type="submit">保存</button><a class="btn" href="sync.php?app_key=<?= rawurlencode((string)($selected['app_key'] ?? '')) ?>">同期画面へ</a></div>
   </form>
 </section>
