@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/kintone_core/bootstrap.php';
+require_once __DIR__ . '/org_master.php';
 
 function kintone_registry_json_object(string $raw): array
 {
@@ -21,59 +22,6 @@ function kintone_registry_normalize_app_key(string $appKey): string
         return '';
     }
     return $appKey;
-}
-
-function kintone_registry_normalize_org_code(string $organizationCode): string
-{
-    return strtoupper(trim(mb_convert_kana($organizationCode, 'asKV', 'UTF-8')));
-}
-
-function kintone_registry_org_master_record(string $organizationCode): ?array
-{
-    $code = kintone_registry_normalize_org_code($organizationCode);
-    if ($code === '') {
-        return null;
-    }
-
-    try {
-        $stmt = kintone_pdo('org')->prepare('SELECT * FROM organizations WHERE organization_code = :code LIMIT 1');
-        $stmt->execute([':code' => $code]);
-        $org = $stmt->fetch();
-        if (!is_array($org)) {
-            return null;
-        }
-
-        $logical = [
-            'organization_code' => (string)($org['organization_code'] ?? ''),
-            'organization_name' => (string)($org['organization_name'] ?? ''),
-            'organization_kana' => (string)($org['organization_kana'] ?? ''),
-            'normalized_organization_name' => (string)($org['normalized_organization_name'] ?? ''),
-            'category' => (string)($org['category'] ?? ''),
-            'representative_name' => (string)($org['representative_name'] ?? ''),
-            'representative_email' => (string)($org['representative_email'] ?? ''),
-            'representative_member_id' => $org['representative_member_id'] ?? null,
-            'rep_source' => (string)($org['rep_source'] ?? ''),
-            'activity_status' => (string)($org['activity_status'] ?? ''),
-            'activity_status_source' => (string)($org['activity_status_source'] ?? ''),
-            'member_count' => (int)($org['member_count'] ?? 0),
-            'is_active' => (int)($org['is_active'] ?? 0),
-            'last_synced_at' => $org['last_synced_at'] ?? null,
-            'updated_at' => $org['updated_at'] ?? null,
-        ];
-
-        return [
-            'record_key' => $logical['organization_code'],
-            'record' => $logical,
-            'record_logical' => $logical,
-            'kintone_record_id' => isset($org['kintone_record_id']) ? (int)$org['kintone_record_id'] : null,
-            'kintone_revision' => isset($org['kintone_revision']) ? (int)$org['kintone_revision'] : null,
-            'synced_at' => $org['last_synced_at'] ?? $org['updated_at'] ?? null,
-            'source' => 'organizations',
-        ];
-    } catch (Throwable $e) {
-        error_log('[kintone_registry org_master] ' . $e->getMessage());
-        return null;
-    }
 }
 
 function kintone_registry_app(string $appKey): ?array
@@ -150,9 +98,7 @@ function kintone_registry_list(string $appKey, int $limit = 500): array
 
 /**
  * record_json の生フィールドコードを、field_map_json の論理名に変換して返す。
- * app_key = organizations は kintone_app_records ではなく、XServer側の団体マスタ
- * organizations テーブルを正本として直接参照する。
- * 未マップのフィールドコードは fail-open でそのまま残す。
+ * 未マップのフィールドコードは fail-open でそのまま残す(データを捨てない)。
  */
 function kintone_registry_get_by_logical(string $appKey, string $recordKey): ?array
 {
@@ -162,10 +108,7 @@ function kintone_registry_get_by_logical(string $appKey, string $recordKey): ?ar
     }
 
     if ($appKey === 'organizations') {
-        $orgRow = kintone_registry_org_master_record($recordKey);
-        if ($orgRow !== null) {
-            return $orgRow;
-        }
+        return kintone_registry_get_local_organizations($recordKey);
     }
 
     $row = kintone_registry_get($appKey, $recordKey);
@@ -192,8 +135,42 @@ function kintone_registry_get_by_logical(string $appKey, string $recordKey): ?ar
 }
 
 /**
+ * app_key = organizations は push 運用の団体マスタであり、kintone_app_records には
+ * キャッシュされない(kintone_sync_pull_app が app_role !== 'pull' を拒否するため)。
+ * 既存の fail-open ヘルパー org_master_lookup_by_code() を再利用し、
+ * XServer側 organizations テーブルを正本として直接参照する。
+ * PII最小化のため、代表者個人の氏名・メールは解決結果に含めない。
+ * 必要になった場合のみ、下記 $safe の配列キーに
+ * 'representative_name', 'representative_email' を明示的に追加すること。
+ */
+function kintone_registry_get_local_organizations(string $organizationCode): ?array
+{
+    $org = org_master_lookup_by_code($organizationCode);
+    if (!is_array($org)) {
+        return null;
+    }
+
+    $safe = array_intersect_key($org, array_flip([
+        'organization_code',
+        'organization_name',
+        'organization_kana',
+        'activity_status',
+        'member_count',
+    ]));
+
+    return [
+        'record_key' => $organizationCode,
+        'record' => $safe,
+        'record_logical' => $safe,
+        'synced_at' => null,
+        'source' => 'local_table:organizations',
+    ];
+}
+
+/**
  * lookup_map_json に宣言されたルックアップフィールドを再帰的に解決する。
- * depth は再帰の深さ上限であり、循環参照が構成されていても必ず終了する。
+ * depth は再帰の深さ上限であり、循環参照が構成されていても必ず終了する
+ * (依存グラフの形に関わらず depth 回で必ず 0 になるため)。
  * 参照先が未登録・未同期・値が空の場合は fail-open で null を埋め、例外は投げない。
  */
 function kintone_registry_resolve(string $appKey, string $recordKey, int $depth = 1): ?array
