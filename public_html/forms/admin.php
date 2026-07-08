@@ -448,4 +448,4 @@ page_header('フォーム管理', 'forms-admin-page');
     </article>
 </template>
 
-<?php page_footer(['assets/js/common.js', 'assets/js/admin.js', 'assets/js/distribution_multi_admin.js']); ?>
+<?php page_footer(['assets/js/common.js', 'assets/js/admin.js', 'assets/js/distribution_multi_admin.js', 'assets/js/admin-sidebar-ui-fixes.js']); ?>

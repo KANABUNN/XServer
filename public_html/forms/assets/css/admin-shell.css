@@ -8,28 +8,59 @@
    ============================================================ */
 
 /* ---- shell ---- */
-.forms-admin-page .admin-shell { min-height: 100vh; display: flex; align-items: stretch; }
+.forms-admin-page .admin-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: stretch;
+}
 
 .forms-admin-page .sidebar {
-  width: 280px; flex: 0 0 280px;
-  display: flex; flex-direction: column; gap: 16px;
+  width: 320px;
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   padding: 20px 16px;
   /* 背景(ダーク)・文字色は skin の --sidebar-* が適用される */
 }
-.forms-admin-page .sidebar-brand h1 { margin: 0; font-size: 22px; }
-.forms-admin-page .sidebar-brand p  { margin: 6px 0 0; line-height: 1.6; }
+
+.forms-admin-page .sidebar-brand h1 {
+  margin: 0;
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.98);
+}
+
+.forms-admin-page .sidebar-brand p {
+  margin: 6px 0 0;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.forms-admin-page .sidebar-brand .brand-kicker {
+  margin: 0 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+}
 
 /* 左レール内は「明るいインセット面」にフォーム一覧を載せ、
    既存カード/一覧の見た目・可読性をそのまま活かす（JS生成要素に無干渉）。 */
 .forms-admin-page .sidebar-scroll {
-  flex: 1 1 auto; min-height: 0; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 12px;
+  padding: 14px;
+  box-shadow: 0 18px 42px rgba(12, 23, 49, 0.14);
 }
+
 /* インセット面の中では二重カードにしない（フラット化） */
 .forms-admin-page .sidebar-scroll .sidebar-card {
   background: transparent !important;
@@ -37,21 +68,253 @@
   box-shadow: none !important;
   padding: 0 !important;
 }
-/* レール幅に合わせ統計カードを3列で圧縮 */
+
+.forms-admin-page .sidebar-scroll .section-title-row {
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.forms-admin-page .sidebar-scroll .section-title-row h2,
+.forms-admin-page .sidebar-scroll .section-title-row h3 {
+  margin: 0;
+}
+
+.forms-admin-page .sidebar-scroll .small-note {
+  line-height: 1.55;
+}
+
+.forms-admin-page .sidebar-scroll .search-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f7f9fe;
+}
+
+.forms-admin-page .sidebar-scroll .search-box input {
+  width: 100%;
+}
+
+/* 統計カードは3列維持しつつ可読性を改善 */
 .forms-admin-page .sidebar-scroll .mini-stat-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
+.forms-admin-page .sidebar-scroll .mini-stat-card {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 12px 10px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fbfcff 0%, #f2f5fb 100%);
+  border: 1px solid #d6ddeb;
+}
+
+.forms-admin-page .sidebar-scroll .mini-stat-label {
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #4e5f7c;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.forms-admin-page .sidebar-scroll .mini-stat-card strong {
+  display: block;
+  font-size: 22px;
+  line-height: 1;
+  color: #10213d;
+}
+
+/* ---- フォーム一覧: タイトルのみ表示 + ホバー詳細 ---- */
+.forms-admin-page #form-list {
+  display: grid;
+  gap: 10px;
+}
+
+.forms-admin-page #form-list > * {
+  position: relative;
+}
+
+.forms-admin-page #form-list .form-list-item-title-only {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 14px;
+  border-radius: 16px;
+  border: 1px solid #d6deed;
+  background: linear-gradient(180deg, #ffffff 0%, #f7f9fd 100%);
+  color: #152642;
+  box-shadow: 0 6px 18px rgba(16, 33, 61, 0.06);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+
+.forms-admin-page #form-list .form-list-item-title-only:hover,
+.forms-admin-page #form-list .form-list-item-title-only:focus-visible {
+  border-color: #5d78d8;
+  box-shadow: 0 12px 28px rgba(39, 81, 191, 0.16);
+  transform: translateY(-1px);
+}
+
+.forms-admin-page #form-list .form-list-item-title-only.active,
+.forms-admin-page #form-list .form-list-item-title-only[aria-current="true"] {
+  border-color: #2f5bd4;
+  background: linear-gradient(180deg, #eef3ff 0%, #e6edff 100%);
+  box-shadow: 0 12px 26px rgba(47, 91, 212, 0.18);
+}
+
+.forms-admin-page #form-list .form-list-item-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: inherit;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.forms-admin-page #form-list .form-list-item-hover-hint {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: #edf2ff;
+  color: #3659c8;
+  white-space: nowrap;
+}
+
+.forms-admin-page #form-list .form-list-item-tooltip {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  z-index: 40;
+  width: min(320px, calc(100vw - 56px));
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(37, 54, 94, 0.16);
+  background: rgba(18, 29, 54, 0.96);
+  color: #f7f9ff;
+  box-shadow: 0 18px 42px rgba(10, 20, 39, 0.28);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-50%) translateX(6px);
+  transition: opacity 0.16s ease, visibility 0.16s ease, transform 0.16s ease;
+  pointer-events: none;
+}
+
+.forms-admin-page #form-list .form-list-item-tooltip::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  background: rgba(18, 29, 54, 0.96);
+  border-left: 1px solid rgba(37, 54, 94, 0.16);
+  border-bottom: 1px solid rgba(37, 54, 94, 0.16);
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.forms-admin-page #form-list .form-list-item-title-only:hover .form-list-item-tooltip,
+.forms-admin-page #form-list .form-list-item-title-only:focus-visible .form-list-item-tooltip,
+.forms-admin-page #form-list .form-list-item-title-only:focus-within .form-list-item-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
+}
+
+.forms-admin-page #form-list .form-list-tooltip-title {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: #ffffff;
+}
+
+.forms-admin-page #form-list .form-list-tooltip-row {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(243, 246, 255, 0.9);
+  white-space: normal;
+  word-break: break-word;
+}
+
+.forms-admin-page #form-list .empty-state {
+  padding: 16px;
+}
+
 /* ---- user / logout（下部固定） ---- */
-.forms-admin-page .sidebar-user { margin-top: auto; display: grid; gap: 10px; }
+.forms-admin-page .sidebar-user {
+  margin-top: auto;
+  display: grid;
+  gap: 10px;
+}
+
+.forms-admin-page .sidebar-user-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.forms-admin-page .sidebar-user-card strong {
+  font-size: 15px;
+  line-height: 1.35;
+  color: #ffffff;
+}
+
+.forms-admin-page .sidebar-user-card span {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(234, 240, 255, 0.88);
+  word-break: break-word;
+}
+
+.forms-admin-page .sidebar-link,
+.forms-admin-page .sidebar-logout-link {
+  min-height: 44px;
+  border-radius: 14px;
+}
 
 /* ---- content ---- */
-.forms-admin-page .content-shell { flex: 1 1 auto; min-width: 0; }
-.forms-admin-page .content-shell .wrap { width: min(100%, 1680px); margin: 0 auto; padding: 24px 28px; }
+.forms-admin-page .content-shell {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.forms-admin-page .content-shell .wrap {
+  width: min(100%, 1680px);
+  margin: 0 auto;
+  padding: 24px 28px;
+}
 
 /* ワークスペースは縦積み。ヘッダーカードは page-head 風のフラット見出しへ。 */
-.forms-admin-page .admin-workspace { display: flex; flex-direction: column; gap: 16px; }
+.forms-admin-page .admin-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .forms-admin-page .workspace-header-card {
   background: transparent !important;
   border: 0 !important;
@@ -78,8 +341,12 @@
 @supports ((-webkit-mask: url("") center / contain no-repeat) or (mask: url("") center / contain no-repeat)) {
   .forms-admin-page .workspace-tab-button[data-nav]::before,
   .forms-admin-page .sidebar-logout-link[data-nav]::before {
-    content: ""; display: inline-block;
-    width: 1em; height: 1em; margin-right: 8px; vertical-align: -0.15em;
+    content: "";
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-right: 8px;
+    vertical-align: -0.15em;
     background: currentColor;
     -webkit-mask: var(--nav-icon) center / contain no-repeat;
     mask: var(--nav-icon) center / contain no-repeat;
@@ -87,14 +354,76 @@
 }
 
 /* ---- レスポンシブ: レールを上部へ畳む ---- */
-@media (max-width: 920px) {
-  .forms-admin-page .admin-shell { flex-direction: column; }
-  .forms-admin-page .sidebar { width: auto; flex: none; }
-  .forms-admin-page .sidebar-scroll { max-height: 46vh; }
-  .forms-admin-page .content-shell .wrap { padding: 18px 16px; }
+@media (max-width: 1200px) {
+  .forms-admin-page .sidebar {
+    width: 300px;
+    flex-basis: 300px;
+  }
 }
+
+@media (max-width: 920px) {
+  .forms-admin-page .admin-shell {
+    flex-direction: column;
+  }
+
+  .forms-admin-page .sidebar {
+    width: auto;
+    flex: none;
+  }
+
+  .forms-admin-page .sidebar-scroll {
+    max-height: 46vh;
+  }
+
+  .forms-admin-page #form-list .form-list-item-tooltip {
+    left: 0;
+    right: auto;
+    top: calc(100% + 10px);
+    width: min(100%, 360px);
+    transform: translateY(6px);
+  }
+
+  .forms-admin-page #form-list .form-list-item-tooltip::before {
+    left: 18px;
+    top: -7px;
+    transform: rotate(135deg);
+  }
+
+  .forms-admin-page #form-list .form-list-item-title-only:hover .form-list-item-tooltip,
+  .forms-admin-page #form-list .form-list-item-title-only:focus-visible .form-list-item-tooltip,
+  .forms-admin-page #form-list .form-list-item-title-only:focus-within .form-list-item-tooltip {
+    transform: translateY(0);
+  }
+
+  .forms-admin-page .content-shell .wrap {
+    padding: 18px 16px;
+  }
+}
+
 @media (max-width: 760px) {
+  .forms-admin-page .sidebar-scroll .mini-stat-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .forms-admin-page .sidebar-scroll .mini-stat-card {
+    padding: 10px 8px;
+  }
+
+  .forms-admin-page .sidebar-scroll .mini-stat-label {
+    font-size: 11px;
+  }
+
+  .forms-admin-page .sidebar-scroll .mini-stat-card strong {
+    font-size: 20px;
+  }
+
+  .forms-admin-page #form-list .form-list-item-title-only {
+    padding: 12px 12px;
+  }
+
   .forms-admin-page input,
   .forms-admin-page select,
-  .forms-admin-page textarea { font-size: 16px; } /* iOSの自動ズーム抑止 */
+  .forms-admin-page textarea {
+    font-size: 16px; /* iOSの自動ズーム抑止 */
+  }
 }
