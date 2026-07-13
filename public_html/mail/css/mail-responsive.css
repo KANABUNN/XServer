@@ -1,0 +1,251 @@
+/* Mail admin: final responsive layer for the current FIT-SC layout. */
+
+@media (max-width: 1100px) {
+  .two-column-grid,
+  .two-column-grid.wide-left,
+  .batch-grid,
+  .compose-layout,
+  .draft-work-grid,
+  .kintone-sync-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .compose-side {
+    position: static;
+  }
+
+  .modal-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 960px) {
+  .admin-shell {
+    display: block;
+    min-width: 0;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 18px;
+    gap: 14px;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    max-width: 100%;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .sidebar-link {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
+  .sidebar-user {
+    margin-top: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+  }
+
+  .sidebar-user-card,
+  .sidebar-logout-form {
+    min-width: 0;
+    margin: 0;
+  }
+
+  .sidebar-user-card span {
+    overflow-wrap: anywhere;
+  }
+
+  .sidebar-logout-link {
+    height: 100%;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
+  .content-shell,
+  .content-view,
+  .wrap,
+  .panel {
+    min-width: 0;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page-head {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .head-actions {
+    margin-top: 0;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 760px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .sidebar {
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+
+  .wrap {
+    padding: 16px max(14px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  }
+
+  .form-grid,
+  .search-row,
+  .settings-grid,
+  .summary-grid,
+  .summary-grid.small,
+  .summary-grid.small.two,
+  .choice-grid,
+  .toolbar-row,
+  .recipient-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .form-grid .full {
+    grid-column: auto;
+  }
+
+  .form-actions,
+  .inline-actions,
+  .modal-head,
+  .modal-actions,
+  .org-action-stack {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .form-actions > *,
+  .head-actions > *,
+  .modal-actions > *,
+  .org-action-stack > * {
+    width: 100%;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+  }
+
+  .primary,
+  .secondary,
+  .danger,
+  .link-button,
+  .text-button,
+  .inline-nav-button,
+  .modal-close,
+  .auth-primary {
+    min-height: 44px;
+  }
+
+  .detail-list div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .table-wrap,
+  .attachment-table-wrap,
+  .recipient-table-wrap,
+  .recipient-view {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-backdrop {
+    padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: calc(100dvh - 20px);
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .segmented-control {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .segmented-control button {
+    min-height: 44px;
+  }
+
+  .html-editor {
+    min-height: 240px;
+  }
+
+  .mail-preview-frame {
+    min-height: 300px;
+  }
+
+  .auth-shell {
+    min-height: 100dvh;
+    padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  }
+
+  .auth-card {
+    padding: 20px 16px;
+    border-radius: 18px;
+  }
+}
+
+@media (max-width: 520px) {
+  .sidebar-brand > p:not(.brand-kicker) {
+    display: none;
+  }
+
+  .sidebar-user {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panel,
+  .summary-card,
+  .side-card,
+  .panel-subform,
+  .compose-source-block {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  h1,
+  .auth-card h1 {
+    font-size: clamp(1.5rem, 8vw, 1.8rem);
+    overflow-wrap: anywhere;
+  }
+}

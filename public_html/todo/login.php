@@ -36,7 +36,7 @@ $flashes = consume_flash();
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ログイン</title>
     <link rel="stylesheet" href="assets/style.css">
-    <link rel="stylesheet" href="assets/responsive.css">
+    <link rel="stylesheet" href="assets/responsive.css?v=20260713">
     <script src="assets/context-menu-guard.js?v=20260713" defer></script>
 </head>
 <body class="login-body">

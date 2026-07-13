@@ -1,6 +1,8 @@
+/* Account UI: responsive overrides for the current FIT-SC layout. */
+
 @media (max-width: 1100px) {
     .layout-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .list-panel,
@@ -8,9 +10,6 @@
     .profile-panel,
     .edit-panel {
         grid-column: 1 / -1;
-    }
-
-    .edit-panel {
         grid-row: auto;
         position: static;
     }
@@ -19,14 +18,15 @@
 @media (max-width: 800px) {
     .topbar,
     .layout-grid {
-        padding-left: 18px;
-        padding-right: 18px;
+        padding-left: max(18px, env(safe-area-inset-left));
+        padding-right: max(18px, env(safe-area-inset-right));
     }
 
     .topbar {
         flex-direction: column;
         align-items: stretch;
-        padding-bottom: 18px;
+        padding-top: max(20px, env(safe-area-inset-top));
+        padding-bottom: 16px;
     }
 
     .topbar-actions,
@@ -38,19 +38,36 @@
         align-items: stretch;
     }
 
+    .topbar-actions .button,
+    .section-head-actions .button,
+    .search-form .button {
+        width: 100%;
+    }
+
     .current-user-box {
         align-items: flex-start;
     }
 
     .summary-grid,
     .two-col {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .panel,
+    .stat-card,
+    .role-card {
+        min-width: 0;
     }
 }
 
 @media (max-width: 640px) {
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
     .account-login-body {
-        padding: 16px;
+        min-height: 100dvh;
+        padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
     }
 
     .account-login-card,
@@ -59,24 +76,99 @@
         border-radius: 16px;
     }
 
+    .account-login-card > .panel {
+        margin-inline: 0;
+    }
+
+    .layout-grid {
+        gap: 14px;
+        padding-bottom: max(20px, env(safe-area-inset-bottom));
+    }
+
+    .topbar h1,
+    .brand-block h1 {
+        font-size: clamp(1.55rem, 8vw, 1.9rem);
+        overflow-wrap: anywhere;
+    }
+
+    .brand-block p,
+    .topbar p,
+    .audit-body,
+    .subline {
+        overflow-wrap: anywhere;
+    }
+
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+        min-height: 44px;
+        font-size: 16px;
+    }
+
+    input[type="checkbox"],
+    input[type="radio"] {
+        flex: 0 0 auto;
+        width: 20px;
+        height: 20px;
+    }
+
+    .button,
+    button {
+        min-height: 44px;
+    }
+
     .stat-card strong {
         font-size: 28px;
     }
 
     .table-wrap {
+        max-width: 100%;
         overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        -webkit-overflow-scrolling: touch;
     }
 
     .data-table {
         min-width: 720px;
     }
 
+    .role-badges {
+        min-width: 0;
+    }
+
+    .role-badges .badge {
+        max-width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .audit-meta {
+        flex-direction: column;
+        gap: 4px;
+    }
+
     .flash-stack {
+        top: max(10px, env(safe-area-inset-top));
         width: min(calc(100% - 20px), 980px);
     }
 
     .danger-form,
     .danger-form .button {
         width: 100%;
+    }
+}
+
+@media (max-width: 420px) {
+    .topbar,
+    .layout-grid {
+        padding-left: max(12px, env(safe-area-inset-left));
+        padding-right: max(12px, env(safe-area-inset-right));
+    }
+
+    .account-login-card,
+    .panel,
+    .role-card,
+    .danger-zone {
+        padding: 14px;
     }
 }

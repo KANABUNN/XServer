@@ -1,3 +1,5 @@
+/* Forms UI: final responsive layer for the current public/admin layouts. */
+
 @media (max-width: 1024px) {
     .topbar {
         padding: 20px 18px;
@@ -8,9 +10,88 @@
     .page-shell {
         padding: 18px;
     }
+
+    .page-shell,
+    .public-app-shell,
+    .public-main,
+    .public-form-panel,
+    .workspace-panel {
+        min-width: 0;
+    }
+}
+
+@media (max-width: 920px) {
+    .public-site-header {
+        position: static;
+        flex-direction: column;
+        align-items: stretch;
+        padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
+        background:
+            radial-gradient(circle at top left, rgba(53, 115, 214, 0.16), transparent 34%),
+            linear-gradient(180deg, rgba(10, 20, 38, 0.96) 0%, rgba(19, 34, 58, 0.94) 100%) !important;
+        color: #f4f8ff;
+    }
+
+    .public-site-header .muted,
+    .public-site-header .eyebrow {
+        color: rgba(240, 246, 255, 0.78) !important;
+    }
+
+    .public-site-header__brand {
+        min-width: 0;
+    }
+
+    .public-site-header__brand > div:last-child {
+        min-width: 0;
+    }
+
+    .public-site-header h1,
+    .public-site-header p {
+        overflow-wrap: anywhere;
+    }
+
+    .public-sidebar {
+        width: min(90vw, 380px);
+        max-width: calc(100% - env(safe-area-inset-right));
+        padding-top: max(18px, env(safe-area-inset-top));
+        padding-bottom: max(18px, env(safe-area-inset-bottom));
+        padding-left: max(18px, env(safe-area-inset-left));
+    }
+
+    .public-drawer-toggle,
+    .public-drawer-close {
+        min-height: 44px;
+    }
+
+    .public-hero-card__content,
+    .public-submit-bar,
+    .draft-restore-bar,
+    .distribution-file-status.file-ready-card {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .public-highlight-grid,
+    .public-form-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 @media (max-width: 720px) {
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
+    .auth-layout,
+    .public-app-shell,
+    .page-shell {
+        padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    }
+
+    .auth-layout {
+        min-height: 100dvh;
+    }
+
     .card,
     .subcard,
     .mini-info-card,
@@ -20,37 +101,108 @@
     .form-nav-item,
     .list-item,
     .history-item,
-    .form-block {
+    .form-block,
+    .public-form-section,
+    .public-info-panel {
+        min-width: 0;
         padding: 14px;
         border-radius: 14px;
+    }
+
+    .public-hero-card,
+    .form-panel-emphasis,
+    .public-submit-bar {
+        border-radius: 18px;
     }
 
     .topbar-actions,
     .section-title-row,
     .workspace-header-main,
-    .workspace-tab-list,
-    .tab-list,
     .public-submit-bar {
         align-items: stretch;
         flex-direction: column;
     }
 
-    .btn,
+    .workspace-tab-list,
+    .tab-list {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 8px;
+        max-width: 100%;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+
     .workspace-tab-button,
     .tab-button {
+        flex: 0 0 auto;
+        width: auto;
+        min-height: 44px;
+        white-space: nowrap;
+    }
+
+    .btn,
+    button,
+    a.btn,
+    .public-form-nav-item {
+        min-height: 44px;
+    }
+
+    .topbar-actions .btn,
+    .section-title-row > .btn,
+    .public-submit-bar .btn {
         width: 100%;
         justify-content: center;
     }
-}
 
-@media (max-width: 560px) {
-    .auth-layout,
-    .public-shell,
-    .page-shell {
-        padding: 14px;
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+        min-height: 44px;
+        font-size: 16px;
     }
 
-    .card {
-        padding: 14px;
+    input[type="checkbox"],
+    input[type="radio"] {
+        flex: 0 0 auto;
+        width: 20px;
+        height: 20px;
+    }
+
+    .table-wrap,
+    .responses-table-wrap {
+        max-width: 100%;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .public-form-nav-item__top,
+    .distribution-download-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .flash-message-stack {
+        top: max(10px, env(safe-area-inset-top));
+        width: calc(100% - 20px);
+    }
+}
+
+@media (max-width: 420px) {
+    .public-site-header .muted {
+        display: none;
+    }
+
+    .brand-mark {
+        width: 42px;
+        height: 42px;
+        border-radius: 13px;
+    }
+
+    .public-sidebar {
+        width: 94vw;
     }
 }

@@ -26,6 +26,15 @@
     }
     ul { margin: 0; padding-left: 1.4em; }
     p { margin: 0; }
+    @media (max-width: 640px) {
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+      }
+      section { margin-bottom: 14px; padding: 16px; border-radius: 14px; }
+      h2 { font-size: 1.2rem; line-height: 1.5; }
+      li { overflow-wrap: anywhere; }
+    }
   </style>
     <script src="assets/common/context-menu-guard.js?v=20260713" defer></script>
 </head>

@@ -1,0 +1,162 @@
+/* kintone admin: final responsive layer for the current FIT-SC layout. */
+
+@media (max-width: 900px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .admin-shell {
+    display: block;
+    min-width: 0;
+  }
+
+  .sidebar {
+    position: relative;
+    top: auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 14px max(14px, env(safe-area-inset-left));
+    gap: 12px;
+  }
+
+  .sidebar nav {
+    display: flex;
+    flex-direction: row;
+    max-width: 100%;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .nav-link {
+    flex: 0 0 auto;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+
+  .sidebar .muted,
+  .sidebar > p {
+    margin: 0;
+  }
+
+  .main-content {
+    width: 100%;
+    min-width: 0;
+    padding: 16px max(14px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  }
+
+  .page-header {
+    padding: 16px;
+  }
+
+  .page-header h1 {
+    font-size: 22px;
+    overflow-wrap: anywhere;
+  }
+
+  .card,
+  .two-column-grid > * {
+    min-width: 0;
+  }
+
+  .two-column-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .search-row,
+  .inline-form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-row input,
+  .search-row select,
+  .inline-form input,
+  .inline-form select {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+  }
+
+  button,
+  .btn,
+  .primary,
+  .secondary {
+    min-height: 44px;
+  }
+
+  .table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-wrap table {
+    min-width: 640px;
+    font-size: 13px;
+  }
+
+  th,
+  td {
+    padding: 8px;
+  }
+
+  td,
+  td code,
+  .page-subtitle,
+  .alert {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 520px) {
+  .sidebar .muted {
+    display: none;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .form-actions > *,
+  .form-actions .primary,
+  .form-actions .secondary,
+  .form-actions .btn {
+    width: 100%;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .login {
+    min-height: 100dvh;
+    padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  }
+
+  .loginbox {
+    padding: 20px 16px;
+  }
+}

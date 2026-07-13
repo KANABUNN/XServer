@@ -1291,3 +1291,143 @@
     width: min(310px, calc(100vw - 16px));
   }
 }
+
+/* ---- Current mobile layout: final overrides after the folder/dialog UI ---- */
+@media (max-width: 920px) {
+  .forms-admin-page .admin-shell {
+    min-width: 0;
+  }
+
+  .forms-admin-page .sidebar {
+    width: 100%;
+    min-width: 0;
+    padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 14px max(14px, env(safe-area-inset-left));
+  }
+
+  .forms-admin-page .sidebar-scroll {
+    max-height: min(46dvh, 520px);
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .forms-admin-page .sidebar-user {
+    margin-top: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .forms-admin-page .sidebar-user-card,
+  .forms-admin-page .sidebar-logout-link {
+    min-width: 0;
+  }
+
+  .forms-admin-page .sidebar-user-card span {
+    overflow-wrap: anywhere;
+  }
+
+  .forms-admin-page .sidebar-logout-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
+  .forms-admin-page .content-shell,
+  .forms-admin-page .content-shell .wrap,
+  .forms-admin-page .admin-workspace,
+  .forms-admin-page .workspace-panel {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .forms-admin-page .content-shell .wrap {
+    padding: 14px max(14px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  }
+
+  .forms-admin-page .workspace-tab-list {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .forms-admin-page .workspace-tab-button {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
+  .forms-admin-page .form-browser-actions,
+  .forms-admin-page .inline-actions,
+  .forms-admin-page .actions-row,
+  .forms-admin-page .dialog-actions {
+    flex-wrap: wrap;
+  }
+
+  .forms-admin-page .section-title-row,
+  .forms-admin-page .workspace-header-main,
+  .forms-admin-page .dialog-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .forms-admin-page .dialog-close-button {
+    align-self: flex-end;
+    flex: 0 0 auto;
+    min-height: 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .forms-admin-page .admin-dialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+    margin-block: 10px;
+  }
+
+  .forms-admin-page .dialog-card {
+    padding: 18px;
+  }
+
+  .forms-admin-page .dialog-action-spacer {
+    display: none;
+  }
+
+  .forms-admin-page .dialog-actions > * {
+    flex: 1 1 140px;
+    min-height: 44px;
+  }
+
+  .forms-admin-page .table-wrap,
+  .forms-admin-page .responses-list-pane {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  .forms-admin-page .sidebar-brand > p:not(.brand-kicker) {
+    display: none;
+  }
+
+  .forms-admin-page .sidebar-user {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .forms-admin-page .form-browser-actions > *,
+  .forms-admin-page .dialog-actions > * {
+    width: 100%;
+    flex-basis: 100%;
+  }
+}

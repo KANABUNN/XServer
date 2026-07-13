@@ -55,6 +55,7 @@ $csrf = kintone_auth_csrf_token();
 <title>ログイン - kintone管理</title>
 <link rel="stylesheet" href="../assets/common/tokens.css?v=20260625-style1">
 <link rel="stylesheet" href="../assets/common/fit-sc-skin.css?v=20260625-style1">
+<link rel="stylesheet" href="../assets/common/fit-sc-responsive.css?v=20260713">
 <script src="../assets/common/context-menu-guard.js?v=20260713" defer></script>
 </head>
 <body>

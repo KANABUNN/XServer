@@ -1,12 +1,21 @@
+/* Public reservation UI: final responsive layer for the current layout. */
+
 @media (max-width: 900px) {
   .container {
-    width: min(100%, 100%);
+    width: 100%;
     padding: 26px 18px;
+  }
+
+  .container,
+  .panel,
+  .calendar-detail-card,
+  .date-config-card {
+    min-width: 0;
   }
 
   .user-grid,
   .date-config-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .calendar-header,
@@ -15,7 +24,7 @@
   .terms-dialog-actions,
   .date-config-head {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
   }
 
   .hero-actions {
@@ -34,51 +43,145 @@
   .calendar-nav-btn,
   .terms-link-btn {
     flex: 1 1 auto;
+    min-height: 44px;
   }
 }
 
 @media (max-width: 640px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
-    padding: 10px;
+    padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   }
 
   .container {
-    width: min(100%, calc(100vw - 20px));
+    width: 100%;
     border-radius: 18px;
     padding: 20px 12px;
   }
 
   h1 {
-    font-size: 30px;
+    font-size: clamp(1.75rem, 8.5vw, 2rem);
   }
 
-  .panel {
-    padding: 16px;
+  h2 {
+    font-size: clamp(1.25rem, 6vw, 1.55rem);
+  }
+
+  .panel,
+  .calendar-detail-card,
+  .date-config-card {
+    padding: 14px;
     border-radius: 16px;
   }
 
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  button,
+  a.hero-action-btn,
+  a.result-back-btn,
+  a.terms-link-btn {
+    min-height: 44px;
+  }
+
+  /* Keep the real checkbox accessible without letting its 100% width overflow. */
+  .consent-tile input[type="checkbox"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .consent-tile {
+    min-height: 56px;
+    padding: 14px;
+  }
+
+  .calendar-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .calendar-nav-btn {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 6px;
+    font-size: 13px;
+  }
+
   .calendar-grid {
-    gap: 6px;
+    gap: 4px;
   }
 
   .calendar-day {
-    min-height: 88px;
-    padding: 8px;
-    border-radius: 12px;
+    min-width: 0;
+    min-height: 82px;
+    padding: 6px;
+    border-radius: 10px;
   }
 
   .calendar-day-number {
-    font-size: 16px;
+    font-size: 15px;
   }
 
   .calendar-room-state,
   .calendar-day-note {
-    font-size: 11px;
+    font-size: 10px;
+  }
+
+  .calendar-room-chips {
+    gap: 3px;
+  }
+
+  .room-chip {
+    max-width: 100%;
+    padding-inline: 4px;
+    font-size: 9px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .step-list {
+    gap: 4px;
+  }
+
+  .step {
+    min-width: 0;
+    padding: 8px 3px 6px;
+  }
+
+  .step-label {
+    font-size: 10px;
+    overflow-wrap: anywhere;
+  }
+
+  .selected-date-summary,
+  .selected-date-list {
+    padding-left: 1.05em;
   }
 
   .terms-dialog,
   .manual-dialog {
-    width: calc(100vw - 12px);
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+
+  .terms-dialog-card {
+    max-height: calc(100dvh - 16px);
   }
 
   .terms-dialog-body,
@@ -88,10 +191,50 @@
     padding: 14px;
   }
 
+  .terms-dialog-actions > *,
+  .manual-dialog .terms-dialog-actions > * {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
   .manual-embed-wrap,
   .manual-pdf-frame,
   .terms-iframe {
-    min-height: 56vh;
-    height: 56vh;
+    min-height: 56dvh;
+    height: 56dvh;
+  }
+
+  .passcode-card,
+  .passcode-row,
+  .mistake-error-id,
+  .mistake-contact {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 420px) {
+  .container {
+    padding-inline: 10px;
+  }
+
+  .calendar-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #goAvailableStart {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .calendar-day {
+    min-height: 76px;
+    padding-inline: 4px;
+  }
+
+  .panel,
+  .calendar-detail-card,
+  .date-config-card {
+    padding: 12px;
   }
 }

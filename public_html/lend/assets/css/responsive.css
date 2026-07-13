@@ -1,3 +1,5 @@
+/* Lending UI: responsive overrides for the current FIT-SC layout. */
+
 @media (max-width: 1100px) {
     .topbar {
         padding: 20px 18px;
@@ -12,14 +14,41 @@
     .page-grid,
     .admin-grid,
     .kiosk-layout {
+        grid-template-columns: minmax(0, 1fr);
         padding: 18px;
+    }
+
+    .card,
+    .page-grid > *,
+    .admin-grid > *,
+    .kiosk-layout > * {
+        min-width: 0;
     }
 }
 
 @media (max-width: 720px) {
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
+    .topbar {
+        position: static;
+        padding: max(18px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
+    }
+
+    .topbar h1,
+    .auth-card h1 {
+        font-size: clamp(1.55rem, 8vw, 1.9rem);
+        overflow-wrap: anywhere;
+    }
+
     .card {
         padding: 16px;
         border-radius: 16px;
+    }
+
+    .two-col {
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .topbar-actions,
@@ -31,9 +60,45 @@
         align-items: stretch;
     }
 
-    .btn,
+    .topbar-actions .btn,
+    .kiosk-action-row .btn,
+    .inline-row .btn,
+    .list-item-actions .btn,
     .btn.large {
         width: 100%;
+    }
+
+    .btn,
+    button,
+    a.btn {
+        min-height: 44px;
+    }
+
+    .btn.large {
+        min-height: 56px;
+        padding: 14px 18px;
+    }
+
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+        min-height: 44px;
+        font-size: 16px;
+    }
+
+    input[type="checkbox"],
+    input[type="radio"] {
+        flex: 0 0 auto;
+        width: 20px;
+        height: 20px;
+    }
+
+    .list-item,
+    .pill-line,
+    .small-note,
+    .demo-box {
+        min-width: 0;
+        overflow-wrap: anywhere;
     }
 
     .scanner-shell {
@@ -44,8 +109,13 @@
 @media (max-width: 560px) {
     .auth-layout,
     .page-grid,
+    .admin-grid,
     .kiosk-layout {
-        padding: 14px;
+        padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    }
+
+    .auth-layout {
+        min-height: 100dvh;
     }
 
     .auth-card {

@@ -178,8 +178,8 @@ function page_header(string $title, string $bodyClass = ''): void
     <meta name="csrf-token" content="{$csrf}">
     <link rel="stylesheet" href="{$commonTokensUrl}">
     <link rel="stylesheet" href="{$stylesUrl}">
-    <link rel="stylesheet" href="{$responsiveUrl}">
     <link rel="stylesheet" href="{$commonSkinUrl}">
+    <link rel="stylesheet" href="{$responsiveUrl}">
     <script src="{$contextMenuGuardUrl}" defer></script>
 </head>
 <body class="{$bodyClass}">

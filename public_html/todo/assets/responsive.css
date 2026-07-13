@@ -1,16 +1,69 @@
+/* ToDo UI: responsive overrides for the current sidebar layout. */
+
 @media (max-width: 1100px) {
+    .layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
     .sidebar {
-        padding: 20px 16px;
+        position: static;
+        min-width: 0;
+        padding: 18px;
+        gap: 14px;
+    }
+
+    .nav {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .nav a {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        text-align: center;
+    }
+
+    .sidebar-footer {
+        margin-top: 0;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
     }
 
     .content {
+        min-width: 0;
         padding: 20px;
+    }
+
+    .two-col,
+    .form-grid.slim {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .sticky-card {
+        position: static;
     }
 }
 
 @media (max-width: 760px) {
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
     .sidebar {
-        gap: 12px;
+        padding-top: max(16px, env(safe-area-inset-top));
+        padding-left: max(14px, env(safe-area-inset-left));
+        padding-right: max(14px, env(safe-area-inset-right));
+    }
+
+    .nav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .sidebar-footer {
+        grid-template-columns: minmax(0, 1fr);
+        align-items: stretch;
     }
 
     .page-head,
@@ -18,32 +71,80 @@
     .form-actions,
     .form-actions.split,
     .summary-badges,
-    .list-item {
+    .list-item,
+    .detail-box > summary {
         flex-direction: column;
         align-items: stretch;
     }
 
     .btn,
-    .btn-small {
+    .btn-small,
+    button,
+    a.btn {
+        min-height: 44px;
+    }
+
+    .form-actions .btn,
+    .section-title-row > .btn,
+    .sidebar-footer .btn {
         width: 100%;
+    }
+
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+        min-height: 44px;
+        font-size: 16px;
+    }
+
+    input[type="checkbox"],
+    input[type="radio"] {
+        flex: 0 0 auto;
+        width: 20px;
+        height: 20px;
     }
 
     .card,
     .login-card {
+        min-width: 0;
         padding: 16px;
         border-radius: 16px;
+    }
+
+    .form-grid,
+    .stats-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .table {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+    }
+
+    .list-item,
+    .list-meta,
+    .hint-box,
+    .detail-box {
+        overflow-wrap: anywhere;
     }
 }
 
 @media (max-width: 560px) {
     .content,
     .login-body {
-        padding: 14px;
+        padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
     }
 
-    .table {
-        display: block;
-        overflow-x: auto;
-        white-space: nowrap;
+    .login-body {
+        min-height: 100dvh;
+    }
+
+    .page-head h1 {
+        font-size: clamp(1.55rem, 8vw, 1.9rem);
     }
 }
