@@ -45,6 +45,46 @@ if ($action === 'delete') {
     ]);
 }
 
+if ($action === 'quick_update') {
+    $formId = (int)($data['form_id'] ?? 0);
+    $changes = is_array($data['changes'] ?? null) ? $data['changes'] : [];
+
+    try {
+        $before = forms_load_form($formId);
+        if (!$before) {
+            throw new InvalidArgumentException('更新対象のフォームが見つかりません。');
+        }
+        $form = forms_quick_update_form($formId, $changes);
+
+        $auditChanges = [];
+        foreach (['name', 'folder_id', 'is_active'] as $key) {
+            if (!array_key_exists($key, $changes)) {
+                continue;
+            }
+            $auditChanges[$key] = [
+                'before' => $before[$key] ?? null,
+                'after' => $form[$key] ?? null,
+            ];
+        }
+        forms_admin_audit_log('form.quick_update', 'managed_form', $formId, [
+            'changes' => $auditChanges,
+        ], $actor);
+    } catch (InvalidArgumentException $e) {
+        json_response(['ok' => false, 'message' => $e->getMessage()], 422);
+    } catch (Throwable $e) {
+        error_log('[forms admin_forms quick_update] ' . (string)$e);
+        json_response(['ok' => false, 'message' => '簡易操作の保存に失敗しました。時間をおいて再試行してください。'], 500);
+    }
+
+    json_response([
+        'ok' => true,
+        'message' => 'フォームを更新しました。',
+        'form' => $form,
+        'forms' => forms_fetch_forms(false),
+        'folders' => forms_fetch_folders(),
+    ]);
+}
+
 if ($action === 'copy') {
     $sourceFormId = (int)($data['source_form_id'] ?? 0);
     if ($sourceFormId < 1) {

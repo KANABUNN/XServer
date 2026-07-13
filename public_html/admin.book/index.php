@@ -48,6 +48,7 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
   <link rel="stylesheet" href="./css/reservation-admin.css?v=20260415b">
   <link rel="stylesheet" href="./css/reservation-admin-responsive.css?v=20260625">
   <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260624c">
+  <script src="./assets/common/context-menu-guard.js?v=20260713" defer></script>
 </head>
 <body>
   <div class="admin-shell">

@@ -187,7 +187,7 @@ function kintone_auth_require_login(): array
 function kintone_auth_forbid(string $message): void
 {
     http_response_code(403);
-    echo '<!doctype html><meta charset="utf-8"><title>権限がありません</title><p>' . kintone_h($message) . '</p>';
+    echo '<!doctype html><meta charset="utf-8"><title>権限がありません</title><script src="/assets/common/context-menu-guard.js?v=20260713" defer></script><p>' . kintone_h($message) . '</p>';
     exit;
 }
 

@@ -1155,6 +1155,75 @@ function forms_save_form(array $formData, array $fields): array
     return forms_load_form($formId) ?? [];
 }
 
+/**
+ * 管理画面の簡易コマンド用に、フォームの基本メタデータだけを部分更新する。
+ *
+ * forms_save_form() は追加項目を含むフォーム全体の保存を担うため、コンテキスト
+ * メニューから呼ぶと、別タブで編集中の設定を意図せず上書きする可能性がある。
+ * この関数では許可した3項目以外を受け付けず、設定JSONと追加項目には触れない。
+ */
+function forms_quick_update_form(int $formId, array $changes): array
+{
+    forms_bootstrap();
+    if ($formId < 1) {
+        throw new InvalidArgumentException('更新対象のフォームが不正です。');
+    }
+
+    $allowedKeys = ['name', 'folder_id', 'is_active'];
+    $unknownKeys = array_diff(array_keys($changes), $allowedKeys);
+    if ($unknownKeys !== []) {
+        throw new InvalidArgumentException('未対応の簡易操作が指定されました。');
+    }
+
+    $pdo = forms_db();
+    $existsStmt = $pdo->prepare('SELECT id FROM managed_forms WHERE id = :id LIMIT 1');
+    $existsStmt->execute([':id' => $formId]);
+    if (!$existsStmt->fetchColumn()) {
+        throw new InvalidArgumentException('更新対象のフォームが見つかりません。');
+    }
+
+    $assignments = [];
+    $params = [':id' => $formId];
+
+    if (array_key_exists('name', $changes)) {
+        $name = trim((string)$changes['name']);
+        if ($name === '') {
+            throw new InvalidArgumentException('フォーム名を入力してください。');
+        }
+        if (mb_strlen($name, 'UTF-8') > 150) {
+            throw new InvalidArgumentException('フォーム名は150文字以内で入力してください。');
+        }
+        $assignments[] = 'name = :name';
+        $params[':name'] = $name;
+    }
+
+    if (array_key_exists('folder_id', $changes)) {
+        $assignments[] = 'folder_id = :folder_id';
+        $params[':folder_id'] = forms_resolve_folder_id($pdo, $changes['folder_id']);
+    }
+
+    if (array_key_exists('is_active', $changes)) {
+        if (!is_bool($changes['is_active'])) {
+            throw new InvalidArgumentException('公開状態の指定が不正です。');
+        }
+        $assignments[] = 'is_active = :is_active';
+        $params[':is_active'] = $changes['is_active'] ? 1 : 0;
+    }
+
+    if ($assignments === []) {
+        throw new InvalidArgumentException('変更内容が指定されていません。');
+    }
+
+    $stmt = $pdo->prepare('UPDATE managed_forms SET ' . implode(', ', $assignments) . ' WHERE id = :id');
+    $stmt->execute($params);
+
+    $updated = forms_load_form($formId);
+    if (!$updated) {
+        throw new InvalidArgumentException('更新対象のフォームが見つかりません。');
+    }
+    return $updated;
+}
+
 function forms_duplicate_form(int $sourceFormId, array $overrides = []): array
 {
     $source = forms_load_form($sourceFormId);

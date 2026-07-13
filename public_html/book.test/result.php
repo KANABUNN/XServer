@@ -65,6 +65,7 @@ function result_base_path(): string
   <link rel="icon" href="icon.png">
   <link rel="stylesheet" href="css/style.css?v=20260407e">
   <link rel="stylesheet" href="css/style_responsive.css?v=20260407e">
+    <script src="context-menu-guard.js?v=20260713" defer></script>
 </head>
 <body>
   <div class="container">

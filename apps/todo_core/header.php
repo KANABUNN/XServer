@@ -12,6 +12,7 @@ $user = current_user();
     <title><?= e($appName) ?></title>
     <link rel="stylesheet" href="assets/style.css">
     <link rel="stylesheet" href="assets/responsive.css">
+    <script src="assets/context-menu-guard.js?v=20260713" defer></script>
 </head>
 <body>
 <div class="layout">

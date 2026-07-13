@@ -167,6 +167,7 @@ function page_header(string $title, string $bodyClass = ''): void
     $responsiveUrl = h(asset_url('assets/css/responsive.css'));
     $commonTokensUrl = h(asset_url('assets/common/tokens.css'));
     $commonSkinUrl = h(asset_url('assets/common/fit-sc-skin.css?v=20260625a'));
+    $contextMenuGuardUrl = h(asset_url('assets/common/context-menu-guard.js'));
     echo <<<HTML
 <!DOCTYPE html>
 <html lang="ja">
@@ -179,6 +180,7 @@ function page_header(string $title, string $bodyClass = ''): void
     <link rel="stylesheet" href="{$stylesUrl}">
     <link rel="stylesheet" href="{$responsiveUrl}">
     <link rel="stylesheet" href="{$commonSkinUrl}">
+    <script src="{$contextMenuGuardUrl}" defer></script>
 </head>
 <body class="{$bodyClass}">
 HTML;

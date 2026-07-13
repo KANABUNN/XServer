@@ -69,6 +69,7 @@ if ($setupAllowed && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>初回管理者セットアップ</title>
   <link rel="stylesheet" href="./css/admin-auth.css">
+  <script src="./assets/common/context-menu-guard.js?v=20260713" defer></script>
 </head>
 <body>
   <main class="auth-shell">

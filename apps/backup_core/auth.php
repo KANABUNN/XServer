@@ -194,7 +194,7 @@ function backup_auth_require_view_access(): array
     $user = backup_auth_require_login();
     if (!backup_auth_user_has_role($user, 'viewer') && !backup_auth_user_has_role($user, 'admin')) {
         http_response_code(403);
-        echo '<!doctype html><meta charset="utf-8"><title>権限がありません</title><p>バックアップ管理画面を表示する権限がありません。</p>';
+        echo '<!doctype html><meta charset="utf-8"><title>権限がありません</title><script src="context-menu-guard.js?v=20260713" defer></script><p>バックアップ管理画面を表示する権限がありません。</p>';
         exit;
     }
     return $user;
@@ -205,7 +205,7 @@ function backup_auth_require_admin_access(): array
     $user = backup_auth_require_login();
     if (!backup_auth_user_has_role($user, 'admin')) {
         http_response_code(403);
-        echo '<!doctype html><meta charset="utf-8"><title>権限がありません</title><p>この操作を実行するにはバックアップ管理者権限が必要です。</p>';
+        echo '<!doctype html><meta charset="utf-8"><title>権限がありません</title><script src="context-menu-guard.js?v=20260713" defer></script><p>この操作を実行するにはバックアップ管理者権限が必要です。</p>';
         exit;
     }
     return $user;

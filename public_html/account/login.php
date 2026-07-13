@@ -45,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="assets/css/account.css">
     <link rel="stylesheet" href="assets/css/account-responsive.css">
     <link rel="stylesheet" href="assets/common/fit-sc-skin.css?v=20260624c">
+    <script src="assets/common/context-menu-guard.js?v=20260713" defer></script>
 </head>
 <body class="account-login-body">
 <div class="account-login-card">

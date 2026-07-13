@@ -75,6 +75,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '' && 
   <link rel="stylesheet" href="./assets/common/tokens.css?v=20260624c">
   <link rel="stylesheet" href="./css/admin-auth.css">
   <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260624c">
+  <script src="./assets/common/context-menu-guard.js?v=20260713" defer></script>
 </head>
 <body>
   <main class="auth-shell">

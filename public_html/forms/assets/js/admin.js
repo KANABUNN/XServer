@@ -27,6 +27,18 @@ const adminState = {
   activeEntryHistory: null,
 };
 
+const formContextMenuState = {
+  formId: 0,
+  anchor: null,
+  view: 'main',
+  clientX: 0,
+  clientY: 0,
+  busy: false,
+  error: '',
+  renameValue: '',
+  openedByKeyboard: false,
+};
+
 function readSessionValue(key, fallback) {
   try {
     return window.sessionStorage.getItem(key) || fallback;
@@ -355,6 +367,7 @@ function formHoverDetailsHtml(form) {
     ${form.description
       ? `<span class="form-hover-tooltip-description">${escapeHtml(form.description)}</span>`
       : '<span class="form-hover-tooltip-description muted-description">説明は未設定です。</span>'}
+    <span class="form-hover-tooltip-context-hint">右クリックで公開設定・移動・名前変更</span>
   `;
 }
 
@@ -449,6 +462,447 @@ function bindFormHoverTooltips() {
   window.addEventListener('scroll', hideFormHoverTooltip, true);
 }
 
+function getContextMenuForm() {
+  return adminState.forms.find((form) => form.id === formContextMenuState.formId) || null;
+}
+
+function ensureFormContextMenu() {
+  let menu = document.getElementById('form-context-menu');
+  if (menu) return menu;
+
+  menu = document.createElement('div');
+  menu.id = 'form-context-menu';
+  menu.className = 'form-context-menu';
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', 'フォームの簡易コマンド');
+  menu.setAttribute('aria-hidden', 'true');
+  menu.tabIndex = -1;
+  menu.hidden = true;
+  document.body.appendChild(menu);
+
+  menu.addEventListener('click', async (event) => {
+    const button = event.target.closest('button');
+    if (!button || button.disabled || formContextMenuState.busy) return;
+
+    const nextView = button.dataset.contextView;
+    if (nextView) {
+      formContextMenuState.view = nextView;
+      formContextMenuState.error = '';
+      const form = getContextMenuForm();
+      if (nextView === 'rename') formContextMenuState.renameValue = form?.name || '';
+      renderFormContextMenu({ focus: true });
+      return;
+    }
+
+    if (button.hasAttribute('data-context-visibility')) {
+      const form = getContextMenuForm();
+      if (!form) return;
+      const isActive = button.dataset.contextVisibility === 'public';
+      if (Boolean(form.is_active) === isActive) return;
+      await quickUpdateFormFromContextMenu(
+        { is_active: isActive },
+        `「${form.name}」を${isActive ? '公開' : '非公開に'}しました。`
+      );
+      return;
+    }
+
+    if (button.hasAttribute('data-context-folder-id')) {
+      const form = getContextMenuForm();
+      if (!form) return;
+      const rawFolderId = button.dataset.contextFolderId;
+      const folderId = rawFolderId === 'root' ? null : Number(rawFolderId);
+      if ((form.folder_id || null) === folderId) return;
+      const destination = folderId ? getFolderPath(folderId) : '未分類';
+      await quickUpdateFormFromContextMenu(
+        { folder_id: folderId },
+        `「${form.name}」を「${destination}」へ移動しました。`
+      );
+    }
+  });
+
+  menu.addEventListener('submit', async (event) => {
+    const formElement = event.target.closest('[data-context-rename-form]');
+    if (!formElement || formContextMenuState.busy) return;
+    event.preventDefault();
+    const targetForm = getContextMenuForm();
+    if (!targetForm) return;
+    const input = formElement.elements.form_name;
+    const nextName = String(input?.value || '').trim();
+    formContextMenuState.renameValue = nextName;
+    if (!nextName) {
+      formContextMenuState.error = 'フォーム名を入力してください。';
+      renderFormContextMenu({ focus: true });
+      return;
+    }
+    if (nextName === targetForm.name) {
+      formContextMenuState.view = 'main';
+      renderFormContextMenu({ focus: true });
+      return;
+    }
+    await quickUpdateFormFromContextMenu(
+      { name: nextName },
+      `フォーム名を「${nextName}」へ変更しました。`
+    );
+  });
+
+  menu.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (formContextMenuState.view !== 'main' && !formContextMenuState.busy) {
+        formContextMenuState.view = 'main';
+        formContextMenuState.error = '';
+        renderFormContextMenu({ focus: true });
+      } else {
+        closeFormContextMenu({ restoreFocus: true });
+      }
+      return;
+    }
+
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    if (event.target.matches('input, textarea, select')) return;
+    const focusable = Array.from(menu.querySelectorAll('button:not([disabled]), input:not([disabled])'))
+      .filter((item) => item.offsetParent !== null);
+    if (!focusable.length) return;
+    event.preventDefault();
+    const currentIndex = focusable.indexOf(document.activeElement);
+    let nextIndex = 0;
+    if (event.key === 'End') nextIndex = focusable.length - 1;
+    if (event.key === 'ArrowDown') nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % focusable.length;
+    if (event.key === 'ArrowUp') nextIndex = currentIndex < 0 ? focusable.length - 1 : (currentIndex - 1 + focusable.length) % focusable.length;
+    focusable[nextIndex].focus();
+  });
+
+  return menu;
+}
+
+function contextMenuFolderItems() {
+  const byParent = new Map();
+  adminState.folders.forEach((folder) => {
+    const parentId = folder.parent_id || 0;
+    if (!byParent.has(parentId)) byParent.set(parentId, []);
+    byParent.get(parentId).push(folder);
+  });
+  byParent.forEach((folders) => folders.sort((a, b) => (
+    Number(a.sort_order || 0) - Number(b.sort_order || 0)
+    || String(a.name).localeCompare(String(b.name), 'ja')
+    || a.id - b.id
+  )));
+
+  const result = [{ id: null, name: '未分類', path: '未分類', depth: 0 }];
+  const visited = new Set();
+  const appendChildren = (parentId, depth) => {
+    (byParent.get(parentId) || []).forEach((folder) => {
+      if (visited.has(folder.id)) return;
+      visited.add(folder.id);
+      result.push({ id: folder.id, name: folder.name, path: getFolderPath(folder.id), depth });
+      appendChildren(folder.id, depth + 1);
+    });
+  };
+  appendChildren(0, 0);
+
+  // 親参照が壊れたフォルダーも移動先から除外せず、末尾へ表示する。
+  adminState.folders.forEach((folder) => {
+    if (visited.has(folder.id)) return;
+    result.push({ id: folder.id, name: folder.name, path: getFolderPath(folder.id), depth: 0 });
+  });
+  return result;
+}
+
+function formContextMenuErrorHtml() {
+  return formContextMenuState.error
+    ? `<div class="form-context-menu-error" role="alert">${escapeHtml(formContextMenuState.error)}</div>`
+    : '';
+}
+
+function formContextMenuMainHtml(form) {
+  const busy = formContextMenuState.busy ? ' disabled' : '';
+  const active = Boolean(form.is_active);
+  return `
+    <div class="form-context-menu-header">
+      <span class="form-context-menu-kicker">簡易コマンド</span>
+      <strong>${escapeHtml(form.name)}</strong>
+    </div>
+    ${formContextMenuErrorHtml()}
+    <div class="form-context-menu-label">公開状態</div>
+    <button type="button" class="form-context-menu-item ${active ? 'is-current' : ''}"
+      role="menuitemradio" aria-checked="${active ? 'true' : 'false'}" data-context-visibility="public"${busy}>
+      <span class="form-context-menu-status status-public" aria-hidden="true"></span>
+      <span>公開</span><span class="form-context-menu-check" aria-hidden="true">${active ? '✓' : ''}</span>
+    </button>
+    <button type="button" class="form-context-menu-item ${!active ? 'is-current' : ''}"
+      role="menuitemradio" aria-checked="${!active ? 'true' : 'false'}" data-context-visibility="private"${busy}>
+      <span class="form-context-menu-status status-private" aria-hidden="true"></span>
+      <span>非公開</span><span class="form-context-menu-check" aria-hidden="true">${!active ? '✓' : ''}</span>
+    </button>
+    <div class="form-context-menu-separator" role="separator"></div>
+    <button type="button" class="form-context-menu-item form-context-menu-item-detail" role="menuitem" data-context-view="folders"${busy}>
+      <span class="form-context-menu-icon" aria-hidden="true">▣</span>
+      <span><strong>フォルダーへ移動</strong><small>${escapeHtml(getFolderPath(form.folder_id))}</small></span>
+      <span class="form-context-menu-chevron" aria-hidden="true">›</span>
+    </button>
+    <button type="button" class="form-context-menu-item" role="menuitem" data-context-view="rename"${busy}>
+      <span class="form-context-menu-icon" aria-hidden="true">✎</span>
+      <span>名前を変更</span><span></span>
+    </button>
+    ${formContextMenuState.busy ? '<div class="form-context-menu-progress" role="status">保存しています…</div>' : ''}
+  `;
+}
+
+function formContextMenuFoldersHtml(form) {
+  const currentFolderId = form.folder_id || null;
+  const busy = formContextMenuState.busy ? ' disabled' : '';
+  return `
+    <div class="form-context-menu-subhead">
+      <button type="button" class="form-context-menu-back" data-context-view="main" aria-label="簡易コマンドへ戻る"${busy}>‹</button>
+      <span><small>移動先を選択</small><strong>${escapeHtml(form.name)}</strong></span>
+    </div>
+    ${formContextMenuErrorHtml()}
+    <div class="form-context-menu-folder-list" role="group" aria-label="移動先フォルダー">
+      ${contextMenuFolderItems().map((folder) => {
+        const isCurrent = currentFolderId === folder.id;
+        const folderId = folder.id === null ? 'root' : String(folder.id);
+        return `
+          <button type="button" class="form-context-menu-item form-context-folder-item ${isCurrent ? 'is-current' : ''}"
+            style="--context-folder-indent:${folder.depth * 13}px" role="menuitemradio" aria-checked="${isCurrent ? 'true' : 'false'}"
+            data-context-folder-id="${folderId}" title="${escapeHtml(folder.path)}"${busy}>
+            <span class="form-context-folder-glyph" aria-hidden="true"></span>
+            <span>${escapeHtml(folder.name)}</span>
+            <span class="form-context-menu-check" aria-hidden="true">${isCurrent ? '✓' : ''}</span>
+          </button>`;
+      }).join('')}
+    </div>
+    ${formContextMenuState.busy ? '<div class="form-context-menu-progress" role="status">移動しています…</div>' : ''}
+  `;
+}
+
+function formContextMenuRenameHtml(form) {
+  const busy = formContextMenuState.busy ? ' disabled' : '';
+  const value = formContextMenuState.renameValue;
+  return `
+    <div class="form-context-menu-subhead">
+      <button type="button" class="form-context-menu-back" data-context-view="main" aria-label="簡易コマンドへ戻る"${busy}>‹</button>
+      <span><small>名前を変更</small><strong>${escapeHtml(form.name)}</strong></span>
+    </div>
+    ${formContextMenuErrorHtml()}
+    <form class="form-context-rename-form" data-context-rename-form>
+      <label for="context-form-name">新しいフォーム名</label>
+      <input type="text" id="context-form-name" name="form_name" value="${escapeHtml(value)}" maxlength="150"
+        autocomplete="off" required${busy}>
+      <div class="form-context-rename-actions">
+        <button type="button" class="form-context-secondary-button" data-context-view="main"${busy}>キャンセル</button>
+        <button type="submit" class="form-context-primary-button"${busy}>変更</button>
+      </div>
+    </form>
+    ${formContextMenuState.busy ? '<div class="form-context-menu-progress" role="status">変更しています…</div>' : ''}
+  `;
+}
+
+function positionFormContextMenu() {
+  const menu = ensureFormContextMenu();
+  if (menu.hidden) return;
+  const edge = 10;
+  const viewportWidth = document.documentElement.clientWidth;
+  const viewportHeight = document.documentElement.clientHeight;
+  const rect = menu.getBoundingClientRect();
+  const maxLeft = Math.max(edge, viewportWidth - rect.width - edge);
+  const maxTop = Math.max(edge, viewportHeight - rect.height - edge);
+  const left = Math.min(Math.max(edge, formContextMenuState.clientX), maxLeft);
+  const top = Math.min(Math.max(edge, formContextMenuState.clientY), maxTop);
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
+}
+
+function focusFormContextMenu() {
+  const menu = ensureFormContextMenu();
+  let target = null;
+  if (formContextMenuState.view === 'rename') {
+    target = menu.querySelector('input[name="form_name"]');
+  } else if (formContextMenuState.view === 'folders') {
+    target = menu.querySelector('.form-context-folder-item.is-current')
+      || menu.querySelector('.form-context-folder-item');
+  } else {
+    target = menu.querySelector('.form-context-menu-item:not([disabled])');
+  }
+  target?.focus();
+  if (target?.matches('input[name="form_name"]')) target.select();
+}
+
+function renderFormContextMenu({ focus = false } = {}) {
+  const menu = ensureFormContextMenu();
+  const form = getContextMenuForm();
+  if (!form) {
+    closeFormContextMenu();
+    return;
+  }
+
+  if (formContextMenuState.view === 'folders') {
+    menu.innerHTML = formContextMenuFoldersHtml(form);
+  } else if (formContextMenuState.view === 'rename') {
+    menu.innerHTML = formContextMenuRenameHtml(form);
+  } else {
+    menu.innerHTML = formContextMenuMainHtml(form);
+  }
+  menu.hidden = false;
+  menu.setAttribute('aria-hidden', 'false');
+  menu.setAttribute('aria-busy', formContextMenuState.busy ? 'true' : 'false');
+  positionFormContextMenu();
+  if (focus) focusFormContextMenu();
+}
+
+function openFormContextMenu(formId, clientX, clientY, anchor, openedByKeyboard = false) {
+  if (formContextMenuState.busy) return;
+  const form = adminState.forms.find((item) => item.id === Number(formId));
+  if (!form) return;
+  hideFormHoverTooltip();
+  formContextMenuState.anchor?.setAttribute('aria-expanded', 'false');
+  formContextMenuState.formId = form.id;
+  formContextMenuState.anchor = anchor || null;
+  formContextMenuState.anchor?.setAttribute('aria-expanded', 'true');
+  formContextMenuState.view = 'main';
+  formContextMenuState.clientX = Number(clientX) || 0;
+  formContextMenuState.clientY = Number(clientY) || 0;
+  formContextMenuState.busy = false;
+  formContextMenuState.error = '';
+  formContextMenuState.renameValue = form.name;
+  formContextMenuState.openedByKeyboard = openedByKeyboard;
+  renderFormContextMenu({ focus: true });
+}
+
+function closeFormContextMenu({ restoreFocus = false, force = false } = {}) {
+  if (formContextMenuState.busy && !force) return;
+  const menu = document.getElementById('form-context-menu');
+  const formId = formContextMenuState.formId;
+  const anchor = formContextMenuState.anchor;
+  anchor?.setAttribute('aria-expanded', 'false');
+  if (menu) {
+    menu.hidden = true;
+    menu.setAttribute('aria-hidden', 'true');
+    menu.removeAttribute('aria-busy');
+    menu.innerHTML = '';
+  }
+  formContextMenuState.formId = 0;
+  formContextMenuState.anchor = null;
+  formContextMenuState.view = 'main';
+  formContextMenuState.busy = false;
+  formContextMenuState.error = '';
+  formContextMenuState.renameValue = '';
+  formContextMenuState.openedByKeyboard = false;
+  if (restoreFocus) {
+    const nextAnchor = anchor?.isConnected
+      ? anchor
+      : document.querySelector(`[data-select-form="${formId}"]`);
+    nextAnchor?.focus();
+  }
+}
+
+function syncQuickUpdatedEditor(form, changes) {
+  if (!form || form.id !== adminState.activeFormId) return;
+  const editor = document.getElementById('form-editor');
+  if (!editor) return;
+  if (Object.prototype.hasOwnProperty.call(changes, 'name')) {
+    editor.elements.name.value = form.name;
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'is_active')) {
+    editor.elements.is_active.checked = Boolean(form.is_active);
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'folder_id') && editor.elements.folder_id) {
+    editor.elements.folder_id.innerHTML = buildFolderOptions(form.folder_id || null);
+    editor.elements.folder_id.value = form.folder_id ? String(form.folder_id) : '';
+  }
+}
+
+async function quickUpdateFormFromContextMenu(changes, successMessage) {
+  const formId = formContextMenuState.formId;
+  const openedByKeyboard = formContextMenuState.openedByKeyboard;
+  if (!formId || formContextMenuState.busy) return;
+
+  formContextMenuState.busy = true;
+  formContextMenuState.error = '';
+  renderFormContextMenu();
+
+  try {
+    const result = await apiPost('api/admin_forms.php', {
+      action: 'quick_update',
+      form_id: formId,
+      changes,
+    });
+    if (!result.ok) {
+      throw new Error(result.message || '簡易操作の保存に失敗しました。');
+    }
+
+    adminState.forms = Array.isArray(result.forms) ? result.forms : adminState.forms;
+    adminState.folders = Array.isArray(result.folders) ? result.folders : adminState.folders;
+    const updatedForm = result.form
+      || adminState.forms.find((form) => form.id === formId)
+      || null;
+    if (updatedForm && Object.prototype.hasOwnProperty.call(changes, 'folder_id')) {
+      expandFolderPath(updatedForm.folder_id);
+    }
+
+    closeFormContextMenu({ force: true });
+    renderOverallStats();
+    renderFormList();
+    const activeForm = getActiveForm();
+    if (activeForm?.id === formId) {
+      renderWorkspaceHeader(activeForm);
+      renderSelectedFormSidebar(activeForm);
+      renderOverview(activeForm);
+      syncQuickUpdatedEditor(activeForm, changes);
+    }
+    showFlashMessage(successMessage || result.message || 'フォームを更新しました。', 'success', {
+      title: '簡易操作を保存しました',
+      duration: 3200,
+    });
+
+    if (openedByKeyboard) {
+      document.querySelector(`[data-select-form="${formId}"]`)?.focus();
+    }
+  } catch (error) {
+    formContextMenuState.busy = false;
+    formContextMenuState.error = error?.message || '通信に失敗しました。';
+    renderFormContextMenu({ focus: true });
+  }
+}
+
+function bindFormContextMenu() {
+  const menu = ensureFormContextMenu();
+  ['form-list', 'recent-form-list'].forEach((rootId) => {
+    const root = document.getElementById(rootId);
+    if (!root) return;
+
+    root.addEventListener('contextmenu', (event) => {
+      const button = event.target.closest('[data-select-form]');
+      if (!button || !root.contains(button)) return;
+      event.preventDefault();
+      openFormContextMenu(button.dataset.selectForm, event.clientX, event.clientY, button, false);
+    });
+
+    root.addEventListener('keydown', (event) => {
+      if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+      const button = event.target.closest('[data-select-form]');
+      if (!button || !root.contains(button)) return;
+      event.preventDefault();
+      const rect = button.getBoundingClientRect();
+      openFormContextMenu(button.dataset.selectForm, rect.right - 4, rect.top + 8, button, true);
+    });
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    if (menu.hidden || menu.contains(event.target)) return;
+    closeFormContextMenu();
+  }, true);
+  document.addEventListener('contextmenu', (event) => {
+    if (menu.hidden || menu.contains(event.target) || event.target.closest('[data-select-form]')) return;
+    closeFormContextMenu();
+  });
+  window.addEventListener('resize', () => closeFormContextMenu());
+  window.addEventListener('blur', () => closeFormContextMenu());
+  window.addEventListener('scroll', (event) => {
+    if (menu.hidden || menu.contains(event.target)) return;
+    closeFormContextMenu();
+  }, true);
+}
+
 function renderFormList() {
   const root = document.getElementById('form-list');
   if (!root) return;
@@ -509,7 +963,8 @@ function renderFormList() {
     return `
       <button type="button" class="directory-form-button ${isSelected ? 'active' : ''}"
         style="--tree-indent:${depth * 14}px" data-select-form="${form.id}" data-form-tooltip="${form.id}"
-        aria-label="${escapeHtml(form.name)}を選択" aria-current="${isSelected ? 'true' : 'false'}">
+        aria-label="${escapeHtml(form.name)}を選択。右クリックで簡易操作" aria-current="${isSelected ? 'true' : 'false'}"
+        aria-haspopup="menu" aria-expanded="false" aria-controls="form-context-menu">
         <span class="directory-form-name">${escapeHtml(form.name)}</span>
       </button>
     `;
@@ -594,7 +1049,8 @@ function renderRecentForms() {
   }
   root.innerHTML = recentForms.map((form) => `
     <button type="button" class="recent-form-button ${form.id === adminState.activeFormId ? 'active' : ''}"
-      data-select-form="${form.id}" data-form-tooltip="${form.id}" aria-label="${escapeHtml(form.name)}を選択">
+      data-select-form="${form.id}" data-form-tooltip="${form.id}" aria-label="${escapeHtml(form.name)}を選択。右クリックで簡易操作"
+      aria-haspopup="menu" aria-expanded="false" aria-controls="form-context-menu">
       <strong>${escapeHtml(form.name)}</strong>
     </button>
   `).join('');
@@ -1864,6 +2320,7 @@ function initAdminPage() {
   populateStatusFilter();
   bindEvents();
   bindFormHoverTooltips();
+  bindFormContextMenu();
   switchWorkspaceTab(adminState.activeWorkspaceTab);
   loadForms();
 }

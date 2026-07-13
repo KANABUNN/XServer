@@ -59,6 +59,7 @@ $csrf = backup_auth_csrf_token();
 <style>
 *,*::before,*::after{box-sizing:border-box}html,body{-webkit-user-select:none;-ms-user-select:none;user-select:none}body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f7fb;color:#172033}input,textarea,select,code,kbd,samp{-webkit-user-select:text;-ms-user-select:text;user-select:text}.login{min-height:100vh;display:grid;place-items:center;padding:24px}.loginbox{width:min(420px,100%);background:#fff;border:1px solid #d8e0ef;border-radius:16px;padding:24px;box-shadow:0 16px 40px rgba(15,23,42,.08)}h1{margin:0 0 6px;font-size:22px}.muted{color:#64748b;margin:0 0 18px}.error{background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:12px;padding:10px;margin:12px 0}label{font-weight:700;display:block;margin:14px 0 6px}input{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;font:inherit}.primary{width:100%;margin-top:18px;padding:11px 14px;border:0;border-radius:10px;background:#1d4ed8;color:#fff;font-weight:800}.small{font-size:12px;color:#64748b;margin-top:14px}
 </style>
+<script src="context-menu-guard.js?v=20260713" defer></script>
 </head>
 <body>
 <div class="login">
