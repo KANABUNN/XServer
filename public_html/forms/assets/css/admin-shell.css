@@ -552,9 +552,8 @@
 .forms-admin-page .recent-form-button {
   min-width: 0;
   min-height: 54px;
-  display: grid;
-  align-content: center;
-  gap: 4px;
+  display: flex;
+  align-items: center;
   padding: 8px 9px;
   border: 1px solid #dce3ef;
   border-radius: 11px;
@@ -572,8 +571,7 @@
   outline: none;
 }
 
-.forms-admin-page .recent-form-button strong,
-.forms-admin-page .recent-form-button small {
+.forms-admin-page .recent-form-button strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -581,11 +579,6 @@
 
 .forms-admin-page .recent-form-button strong {
   font-size: 11px;
-}
-
-.forms-admin-page .recent-form-button small {
-  color: #687894;
-  font-size: 9px;
 }
 
 .forms-admin-page .directory-browser {
@@ -728,7 +721,7 @@
 
 .forms-admin-page .directory-form-button {
   cursor: pointer;
-  padding-left: calc(33px + var(--tree-indent));
+  padding-left: calc(13px + var(--tree-indent));
 }
 
 .forms-admin-page .directory-form-button.active {
@@ -747,6 +740,70 @@
 .forms-admin-page .form-status-dot.active {
   background: #1ca768;
   box-shadow: 0 0 0 3px rgba(28, 167, 104, 0.11);
+}
+
+/* フォーム一覧はタイトルだけに保ち、詳細はビューポート基準のツールチップへ出す。
+   sidebar / tree の overflow に切られないよう、ツールチップ本体は body 直下に配置する。 */
+.forms-admin-page .form-hover-tooltip {
+  position: fixed;
+  z-index: 1200;
+  width: min(340px, calc(100vw - 24px));
+  display: grid;
+  gap: 10px;
+  padding: 14px 15px;
+  border: 1px solid rgba(147, 164, 199, 0.28);
+  border-radius: 14px;
+  background: rgba(17, 29, 53, 0.97);
+  color: #f7f9ff;
+  box-shadow: 0 20px 48px rgba(8, 18, 38, 0.32);
+  pointer-events: none;
+}
+
+.forms-admin-page .form-hover-tooltip[hidden] {
+  display: none;
+}
+
+.forms-admin-page .form-hover-tooltip-title {
+  font-size: 14px;
+  line-height: 1.45;
+  color: #fff;
+}
+
+.forms-admin-page .form-hover-tooltip-rows {
+  display: grid;
+  gap: 5px;
+}
+
+.forms-admin-page .form-hover-tooltip-row {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  gap: 9px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.forms-admin-page .form-hover-tooltip-label {
+  color: #aebcda;
+}
+
+.forms-admin-page .form-hover-tooltip-value {
+  min-width: 0;
+  color: #f5f7ff;
+  overflow-wrap: anywhere;
+}
+
+.forms-admin-page .form-hover-tooltip-description {
+  padding-top: 9px;
+  border-top: 1px solid rgba(195, 207, 232, 0.18);
+  color: #dce4f7;
+  font-size: 11px;
+  line-height: 1.65;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.forms-admin-page .form-hover-tooltip-description.muted-description {
+  color: #9eabc5;
 }
 
 .forms-admin-page .directory-empty-state {

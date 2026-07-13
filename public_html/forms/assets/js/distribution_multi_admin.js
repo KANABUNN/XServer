@@ -745,6 +745,9 @@
   }
 
   function init() {
+    // admin.js のフォルダー階層ブラウザーが有効な画面では、旧来の平坦な
+    // Form Finder で #form-list と renderFormList を上書きしない。
+    if (document.getElementById('form-list')?.classList.contains('form-directory-tree')) return;
     injectStyle();
     ensureToolbar();
     ensureModal();

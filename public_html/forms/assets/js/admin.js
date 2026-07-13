@@ -330,9 +330,129 @@ function renderOverallStats() {
   document.getElementById('overall-inactive-form-count').textContent = String(inactive);
 }
 
+function formHoverDetailsHtml(form) {
+  const availability = form.availability || {};
+  const settings = form.settings || {};
+  const statusLabel = form.is_active ? (availability.label || '公開中') : '非公開';
+  const rows = [
+    ['状態', statusLabel],
+    ['保存先', getFolderPath(form.folder_id)],
+    ['公開期間', formatAvailabilityWindow(availability, settings)],
+    ['slug', form.slug || '未設定'],
+    ['追加項目', `${Array.isArray(form.fields) ? form.fields.length : 0}件`],
+  ];
+
+  return `
+    <strong class="form-hover-tooltip-title">${escapeHtml(form.name)}</strong>
+    <span class="form-hover-tooltip-rows">
+      ${rows.map(([label, value]) => `
+        <span class="form-hover-tooltip-row">
+          <span class="form-hover-tooltip-label">${escapeHtml(label)}</span>
+          <span class="form-hover-tooltip-value">${escapeHtml(value)}</span>
+        </span>
+      `).join('')}
+    </span>
+    ${form.description
+      ? `<span class="form-hover-tooltip-description">${escapeHtml(form.description)}</span>`
+      : '<span class="form-hover-tooltip-description muted-description">説明は未設定です。</span>'}
+  `;
+}
+
+function ensureFormHoverTooltip() {
+  let tooltip = document.getElementById('form-hover-tooltip');
+  if (tooltip) return tooltip;
+  tooltip = document.createElement('div');
+  tooltip.id = 'form-hover-tooltip';
+  tooltip.className = 'form-hover-tooltip';
+  tooltip.setAttribute('role', 'tooltip');
+  tooltip.hidden = true;
+  document.body.appendChild(tooltip);
+  return tooltip;
+}
+
+function positionFormHoverTooltip(button, tooltip) {
+  const buttonRect = button.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const viewportWidth = document.documentElement.clientWidth;
+  const viewportHeight = document.documentElement.clientHeight;
+  const gap = 12;
+  const edge = 12;
+  let placement = 'right';
+  let left = buttonRect.right + gap;
+  let top = buttonRect.top + ((buttonRect.height - tooltipRect.height) / 2);
+
+  if (viewportWidth < 720) {
+    placement = 'below';
+    left = Math.min(Math.max(edge, buttonRect.left), Math.max(edge, viewportWidth - tooltipRect.width - edge));
+    top = buttonRect.bottom + 8;
+    if (top + tooltipRect.height > viewportHeight - edge) {
+      placement = 'above';
+      top = buttonRect.top - tooltipRect.height - 8;
+    }
+  } else if (left + tooltipRect.width > viewportWidth - edge) {
+    placement = 'left';
+    left = buttonRect.left - tooltipRect.width - gap;
+  }
+
+  left = Math.min(Math.max(edge, left), Math.max(edge, viewportWidth - tooltipRect.width - edge));
+  top = Math.min(Math.max(edge, top), Math.max(edge, viewportHeight - tooltipRect.height - edge));
+  tooltip.dataset.placement = placement;
+  tooltip.style.left = `${Math.round(left)}px`;
+  tooltip.style.top = `${Math.round(top)}px`;
+}
+
+function showFormHoverTooltip(button) {
+  const form = adminState.forms.find((item) => item.id === Number(button.dataset.formTooltip));
+  if (!form) return;
+  const tooltip = ensureFormHoverTooltip();
+  tooltip.innerHTML = formHoverDetailsHtml(form);
+  tooltip.hidden = false;
+  tooltip.classList.add('is-visible');
+  positionFormHoverTooltip(button, tooltip);
+  button.setAttribute('aria-describedby', tooltip.id);
+}
+
+function hideFormHoverTooltip() {
+  const tooltip = document.getElementById('form-hover-tooltip');
+  if (!tooltip) return;
+  tooltip.classList.remove('is-visible');
+  tooltip.hidden = true;
+}
+
+function bindFormHoverTooltips() {
+  ['form-list', 'recent-form-list'].forEach((rootId) => {
+    const root = document.getElementById(rootId);
+    if (!root) return;
+
+    root.addEventListener('pointerover', (event) => {
+      const button = event.target.closest('[data-form-tooltip]');
+      if (!button || !root.contains(button) || button.contains(event.relatedTarget)) return;
+      showFormHoverTooltip(button);
+    });
+    root.addEventListener('pointerout', (event) => {
+      const button = event.target.closest('[data-form-tooltip]');
+      if (!button || button.contains(event.relatedTarget)) return;
+      hideFormHoverTooltip();
+    });
+    root.addEventListener('focusin', (event) => {
+      const button = event.target.closest('[data-form-tooltip]');
+      if (button && root.contains(button)) showFormHoverTooltip(button);
+    });
+    root.addEventListener('focusout', (event) => {
+      const button = event.target.closest('[data-form-tooltip]');
+      if (!button || button.contains(event.relatedTarget)) return;
+      hideFormHoverTooltip();
+    });
+  });
+
+  window.addEventListener('resize', hideFormHoverTooltip);
+  window.addEventListener('scroll', hideFormHoverTooltip, true);
+}
+
 function renderFormList() {
   const root = document.getElementById('form-list');
   if (!root) return;
+  hideFormHoverTooltip();
 
   const keyword = adminState.formSearch.trim().toLowerCase();
   const folderMap = new Map(adminState.folders.map((folder) => [folder.id, folder]));
@@ -386,12 +506,10 @@ function renderFormList() {
 
   const renderFormButton = (form, depth) => {
     const isSelected = form.id === adminState.activeFormId;
-    const detail = `${form.is_active ? '公開中' : '非公開'} / ${form.slug} / ${getFolderPath(form.folder_id)}`;
     return `
       <button type="button" class="directory-form-button ${isSelected ? 'active' : ''}"
-        style="--tree-indent:${depth * 14}px" data-select-form="${form.id}" title="${escapeHtml(detail)}"
-        aria-current="${isSelected ? 'true' : 'false'}">
-        <span class="form-status-dot ${form.is_active ? 'active' : ''}" aria-hidden="true"></span>
+        style="--tree-indent:${depth * 14}px" data-select-form="${form.id}" data-form-tooltip="${form.id}"
+        aria-label="${escapeHtml(form.name)}を選択" aria-current="${isSelected ? 'true' : 'false'}">
         <span class="directory-form-name">${escapeHtml(form.name)}</span>
       </button>
     `;
@@ -476,9 +594,8 @@ function renderRecentForms() {
   }
   root.innerHTML = recentForms.map((form) => `
     <button type="button" class="recent-form-button ${form.id === adminState.activeFormId ? 'active' : ''}"
-      data-select-form="${form.id}" title="${escapeHtml(form.name)} / ${escapeHtml(getFolderPath(form.folder_id))}">
+      data-select-form="${form.id}" data-form-tooltip="${form.id}" aria-label="${escapeHtml(form.name)}を選択">
       <strong>${escapeHtml(form.name)}</strong>
-      <small>${escapeHtml(getFolderPath(form.folder_id))}</small>
     </button>
   `).join('');
 }
@@ -1746,6 +1863,7 @@ function bindEvents() {
 function initAdminPage() {
   populateStatusFilter();
   bindEvents();
+  bindFormHoverTooltips();
   switchWorkspaceTab(adminState.activeWorkspaceTab);
   loadForms();
 }
