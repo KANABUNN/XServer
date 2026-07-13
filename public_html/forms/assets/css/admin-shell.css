@@ -63,6 +63,8 @@
 
 /* インセット面の中では二重カードにしない（フラット化） */
 .forms-admin-page .sidebar-scroll .sidebar-card {
+  flex: 0 0 auto;
+  min-height: auto;
   background: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
@@ -1301,11 +1303,23 @@
   .forms-admin-page .sidebar {
     width: 100%;
     min-width: 0;
+    height: auto;
+    min-height: 0;
+    flex: 0 0 auto;
+    overflow: visible;
     padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 14px max(14px, env(safe-area-inset-left));
   }
 
   .forms-admin-page .sidebar-scroll {
-    max-height: min(46dvh, 520px);
+    flex: 0 0 auto;
+    min-height: auto;
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: auto;
+  }
+
+  .forms-admin-page #form-list.form-directory-tree {
+    max-height: min(42dvh, 420px);
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
