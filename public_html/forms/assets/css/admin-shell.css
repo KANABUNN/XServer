@@ -427,3 +427,480 @@
     font-size: 16px; /* iOSの自動ズーム抑止 */
   }
 }
+
+/* ============================================================
+   フォームブラウザー / フォルダー階層 / 作成ダイアログ
+   ============================================================ */
+.forms-admin-page .visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.forms-admin-page .form-browser-card {
+  display: grid;
+  gap: 13px;
+  min-height: 0;
+}
+
+.forms-admin-page .form-browser-card .eyebrow {
+  margin: 0 0 2px;
+}
+
+.forms-admin-page .form-browser-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.forms-admin-page .icon-text-button,
+.forms-admin-page .quiet-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #3659c8;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 8px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.forms-admin-page .icon-text-button:hover,
+.forms-admin-page .quiet-button:hover,
+.forms-admin-page .icon-text-button:focus-visible,
+.forms-admin-page .quiet-button:focus-visible {
+  background: #edf2ff;
+  outline: none;
+}
+
+.forms-admin-page .form-browser-card .search-box {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.forms-admin-page .form-browser-card .search-box::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  border: 2px solid #70809c;
+  border-radius: 50%;
+  transform: translateY(-58%);
+  pointer-events: none;
+}
+
+.forms-admin-page .form-browser-card .search-box::after {
+  content: "";
+  position: absolute;
+  left: 26px;
+  top: 58%;
+  width: 6px;
+  height: 2px;
+  border-radius: 2px;
+  background: #70809c;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.forms-admin-page .form-browser-card .search-box input {
+  min-height: 42px;
+  padding-left: 40px;
+  border-radius: 12px;
+  background: #f7f9fd;
+}
+
+.forms-admin-page .form-browser-group {
+  display: grid;
+  gap: 7px;
+}
+
+.forms-admin-page .form-browser-group-title {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 3px;
+}
+
+.forms-admin-page .form-browser-group-title h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #4e5f7c;
+}
+
+.forms-admin-page .recent-form-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.forms-admin-page .recent-form-button {
+  min-width: 0;
+  min-height: 54px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 8px 9px;
+  border: 1px solid #dce3ef;
+  border-radius: 11px;
+  background: #fff;
+  color: #182944;
+  text-align: left;
+  cursor: pointer;
+}
+
+.forms-admin-page .recent-form-button:hover,
+.forms-admin-page .recent-form-button:focus-visible,
+.forms-admin-page .recent-form-button.active {
+  border-color: #718ce2;
+  background: #f1f5ff;
+  outline: none;
+}
+
+.forms-admin-page .recent-form-button strong,
+.forms-admin-page .recent-form-button small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forms-admin-page .recent-form-button strong {
+  font-size: 11px;
+}
+
+.forms-admin-page .recent-form-button small {
+  color: #687894;
+  font-size: 9px;
+}
+
+.forms-admin-page .directory-browser {
+  min-height: 0;
+}
+
+.forms-admin-page #form-list.form-directory-tree {
+  display: block;
+  max-height: min(42vh, 480px);
+  overflow: auto;
+  padding: 3px 2px 5px 0;
+  scrollbar-width: thin;
+}
+
+.forms-admin-page .directory-folder-children[hidden] {
+  display: none;
+}
+
+.forms-admin-page .directory-folder-row,
+.forms-admin-page .directory-form-button {
+  --tree-indent: 0px;
+  width: 100%;
+  min-height: 35px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 6px 5px calc(6px + var(--tree-indent));
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #1a2b46;
+  text-align: left;
+}
+
+.forms-admin-page .directory-folder-row:hover,
+.forms-admin-page .directory-form-button:hover,
+.forms-admin-page .directory-form-button:focus-visible {
+  background: #f0f4fb;
+  outline: none;
+}
+
+.forms-admin-page .directory-folder-toggle {
+  width: 20px;
+  height: 24px;
+  flex: 0 0 20px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #647592;
+  cursor: pointer;
+  transition: transform 0.16s ease;
+}
+
+.forms-admin-page .directory-folder-toggle[aria-expanded="true"] {
+  transform: rotate(90deg);
+}
+
+.forms-admin-page .directory-folder-main {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.forms-admin-page .folder-glyph {
+  width: 17px;
+  height: 13px;
+  flex: 0 0 17px;
+  position: relative;
+  border-radius: 3px;
+  background: #e9b84a;
+  box-shadow: inset 0 -1px 0 rgba(90, 60, 0, 0.12);
+}
+
+.forms-admin-page .folder-glyph::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: -4px;
+  width: 8px;
+  height: 5px;
+  border-radius: 3px 3px 0 0;
+  background: #dca73d;
+}
+
+.forms-admin-page .directory-folder-name,
+.forms-admin-page .directory-form-name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.forms-admin-page .directory-folder-count {
+  flex: 0 0 auto;
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #e9edf5;
+  color: #5c6d88;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.forms-admin-page .directory-folder-edit {
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #72819a;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.forms-admin-page .directory-folder-row:hover .directory-folder-edit,
+.forms-admin-page .directory-folder-edit:focus-visible {
+  opacity: 1;
+  background: #fff;
+  outline: none;
+}
+
+.forms-admin-page .directory-form-button {
+  cursor: pointer;
+  padding-left: calc(33px + var(--tree-indent));
+}
+
+.forms-admin-page .directory-form-button.active {
+  background: #e9efff;
+  color: #214bb9;
+}
+
+.forms-admin-page .form-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #a8b3c4;
+}
+
+.forms-admin-page .form-status-dot.active {
+  background: #1ca768;
+  box-shadow: 0 0 0 3px rgba(28, 167, 104, 0.11);
+}
+
+.forms-admin-page .directory-empty-state {
+  margin: 5px 2px;
+  padding: 12px;
+  border: 1px dashed #cfd7e6;
+  border-radius: 10px;
+  color: #6b7a92;
+  font-size: 12px;
+  text-align: center;
+}
+
+.forms-admin-page .form-browser-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding-top: 9px;
+  border-top: 1px solid #e4e9f2;
+  color: #66758e;
+  font-size: 10px;
+}
+
+.forms-admin-page .form-browser-stats strong {
+  color: #263854;
+}
+
+.forms-admin-page .stat-dot {
+  width: 6px;
+  height: 6px;
+  margin-left: 4px;
+  border-radius: 50%;
+}
+
+.forms-admin-page .stat-active { background: #1ca768; }
+.forms-admin-page .stat-inactive { background: #a6b0bf; }
+
+.forms-admin-page .admin-dialog {
+  width: min(560px, calc(100vw - 28px));
+  max-height: calc(100vh - 36px);
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  color: var(--text);
+  box-shadow: 0 26px 80px rgba(8, 20, 43, 0.32);
+  overflow: auto;
+}
+
+.forms-admin-page .admin-dialog::backdrop {
+  background: rgba(11, 23, 47, 0.58);
+  backdrop-filter: blur(3px);
+}
+
+.forms-admin-page .dialog-card {
+  display: grid;
+  gap: 17px;
+  padding: 24px;
+  background: #fff;
+}
+
+.forms-admin-page .dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.forms-admin-page .dialog-header h2,
+.forms-admin-page .dialog-header .eyebrow {
+  margin: 0;
+}
+
+.forms-admin-page .dialog-close-button {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #f0f3f8;
+  color: #485a76;
+  font-size: 23px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.forms-admin-page .creation-mode-fieldset {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.forms-admin-page .creation-mode-fieldset legend {
+  grid-column: 1 / -1;
+  margin-bottom: 7px;
+  font-weight: 700;
+}
+
+.forms-admin-page .creation-mode-card {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid #d7dfec;
+  border-radius: 14px;
+  background: #fafbfe;
+  cursor: pointer;
+}
+
+.forms-admin-page .creation-mode-card:has(input:checked) {
+  border-color: #5575da;
+  background: #edf2ff;
+  box-shadow: 0 0 0 3px rgba(62, 94, 199, 0.09);
+}
+
+.forms-admin-page .creation-mode-card span,
+.forms-admin-page .creation-mode-card strong,
+.forms-admin-page .creation-mode-card small {
+  display: block;
+}
+
+.forms-admin-page .creation-mode-card small {
+  margin-top: 4px;
+  color: #667792;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.forms-admin-page .dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-top: 3px;
+}
+
+.forms-admin-page .dialog-action-spacer {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 420px) {
+  .forms-admin-page .recent-form-list,
+  .forms-admin-page .creation-mode-fieldset {
+    grid-template-columns: 1fr;
+  }
+
+  .forms-admin-page .dialog-card {
+    padding: 19px;
+  }
+}

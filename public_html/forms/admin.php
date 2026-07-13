@@ -16,38 +16,46 @@ page_header('フォーム管理', 'forms-admin-page');
         </div>
 
         <div class="sidebar-scroll">
-            <section class="card sidebar-card">
+            <section class="card sidebar-card form-browser-card">
                 <div class="section-title-row">
                     <div>
-                        <h2>フォーム一覧</h2>
-                        <p class="small-note">作成済みフォームの選択と新規作成を行います。</p>
+                        <p class="eyebrow">Form browser</p>
+                        <h2>フォームを選択</h2>
                     </div>
-                    <button type="button" class="btn primary" id="new-form-button">新しいフォーム</button>
+                    <div class="form-browser-actions">
+                        <button type="button" class="icon-text-button" id="new-folder-button" title="フォルダーを作成">＋ フォルダー</button>
+                        <button type="button" class="btn primary" id="new-form-button">＋ 新規</button>
+                    </div>
                 </div>
 
                 <div id="admin-message" class="alert hidden"></div>
 
                 <label class="search-box">
-                    <span class="small-note">フォームを検索</span>
-                    <input type="search" id="form-search" placeholder="フォーム名・slugで検索">
+                    <span class="visually-hidden">フォームを検索</span>
+                    <input type="search" id="form-search" placeholder="フォーム名・フォルダー名を検索" autocomplete="off">
                 </label>
 
-                <div class="mini-stat-grid" id="forms-overall-stats">
-                    <article class="mini-stat-card">
-                        <span class="mini-stat-label">総フォーム数</span>
-                        <strong id="overall-form-count">0</strong>
-                    </article>
-                    <article class="mini-stat-card">
-                        <span class="mini-stat-label">公開中</span>
-                        <strong id="overall-active-form-count">0</strong>
-                    </article>
-                    <article class="mini-stat-card">
-                        <span class="mini-stat-label">非公開</span>
-                        <strong id="overall-inactive-form-count">0</strong>
-                    </article>
-                </div>
+                <section id="recent-forms-section" class="form-browser-group hidden" aria-labelledby="recent-forms-heading">
+                    <div class="form-browser-group-title">
+                        <h3 id="recent-forms-heading">最近使ったフォーム</h3>
+                        <span class="small-note">最大3件</span>
+                    </div>
+                    <div id="recent-form-list" class="recent-form-list"></div>
+                </section>
 
-                <div id="form-list" class="stack-list form-nav-list"></div>
+                <section class="form-browser-group directory-browser" aria-labelledby="directory-heading">
+                    <div class="form-browser-group-title">
+                        <h3 id="directory-heading">すべてのフォーム</h3>
+                        <button type="button" class="quiet-button" id="expand-all-folders-button">すべて展開</button>
+                    </div>
+                    <div id="form-list" class="form-directory-tree"></div>
+                </section>
+
+                <div class="form-browser-stats" id="forms-overall-stats" aria-label="フォーム集計">
+                    <span>全 <strong id="overall-form-count">0</strong></span>
+                    <span class="stat-dot stat-active" aria-hidden="true"></span><span>公開 <strong id="overall-active-form-count">0</strong></span>
+                    <span class="stat-dot stat-inactive" aria-hidden="true"></span><span>非公開 <strong id="overall-inactive-form-count">0</strong></span>
+                </div>
             </section>
 
             <section class="card sidebar-card" id="selected-form-sidebar-card">
@@ -178,12 +186,18 @@ page_header('フォーム管理', 'forms-admin-page');
                                 </label>
                                 <div class="two-col">
                                     <label>
+                                        <span>保存先フォルダー</span>
+                                        <select name="folder_id" id="form-folder-select">
+                                            <option value="">未分類</option>
+                                        </select>
+                                    </label>
+                                    <label>
                                         <span>表示順</span>
                                         <input type="number" name="sort_order" value="0">
                                     </label>
-                                    <div class="toggle-stack">
-                                        <label class="switch-card"><input type="checkbox" name="is_active" checked><span>公開する</span></label>
-                                    </div>
+                                </div>
+                                <div class="toggle-stack">
+                                    <label class="switch-card"><input type="checkbox" name="is_active" checked><span>公開する</span></label>
                                 </div>
                             </section>
 
@@ -405,6 +419,90 @@ page_header('フォーム管理', 'forms-admin-page');
     </main><!-- /.content-shell -->
 </div><!-- /.admin-shell -->
 
+<dialog id="new-form-dialog" class="admin-dialog" aria-labelledby="new-form-dialog-title">
+    <form id="new-form-dialog-form" class="dialog-card">
+        <div class="dialog-header">
+            <div>
+                <p class="eyebrow">Create form</p>
+                <h2 id="new-form-dialog-title">新しいフォーム</h2>
+            </div>
+            <button type="button" class="dialog-close-button" data-close-dialog="new-form-dialog" aria-label="閉じる">×</button>
+        </div>
+
+        <label>
+            <span>フォーム名</span>
+            <input type="text" name="name" maxlength="150" required placeholder="例：2026年度 活動報告">
+        </label>
+        <label>
+            <span>保存先フォルダー</span>
+            <select name="folder_id" id="new-form-folder-select">
+                <option value="">未分類</option>
+            </select>
+        </label>
+
+        <fieldset class="creation-mode-fieldset">
+            <legend>作成方法</legend>
+            <label class="creation-mode-card">
+                <input type="radio" name="creation_mode" value="blank" checked>
+                <span><strong>空のフォーム</strong><small>初期設定から作成します。</small></span>
+            </label>
+            <label class="creation-mode-card">
+                <input type="radio" name="creation_mode" value="copy">
+                <span><strong>既存フォームをコピー</strong><small>設定と追加項目を引き継ぎます。</small></span>
+            </label>
+        </fieldset>
+
+        <label id="copy-source-field" class="hidden">
+            <span>コピー元フォーム</span>
+            <select name="source_form_id" id="copy-source-form-select"></select>
+            <small class="small-note">回答・履歴・提出ファイル・配布ファイル本体はコピーされません。コピーは非公開で作成されます。</small>
+        </label>
+
+        <div id="new-form-dialog-message" class="alert hidden"></div>
+        <div class="dialog-actions">
+            <button type="button" class="btn" data-close-dialog="new-form-dialog">キャンセル</button>
+            <button type="submit" class="btn primary" id="create-form-confirm-button">作成を開始</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="folder-dialog" class="admin-dialog" aria-labelledby="folder-dialog-title">
+    <form id="folder-editor" class="dialog-card">
+        <input type="hidden" name="id" value="0">
+        <div class="dialog-header">
+            <div>
+                <p class="eyebrow">Directory</p>
+                <h2 id="folder-dialog-title">フォルダーを作成</h2>
+            </div>
+            <button type="button" class="dialog-close-button" data-close-dialog="folder-dialog" aria-label="閉じる">×</button>
+        </div>
+        <label>
+            <span>フォルダー名</span>
+            <input type="text" name="name" maxlength="120" required>
+        </label>
+        <div class="two-col">
+            <label>
+                <span>親フォルダー</span>
+                <select name="parent_id" id="folder-parent-select">
+                    <option value="">最上位</option>
+                </select>
+            </label>
+            <label>
+                <span>表示順</span>
+                <input type="number" name="sort_order" value="0">
+            </label>
+        </div>
+        <p class="small-note">フォルダーの階層は必要な深さまで作成できます。フォームの移動は「基本設定」の保存先フォルダーから行います。</p>
+        <div id="folder-dialog-message" class="alert hidden"></div>
+        <div class="dialog-actions split-actions">
+            <button type="button" class="btn danger hidden" id="delete-folder-button">空のフォルダーを削除</button>
+            <span class="dialog-action-spacer"></span>
+            <button type="button" class="btn" data-close-dialog="folder-dialog">キャンセル</button>
+            <button type="submit" class="btn primary">保存</button>
+        </div>
+    </form>
+</dialog>
+
 <template id="field-row-template">
     <article class="field-card" data-field-row>
         <div class="field-card-header">
@@ -448,4 +546,4 @@ page_header('フォーム管理', 'forms-admin-page');
     </article>
 </template>
 
-<?php page_footer(['assets/js/common.js', 'assets/js/admin.js', 'assets/js/distribution_multi_admin.js', 'assets/js/admin-sidebar-ui-fixes.js']); ?>
+<?php page_footer(['assets/js/common.js', 'assets/js/admin.js', 'assets/js/distribution_multi_admin.js']); ?>

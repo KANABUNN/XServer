@@ -7,27 +7,172 @@ const STATUS_DEFINITIONS = {
   rejected: { label: '差戻し', className: 'status-rejected' },
 };
 
+const RECENT_FORMS_LIMIT = 3;
+const RECENT_FORMS_STORAGE_KEY = 'forms.admin.recentFormIds.v2';
+const EXPANDED_FOLDERS_STORAGE_KEY = 'forms.admin.expandedFolderIds.v2';
+const WORKSPACE_TAB_STORAGE_KEY = 'forms.admin.activeWorkspaceTab.v2';
+const WORKSPACE_TABS = new Set(['overview', 'settings', 'fields', 'responses']);
+
 const adminState = {
   forms: [],
+  folders: [],
   activeFormId: 0,
-  activeWorkspaceTab: 'overview',
+  activeWorkspaceTab: readSessionValue(WORKSPACE_TAB_STORAGE_KEY, 'overview'),
   formSearch: '',
+  recentFormIds: readNumberList(RECENT_FORMS_STORAGE_KEY),
+  expandedFolderIds: new Set(readNumberList(EXPANDED_FOLDERS_STORAGE_KEY)),
+  folderExpansionInitialized: false,
   entriesResult: null,
   activeEntryId: 0,
   activeEntryHistory: null,
 };
+
+function readSessionValue(key, fallback) {
+  try {
+    return window.sessionStorage.getItem(key) || fallback;
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function readNumberList(key) {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(Number).filter((value) => Number.isInteger(value) && value > 0);
+  } catch (error) {
+    return [];
+  }
+}
+
+function writeNumberList(key, values) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(Array.from(values)));
+  } catch (error) {
+    // プライベートブラウズ等で保存できない場合も、現在の画面内では継続する。
+  }
+}
+
+function getFolder(folderId) {
+  return adminState.folders.find((folder) => folder.id === Number(folderId)) || null;
+}
+
+function getFolderPath(folderId) {
+  const names = [];
+  const visited = new Set();
+  let current = getFolder(folderId);
+  while (current && !visited.has(current.id)) {
+    visited.add(current.id);
+    names.unshift(current.name);
+    current = current.parent_id ? getFolder(current.parent_id) : null;
+  }
+  return names.join(' / ') || '未分類';
+}
+
+function getFolderDescendantIds(folderId) {
+  const result = new Set([Number(folderId)]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    adminState.folders.forEach((folder) => {
+      if (folder.parent_id && result.has(folder.parent_id) && !result.has(folder.id)) {
+        result.add(folder.id);
+        changed = true;
+      }
+    });
+  }
+  return result;
+}
+
+function buildFolderOptions(selectedId = null, rootLabel = '未分類', excludedIds = new Set()) {
+  const childrenByParent = new Map();
+  adminState.folders.forEach((folder) => {
+    const parentKey = folder.parent_id || 0;
+    if (!childrenByParent.has(parentKey)) childrenByParent.set(parentKey, []);
+    childrenByParent.get(parentKey).push(folder);
+  });
+  childrenByParent.forEach((folders) => folders.sort((a, b) => (
+    Number(a.sort_order || 0) - Number(b.sort_order || 0)
+    || String(a.name).localeCompare(String(b.name), 'ja')
+    || a.id - b.id
+  )));
+
+  const options = [`<option value="">${escapeHtml(rootLabel)}</option>`];
+  const visited = new Set();
+  const appendChildren = (parentId, depth) => {
+    (childrenByParent.get(parentId) || []).forEach((folder) => {
+      if (visited.has(folder.id) || excludedIds.has(folder.id)) return;
+      visited.add(folder.id);
+      const prefix = depth ? `${'　'.repeat(depth)}└ ` : '';
+      const selected = Number(selectedId) === folder.id ? ' selected' : '';
+      options.push(`<option value="${folder.id}"${selected}>${escapeHtml(prefix + folder.name)}</option>`);
+      appendChildren(folder.id, depth + 1);
+    });
+  };
+  appendChildren(0, 0);
+
+  // 壊れた親参照が存在しても管理画面から救済できるよう、孤立フォルダーも末尾へ出す。
+  adminState.folders.forEach((folder) => {
+    if (visited.has(folder.id) || excludedIds.has(folder.id)) return;
+    const selected = Number(selectedId) === folder.id ? ' selected' : '';
+    options.push(`<option value="${folder.id}"${selected}>${escapeHtml(folder.name)}</option>`);
+  });
+  return options.join('');
+}
+
+function refreshFolderSelects() {
+  const currentFormFolderId = getActiveForm()?.folder_id || null;
+  const formSelect = document.getElementById('form-folder-select');
+  if (formSelect) formSelect.innerHTML = buildFolderOptions(currentFormFolderId);
+  const newFormSelect = document.getElementById('new-form-folder-select');
+  if (newFormSelect) newFormSelect.innerHTML = buildFolderOptions(newFormSelect.value || null);
+}
+
+function rememberFormUsage(formId) {
+  const id = Number(formId);
+  if (!id) return;
+  adminState.recentFormIds = [id, ...adminState.recentFormIds.filter((item) => item !== id)]
+    .slice(0, RECENT_FORMS_LIMIT);
+  writeNumberList(RECENT_FORMS_STORAGE_KEY, adminState.recentFormIds);
+}
+
+function persistExpandedFolders() {
+  writeNumberList(EXPANDED_FOLDERS_STORAGE_KEY, adminState.expandedFolderIds);
+}
+
+function expandFolderPath(folderId) {
+  const visited = new Set();
+  let currentId = Number(folderId || 0);
+  adminState.expandedFolderIds.add(currentId);
+  while (currentId > 0 && !visited.has(currentId)) {
+    visited.add(currentId);
+    const folder = getFolder(currentId);
+    if (!folder?.parent_id) break;
+    currentId = folder.parent_id;
+    adminState.expandedFolderIds.add(currentId);
+  }
+  persistExpandedFolders();
+}
 
 function getStatusMeta(status) {
   return STATUS_DEFINITIONS[status] || STATUS_DEFINITIONS.new;
 }
 
 function switchWorkspaceTab(tab) {
-  adminState.activeWorkspaceTab = tab;
+  const nextTab = WORKSPACE_TABS.has(tab) ? tab : 'overview';
+  adminState.activeWorkspaceTab = nextTab;
+  try {
+    window.sessionStorage.setItem(WORKSPACE_TAB_STORAGE_KEY, nextTab);
+  } catch (error) {
+    // 状態保存が使えなくてもタブ切替自体は継続する。
+  }
   document.querySelectorAll('[data-workspace-tab]').forEach((button) => {
-    button.classList.toggle('active', button.dataset.workspaceTab === tab);
+    const isActive = button.dataset.workspaceTab === nextTab;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
   document.querySelectorAll('[data-workspace-panel]').forEach((panel) => {
-    panel.classList.toggle('hidden', panel.dataset.workspacePanel !== tab);
+    panel.classList.toggle('hidden', panel.dataset.workspacePanel !== nextTab);
   });
 }
 
@@ -190,40 +335,152 @@ function renderFormList() {
   if (!root) return;
 
   const keyword = adminState.formSearch.trim().toLowerCase();
-  const filteredForms = adminState.forms.filter((form) => {
-    if (!keyword) return true;
-    return [form.name, form.slug, form.description]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(keyword));
+  const folderMap = new Map(adminState.folders.map((folder) => [folder.id, folder]));
+  const childrenByParent = new Map();
+  adminState.folders.forEach((folder) => {
+    const parentId = folder.parent_id && folderMap.has(folder.parent_id) ? folder.parent_id : 0;
+    if (!childrenByParent.has(parentId)) childrenByParent.set(parentId, []);
+    childrenByParent.get(parentId).push(folder);
   });
+  childrenByParent.forEach((folders) => folders.sort((a, b) => (
+    Number(a.sort_order || 0) - Number(b.sort_order || 0)
+    || String(a.name).localeCompare(String(b.name), 'ja')
+    || a.id - b.id
+  )));
 
-  if (!filteredForms.length) {
-    root.innerHTML = '<div class="empty-state">条件に一致するフォームはありません。</div>';
+  const formsByFolder = new Map();
+  adminState.forms.forEach((form) => {
+    const folderId = form.folder_id && folderMap.has(form.folder_id) ? form.folder_id : 0;
+    if (!formsByFolder.has(folderId)) formsByFolder.set(folderId, []);
+    formsByFolder.get(folderId).push(form);
+  });
+  formsByFolder.forEach((forms) => forms.sort((a, b) => (
+    Number(a.sort_order || 0) - Number(b.sort_order || 0)
+    || String(a.name).localeCompare(String(b.name), 'ja')
+    || a.id - b.id
+  )));
+
+  const formMatches = (form) => !keyword || [form.name, form.slug, form.description, getFolderPath(form.folder_id)]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(keyword));
+  const folderMatches = (folder) => keyword && [folder.name, getFolderPath(folder.id)]
+    .some((value) => String(value).toLowerCase().includes(keyword));
+
+  const countFolderForms = (folderId, visited = new Set()) => {
+    if (visited.has(folderId)) return 0;
+    visited.add(folderId);
+    let count = (formsByFolder.get(folderId) || []).length;
+    (childrenByParent.get(folderId) || []).forEach((child) => {
+      count += countFolderForms(child.id, new Set(visited));
+    });
+    return count;
+  };
+
+  const subtreeHasMatch = (folder, visited = new Set()) => {
+    if (!keyword || folderMatches(folder)) return true;
+    if (visited.has(folder.id)) return false;
+    visited.add(folder.id);
+    if ((formsByFolder.get(folder.id) || []).some(formMatches)) return true;
+    return (childrenByParent.get(folder.id) || []).some((child) => subtreeHasMatch(child, new Set(visited)));
+  };
+
+  const renderFormButton = (form, depth) => {
+    const isSelected = form.id === adminState.activeFormId;
+    const detail = `${form.is_active ? '公開中' : '非公開'} / ${form.slug} / ${getFolderPath(form.folder_id)}`;
+    return `
+      <button type="button" class="directory-form-button ${isSelected ? 'active' : ''}"
+        style="--tree-indent:${depth * 14}px" data-select-form="${form.id}" title="${escapeHtml(detail)}"
+        aria-current="${isSelected ? 'true' : 'false'}">
+        <span class="form-status-dot ${form.is_active ? 'active' : ''}" aria-hidden="true"></span>
+        <span class="directory-form-name">${escapeHtml(form.name)}</span>
+      </button>
+    `;
+  };
+
+  const renderFolder = (folder, depth, visited = new Set(), forceAll = false) => {
+    if (visited.has(folder.id)) return '';
+    visited.add(folder.id);
+    const forceSubtree = forceAll || folderMatches(folder);
+    if (!forceSubtree && !subtreeHasMatch(folder)) return '';
+    const expanded = keyword || adminState.expandedFolderIds.has(folder.id);
+    const directForms = (formsByFolder.get(folder.id) || []).filter((form) => forceSubtree || formMatches(form));
+    const childHtml = (childrenByParent.get(folder.id) || [])
+      .map((child) => renderFolder(child, depth + 1, new Set(visited), forceSubtree))
+      .join('');
+    const formHtml = directForms.map((form) => renderFormButton(form, depth + 1)).join('');
+    return `
+      <div class="directory-folder-node" data-folder-node="${folder.id}">
+        <div class="directory-folder-row" style="--tree-indent:${depth * 14}px">
+          <button type="button" class="directory-folder-toggle" data-toggle-folder="${folder.id}"
+            aria-expanded="${expanded ? 'true' : 'false'}" aria-label="${expanded ? '折りたたむ' : '展開する'}">›</button>
+          <button type="button" class="directory-folder-main" data-toggle-folder="${folder.id}" title="${escapeHtml(getFolderPath(folder.id))}">
+            <span class="folder-glyph" aria-hidden="true"></span>
+            <span class="directory-folder-name">${escapeHtml(folder.name)}</span>
+            <span class="directory-folder-count">${countFolderForms(folder.id)}</span>
+          </button>
+          <button type="button" class="directory-folder-edit" data-edit-folder="${folder.id}" aria-label="${escapeHtml(folder.name)}を編集" title="フォルダー設定">•••</button>
+        </div>
+        <div class="directory-folder-children"${expanded ? '' : ' hidden'}>${childHtml}${formHtml}</div>
+      </div>
+    `;
+  };
+
+  const unfiledForms = (formsByFolder.get(0) || []).filter(formMatches);
+  const unfiledMatches = !keyword || '未分類'.includes(keyword) || unfiledForms.length > 0;
+  const unfiledExpanded = keyword || adminState.expandedFolderIds.has(0);
+  const unfiledHtml = unfiledMatches && (unfiledForms.length || !keyword) ? `
+    <div class="directory-folder-node" data-folder-node="0">
+      <div class="directory-folder-row" style="--tree-indent:0px">
+        <button type="button" class="directory-folder-toggle" data-toggle-folder="0" aria-expanded="${unfiledExpanded ? 'true' : 'false'}">›</button>
+        <button type="button" class="directory-folder-main" data-toggle-folder="0">
+          <span class="folder-glyph" aria-hidden="true"></span>
+          <span class="directory-folder-name">未分類</span>
+          <span class="directory-folder-count">${(formsByFolder.get(0) || []).length}</span>
+        </button>
+      </div>
+      <div class="directory-folder-children"${unfiledExpanded ? '' : ' hidden'}>
+        ${unfiledForms.map((form) => renderFormButton(form, 1)).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  const folderHtml = (childrenByParent.get(0) || [])
+    .map((folder) => renderFolder(folder, 0))
+    .join('');
+  root.innerHTML = (folderHtml || unfiledHtml)
+    ? `${folderHtml}${unfiledHtml}`
+    : '<div class="directory-empty-state">条件に一致するフォームはありません。</div>';
+
+  renderRecentForms();
+  const expandButton = document.getElementById('expand-all-folders-button');
+  if (expandButton) {
+    const allFolderIds = [0, ...adminState.folders.map((folder) => folder.id)];
+    const allExpanded = allFolderIds.length > 0 && allFolderIds.every((id) => adminState.expandedFolderIds.has(id));
+    expandButton.textContent = allExpanded ? 'すべて折りたたむ' : 'すべて展開';
+  }
+}
+
+function renderRecentForms() {
+  const section = document.getElementById('recent-forms-section');
+  const root = document.getElementById('recent-form-list');
+  if (!section || !root) return;
+  const recentForms = adminState.recentFormIds
+    .map((id) => adminState.forms.find((form) => form.id === id))
+    .filter(Boolean)
+    .slice(0, RECENT_FORMS_LIMIT);
+  const visible = recentForms.length > 0 && adminState.formSearch.trim() === '';
+  section.classList.toggle('hidden', !visible);
+  if (!visible) {
+    root.innerHTML = '';
     return;
   }
-
-  root.innerHTML = filteredForms.map((form) => {
-    const isSelected = form.id === adminState.activeFormId;
-    const fieldCount = Array.isArray(form.fields) ? form.fields.length : 0;
-    return `
-      <article class="form-nav-item ${isSelected ? 'selected' : ''}">
-        <button type="button" class="form-nav-button" data-select-form="${form.id}">
-          <div class="form-nav-main">
-            <div>
-              <strong>${escapeHtml(form.name)}</strong>
-              <div class="meta-line">
-                ${createStatusBadge(form.is_active ? 'resolved' : 'on_hold', form.is_active ? '公開中' : '非公開')}
-                ${availabilityBadge(form.availability, form.is_active)}
-                <span class="pill">slug: ${escapeHtml(form.slug)}</span>
-              </div>
-            </div>
-            <span class="small-note">項目 ${fieldCount}件</span>
-          </div>
-          ${form.description ? `<div class="small-note">${escapeHtml(form.description)}</div>` : ''}
-        </button>
-      </article>
-    `;
-  }).join('');
+  root.innerHTML = recentForms.map((form) => `
+    <button type="button" class="recent-form-button ${form.id === adminState.activeFormId ? 'active' : ''}"
+      data-select-form="${form.id}" title="${escapeHtml(form.name)} / ${escapeHtml(getFolderPath(form.folder_id))}">
+      <strong>${escapeHtml(form.name)}</strong>
+      <small>${escapeHtml(getFolderPath(form.folder_id))}</small>
+    </button>
+  `).join('');
 }
 
 function renderWorkspaceHeader(form) {
@@ -242,6 +499,7 @@ function renderWorkspaceHeader(form) {
   description.textContent = form.description || 'フォームの説明は未設定です。';
   meta.innerHTML = `
     <span class="pill">ID: ${escapeHtml(String(form.id))}</span>
+    <span class="pill">${escapeHtml(getFolderPath(form.folder_id))}</span>
     <span class="pill">slug: ${escapeHtml(form.slug)}</span>
     ${createStatusBadge(form.is_active ? 'resolved' : 'on_hold', form.is_active ? '公開中' : '非公開')}
     ${availabilityBadge(form.availability, form.is_active)}
@@ -269,6 +527,7 @@ function renderSelectedFormSidebar(form) {
     <article class="mini-info-card">
       <strong>${escapeHtml(form.name)}</strong>
       <div class="meta-line">
+        <span class="pill">${escapeHtml(getFolderPath(form.folder_id))}</span>
         <span class="pill">slug: ${escapeHtml(form.slug)}</span>
         <span class="pill">順序 ${escapeHtml(String(form.sort_order ?? 0))}</span>
         ${availabilityBadge(form.availability, form.is_active)}
@@ -305,6 +564,7 @@ function renderOverview(form) {
   } else {
     const infoItems = [
       ['フォーム名', form.name],
+      ['保存先', getFolderPath(form.folder_id)],
       ['slug', form.slug],
       ['公開状態', form.is_active ? '公開中' : '非公開'],
       ['公開期間', formatAvailabilityWindow(availability, settings)],
@@ -380,6 +640,10 @@ function fillEditor(form) {
   editor.elements.name.value = form?.name || '';
   editor.elements.slug.value = form?.slug || '';
   editor.elements.description.value = form?.description || '';
+  if (editor.elements.folder_id) {
+    editor.elements.folder_id.innerHTML = buildFolderOptions(form?.folder_id || null);
+    editor.elements.folder_id.value = form?.folder_id ? String(form.folder_id) : '';
+  }
   editor.elements.is_active.checked = form ? Boolean(form.is_active) : true;
   editor.elements.sort_order.value = form?.sort_order ?? 0;
   editor.elements.enable_date_field.checked = form?.settings?.enable_date_field ?? true;
@@ -666,6 +930,20 @@ async function loadForms(selectId = null) {
 
   clearMessage(message);
   adminState.forms = result.forms || [];
+  adminState.folders = result.folders || [];
+  const validFolderIds = new Set(adminState.folders.map((folder) => folder.id));
+  adminState.expandedFolderIds = new Set(
+    Array.from(adminState.expandedFolderIds).filter((id) => id === 0 || validFolderIds.has(id))
+  );
+  if (!adminState.folderExpansionInitialized) {
+    if (adminState.expandedFolderIds.size === 0) {
+      adminState.expandedFolderIds.add(0);
+      adminState.folders.filter((folder) => !folder.parent_id).forEach((folder) => {
+        adminState.expandedFolderIds.add(folder.id);
+      });
+    }
+    adminState.folderExpansionInitialized = true;
+  }
   renderOverallStats();
 
   if (selectId !== null) {
@@ -674,9 +952,12 @@ async function loadForms(selectId = null) {
     adminState.activeFormId = adminState.forms[0]?.id || 0;
   }
 
+  const activeForm = getActiveForm();
+  if (activeForm) expandFolderPath(activeForm.folder_id);
+  refreshFolderSelects();
   renderFormList();
 
-  const current = getActiveForm();
+  const current = activeForm;
   renderWorkspaceHeader(current);
   renderSelectedFormSidebar(current);
   renderOverview(current);
@@ -684,6 +965,7 @@ async function loadForms(selectId = null) {
 
   if (current) {
     setWorkspaceButtonsDisabled(false);
+    switchWorkspaceTab(adminState.activeWorkspaceTab);
     await loadEntries(current.id, null, true);
   } else {
     adminState.entriesResult = null;
@@ -692,6 +974,27 @@ async function loadForms(selectId = null) {
     renderEntrySummaryBlock({ total_count: 0, filtered_count: 0, status_counts: [] });
     renderEntryList([]);
   }
+}
+
+async function selectFormById(formId) {
+  const nextId = Number(formId);
+  const form = adminState.forms.find((item) => item.id === nextId) || null;
+  if (!form) return;
+
+  adminState.activeFormId = nextId;
+  adminState.entriesResult = null;
+  adminState.activeEntryId = 0;
+  adminState.activeEntryHistory = null;
+  rememberFormUsage(nextId);
+  expandFolderPath(form.folder_id);
+  renderFormList();
+  renderWorkspaceHeader(form);
+  renderSelectedFormSidebar(form);
+  renderOverview(form);
+  fillEditor(form);
+  // activeWorkspaceTabは変更せず、フォームだけを差し替える。
+  switchWorkspaceTab(adminState.activeWorkspaceTab);
+  await loadEntries(form.id, null, false);
 }
 
 async function loadEntries(formId, filters = null, preserveActiveEntry = true) {
@@ -849,7 +1152,7 @@ async function deleteCurrentEntry(entryId) {
   await loadEntries(adminState.activeFormId, getEntryFilterValues(), false);
 }
 
-function startNewFormMode() {
+function startNewFormMode(seed = {}) {
   adminState.activeFormId = 0;
   adminState.entriesResult = null;
   adminState.activeEntryId = 0;
@@ -859,9 +1162,206 @@ function startNewFormMode() {
   renderSelectedFormSidebar(null);
   renderOverview(null);
   fillEditor(null);
+  const editor = document.getElementById('form-editor');
+  if (editor) {
+    editor.elements.name.value = seed.name || '';
+    if (editor.elements.folder_id) editor.elements.folder_id.value = seed.folderId ? String(seed.folderId) : '';
+  }
   renderEntrySummaryBlock({ total_count: 0, filtered_count: 0, status_counts: [] });
   renderEntryList([]);
   switchWorkspaceTab('settings');
+  editor?.elements?.name?.focus();
+}
+
+function openAdminDialog(dialogId) {
+  const dialog = document.getElementById(dialogId);
+  if (!dialog) return;
+  if (typeof dialog.showModal === 'function') {
+    if (!dialog.open) dialog.showModal();
+  } else {
+    dialog.setAttribute('open', '');
+  }
+}
+
+function closeAdminDialog(dialogId) {
+  const dialog = document.getElementById(dialogId);
+  if (!dialog) return;
+  if (typeof dialog.close === 'function' && dialog.open) {
+    dialog.close();
+  } else {
+    dialog.removeAttribute('open');
+  }
+}
+
+function syncNewFormCreationMode() {
+  const form = document.getElementById('new-form-dialog-form');
+  const copyField = document.getElementById('copy-source-field');
+  const submitButton = document.getElementById('create-form-confirm-button');
+  if (!form || !copyField || !submitButton) return;
+  const mode = form.elements.creation_mode.value;
+  copyField.classList.toggle('hidden', mode !== 'copy');
+  submitButton.textContent = mode === 'copy' ? '非公開でコピー' : '作成を開始';
+}
+
+function openNewFormDialog() {
+  const form = document.getElementById('new-form-dialog-form');
+  if (!form) return;
+  form.reset();
+  clearMessage(document.getElementById('new-form-dialog-message'));
+
+  const activeForm = getActiveForm();
+  const folderSelect = form.elements.folder_id;
+  folderSelect.innerHTML = buildFolderOptions(activeForm?.folder_id || null);
+  folderSelect.value = activeForm?.folder_id ? String(activeForm.folder_id) : '';
+
+  const sourceSelect = form.elements.source_form_id;
+  sourceSelect.innerHTML = adminState.forms.map((item) => (
+    `<option value="${item.id}">${escapeHtml(getFolderPath(item.folder_id) + ' / ' + item.name)}</option>`
+  )).join('');
+  if (activeForm) sourceSelect.value = String(activeForm.id);
+
+  const copyModeInput = form.querySelector('input[name="creation_mode"][value="copy"]');
+  if (copyModeInput) copyModeInput.disabled = adminState.forms.length === 0;
+  syncNewFormCreationMode();
+  openAdminDialog('new-form-dialog');
+  window.setTimeout(() => form.elements.name.focus(), 0);
+}
+
+async function submitNewFormDialog(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const message = document.getElementById('new-form-dialog-message');
+  const name = form.elements.name.value.trim();
+  const folderId = Number(form.elements.folder_id.value || 0) || null;
+  if (!name) {
+    setMessage(message, 'フォーム名を入力してください。', 'error');
+    return;
+  }
+
+  if (form.elements.creation_mode.value === 'blank') {
+    closeAdminDialog('new-form-dialog');
+    startNewFormMode({ name, folderId });
+    showFlashMessage('基本設定を確認し、「設定を保存」で作成を完了してください。', 'info', {
+      title: '新しいフォームを編集中',
+      duration: 4200,
+    });
+    return;
+  }
+
+  const sourceFormId = Number(form.elements.source_form_id.value || 0);
+  if (!sourceFormId) {
+    setMessage(message, 'コピー元のフォームを選択してください。', 'error');
+    return;
+  }
+
+  const submitButton = document.getElementById('create-form-confirm-button');
+  submitButton.disabled = true;
+  setMessage(message, 'フォームをコピーしています...', 'info');
+  try {
+    const result = await apiPost('api/admin_forms.php', {
+      action: 'copy',
+      source_form_id: sourceFormId,
+      name,
+      folder_id: folderId,
+    });
+    if (!result.ok) {
+      setMessage(message, result.message || 'フォームのコピーに失敗しました。', 'error');
+      return;
+    }
+    adminState.forms = result.forms || [];
+    adminState.folders = result.folders || adminState.folders;
+    refreshFolderSelects();
+    closeAdminDialog('new-form-dialog');
+    adminState.activeWorkspaceTab = 'settings';
+    rememberFormUsage(result.form.id);
+    await selectFormById(result.form.id);
+    renderOverallStats();
+    showFlashMessage(result.message || 'フォームをコピーしました。', 'success', {
+      title: 'コピーを作成しました',
+      duration: 4800,
+    });
+  } catch (error) {
+    setMessage(message, error?.message || '通信に失敗しました。時間をおいて再度お試しください。', 'error');
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+function openFolderDialog(folder = null) {
+  const form = document.getElementById('folder-editor');
+  if (!form) return;
+  form.reset();
+  clearMessage(document.getElementById('folder-dialog-message'));
+  form.elements.id.value = folder?.id || 0;
+  form.elements.name.value = folder?.name || '';
+  form.elements.sort_order.value = folder?.sort_order ?? 0;
+
+  const excludedIds = folder ? getFolderDescendantIds(folder.id) : new Set();
+  const parentSelect = form.elements.parent_id;
+  parentSelect.innerHTML = buildFolderOptions(folder?.parent_id || null, '最上位', excludedIds);
+  parentSelect.value = folder?.parent_id ? String(folder.parent_id) : '';
+
+  document.getElementById('folder-dialog-title').textContent = folder ? 'フォルダーを編集' : 'フォルダーを作成';
+  document.getElementById('delete-folder-button').classList.toggle('hidden', !folder);
+  openAdminDialog('folder-dialog');
+  window.setTimeout(() => form.elements.name.focus(), 0);
+}
+
+async function submitFolderDialog(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const message = document.getElementById('folder-dialog-message');
+  const folder = {
+    id: Number(form.elements.id.value || 0),
+    name: form.elements.name.value.trim(),
+    parent_id: Number(form.elements.parent_id.value || 0) || null,
+    sort_order: Number(form.elements.sort_order.value || 0),
+  };
+  setMessage(message, '保存しています...', 'info');
+  try {
+    const result = await apiPost('api/admin_form_folders.php', { action: 'save', folder });
+    if (!result.ok) {
+      setMessage(message, result.message || 'フォルダーを保存できませんでした。', 'error');
+      return;
+    }
+    adminState.folders = result.folders || [];
+    adminState.expandedFolderIds.add(result.folder.id);
+    if (result.folder.parent_id) adminState.expandedFolderIds.add(result.folder.parent_id);
+    persistExpandedFolders();
+    refreshFolderSelects();
+    renderFormList();
+    closeAdminDialog('folder-dialog');
+    showFlashMessage(result.message || 'フォルダーを保存しました。', 'success', { title: 'フォルダーを更新しました' });
+  } catch (error) {
+    setMessage(message, error?.message || '通信に失敗しました。時間をおいて再度お試しください。', 'error');
+  }
+}
+
+async function deleteFolderFromDialog() {
+  const form = document.getElementById('folder-editor');
+  const folderId = Number(form?.elements?.id?.value || 0);
+  const folder = getFolder(folderId);
+  if (!folder) return;
+  if (!window.confirm(`空のフォルダー「${folder.name}」を削除します。よろしいですか。`)) return;
+
+  const message = document.getElementById('folder-dialog-message');
+  setMessage(message, '削除しています...', 'info');
+  try {
+    const result = await apiPost('api/admin_form_folders.php', { action: 'delete', folder_id: folderId });
+    if (!result.ok) {
+      setMessage(message, result.message || 'フォルダーを削除できませんでした。', 'error');
+      return;
+    }
+    adminState.folders = result.folders || [];
+    adminState.expandedFolderIds.delete(folderId);
+    persistExpandedFolders();
+    refreshFolderSelects();
+    renderFormList();
+    closeAdminDialog('folder-dialog');
+    showFlashMessage(result.message || 'フォルダーを削除しました。', 'success', { title: 'フォルダーを削除しました' });
+  } catch (error) {
+    setMessage(message, error?.message || '通信に失敗しました。時間をおいて再度お試しください。', 'error');
+  }
 }
 
 function buildCsvUrl() {
@@ -990,7 +1490,30 @@ function bindEvents() {
     renderFormList();
   });
 
-  document.getElementById('new-form-button')?.addEventListener('click', startNewFormMode);
+  document.getElementById('new-form-button')?.addEventListener('click', openNewFormDialog);
+  document.getElementById('new-folder-button')?.addEventListener('click', () => openFolderDialog());
+  document.getElementById('expand-all-folders-button')?.addEventListener('click', () => {
+    const allFolderIds = [0, ...adminState.folders.map((folder) => folder.id)];
+    const allExpanded = allFolderIds.every((id) => adminState.expandedFolderIds.has(id));
+    adminState.expandedFolderIds = allExpanded ? new Set() : new Set(allFolderIds);
+    persistExpandedFolders();
+    renderFormList();
+  });
+
+  document.querySelectorAll('[data-close-dialog]').forEach((button) => {
+    button.addEventListener('click', () => closeAdminDialog(button.dataset.closeDialog));
+  });
+  document.querySelectorAll('.admin-dialog').forEach((dialog) => {
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) closeAdminDialog(dialog.id);
+    });
+  });
+  document.getElementById('new-form-dialog-form')?.addEventListener('change', (event) => {
+    if (event.target.name === 'creation_mode') syncNewFormCreationMode();
+  });
+  document.getElementById('new-form-dialog-form')?.addEventListener('submit', submitNewFormDialog);
+  document.getElementById('folder-editor')?.addEventListener('submit', submitFolderDialog);
+  document.getElementById('delete-folder-button')?.addEventListener('click', deleteFolderFromDialog);
 
   document.getElementById('delete-form-button')?.addEventListener('click', async () => {
     const form = getActiveForm();
@@ -1014,18 +1537,15 @@ function bindEvents() {
     }
 
     adminState.forms = result.forms || [];
+    adminState.folders = result.folders || adminState.folders;
+    adminState.recentFormIds = adminState.recentFormIds.filter((id) => id !== form.id);
+    writeNumberList(RECENT_FORMS_STORAGE_KEY, adminState.recentFormIds);
     adminState.activeFormId = adminState.forms[0]?.id || 0;
     renderOverallStats();
-    renderFormList();
+    refreshFolderSelects();
 
     if (adminState.activeFormId > 0) {
-      const nextForm = getActiveForm();
-      renderWorkspaceHeader(nextForm);
-      renderSelectedFormSidebar(nextForm);
-      renderOverview(nextForm);
-      fillEditor(nextForm);
-      switchWorkspaceTab('overview');
-      await loadEntries(adminState.activeFormId, null, false);
+      await selectFormById(adminState.activeFormId);
     } else {
       startNewFormMode();
     }
@@ -1045,20 +1565,32 @@ function bindEvents() {
   });
 
   document.getElementById('form-list')?.addEventListener('click', async (event) => {
+    const editButton = event.target.closest('[data-edit-folder]');
+    if (editButton) {
+      openFolderDialog(getFolder(Number(editButton.dataset.editFolder)));
+      return;
+    }
+    const toggleButton = event.target.closest('[data-toggle-folder]');
+    if (toggleButton) {
+      const folderId = Number(toggleButton.dataset.toggleFolder);
+      if (adminState.expandedFolderIds.has(folderId)) {
+        adminState.expandedFolderIds.delete(folderId);
+      } else {
+        adminState.expandedFolderIds.add(folderId);
+      }
+      persistExpandedFolders();
+      renderFormList();
+      return;
+    }
     const button = event.target.closest('[data-select-form]');
     if (!button) return;
-    adminState.activeFormId = Number(button.dataset.selectForm);
-    adminState.activeEntryId = 0;
-    renderFormList();
-    const form = getActiveForm();
-    renderWorkspaceHeader(form);
-    renderSelectedFormSidebar(form);
-    renderOverview(form);
-    fillEditor(form);
-    if (form) {
-      switchWorkspaceTab('overview');
-      await loadEntries(form.id, null, false);
-    }
+    await selectFormById(button.dataset.selectForm);
+  });
+
+  document.getElementById('recent-form-list')?.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-select-form]');
+    if (!button) return;
+    await selectFormById(button.dataset.selectForm);
   });
 
   document.getElementById('refresh-entries-button')?.addEventListener('click', async () => {
@@ -1158,6 +1690,7 @@ function bindEvents() {
         name: form.elements.name.value,
         slug: form.elements.slug.value,
         description: form.elements.description.value,
+        folder_id: Number(form.elements.folder_id?.value || 0) || null,
         is_active: form.elements.is_active.checked,
         sort_order: Number(form.elements.sort_order.value || 0),
         enable_date_field: form.elements.enable_date_field.checked,
@@ -1193,7 +1726,11 @@ function bindEvents() {
     setMessage(message, result.message || '保存しました。', 'success');
     showFlashMessage(result.message || '保存しました。', 'success', { title: 'フォーム設定を更新しました', duration: 3200 });
     adminState.forms = result.forms || [];
+    adminState.folders = result.folders || adminState.folders;
     adminState.activeFormId = result.form?.id || adminState.activeFormId;
+    rememberFormUsage(adminState.activeFormId);
+    expandFolderPath(result.form?.folder_id);
+    refreshFolderSelects();
     renderOverallStats();
     renderFormList();
     renderWorkspaceHeader(result.form || getActiveForm());
@@ -1209,7 +1746,7 @@ function bindEvents() {
 function initAdminPage() {
   populateStatusFilter();
   bindEvents();
-  switchWorkspaceTab('overview');
+  switchWorkspaceTab(adminState.activeWorkspaceTab);
   loadForms();
 }
 

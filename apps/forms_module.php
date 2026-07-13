@@ -240,8 +240,23 @@ function forms_ensure_schema(): void
     $pdo = forms_db();
 
     $pdo->exec(<<<SQL
+CREATE TABLE IF NOT EXISTS managed_form_folders (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    parent_id BIGINT UNSIGNED DEFAULT NULL,
+    name VARCHAR(120) NOT NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_managed_form_folders_parent_sort (parent_id, sort_order, name, id),
+    CONSTRAINT fk_managed_form_folders_parent FOREIGN KEY (parent_id) REFERENCES managed_form_folders (id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SQL);
+
+    $pdo->exec(<<<SQL
 CREATE TABLE IF NOT EXISTS managed_forms (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    folder_id BIGINT UNSIGNED DEFAULT NULL,
     slug VARCHAR(120) NOT NULL,
     name VARCHAR(150) NOT NULL,
     description TEXT DEFAULT NULL,
@@ -252,7 +267,9 @@ CREATE TABLE IF NOT EXISTS managed_forms (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uq_managed_forms_slug (slug),
-    KEY idx_managed_forms_active_sort (is_active, sort_order, id)
+    KEY idx_managed_forms_active_sort (is_active, sort_order, id),
+    KEY idx_managed_forms_folder_sort (folder_id, sort_order, id),
+    CONSTRAINT fk_managed_forms_folder FOREIGN KEY (folder_id) REFERENCES managed_form_folders (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SQL);
 
@@ -424,6 +441,14 @@ CREATE TABLE IF NOT EXISTS forms_admin_audit_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SQL);
 
+    forms_ensure_column($pdo, 'managed_forms', 'folder_id', 'BIGINT UNSIGNED DEFAULT NULL');
+    forms_ensure_index($pdo, 'managed_forms', 'idx_managed_forms_folder_sort', '`folder_id`, `sort_order`, `id`');
+    forms_ensure_foreign_key(
+        $pdo,
+        'managed_forms',
+        'fk_managed_forms_folder',
+        'FOREIGN KEY (`folder_id`) REFERENCES `managed_form_folders` (`id`) ON DELETE SET NULL'
+    );
     forms_ensure_column($pdo, 'managed_form_submissions', 'status', "VARCHAR(32) NOT NULL DEFAULT 'new'");
     forms_ensure_column($pdo, 'managed_form_submissions', 'admin_note', 'TEXT DEFAULT NULL');
     forms_ensure_column($pdo, 'managed_form_submissions', 'status_updated_at', 'DATETIME DEFAULT NULL');
@@ -447,6 +472,42 @@ function forms_ensure_column(PDO $pdo, string $table, string $column, string $de
         return;
     }
     $pdo->exec(sprintf('ALTER TABLE `%s` ADD COLUMN `%s` %s', str_replace('`', '``', $table), str_replace('`', '``', $column), $definition));
+}
+
+function forms_ensure_index(PDO $pdo, string $table, string $index, string $columnsSql): void
+{
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND INDEX_NAME = :index_name');
+    $stmt->execute([
+        ':table_name' => $table,
+        ':index_name' => $index,
+    ]);
+    if ((int)$stmt->fetchColumn() > 0) {
+        return;
+    }
+    $pdo->exec(sprintf(
+        'ALTER TABLE `%s` ADD INDEX `%s` (%s)',
+        str_replace('`', '``', $table),
+        str_replace('`', '``', $index),
+        $columnsSql
+    ));
+}
+
+function forms_ensure_foreign_key(PDO $pdo, string $table, string $constraint, string $definition): void
+{
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND CONSTRAINT_NAME = :constraint_name AND CONSTRAINT_TYPE = 'FOREIGN KEY'");
+    $stmt->execute([
+        ':table_name' => $table,
+        ':constraint_name' => $constraint,
+    ]);
+    if ((int)$stmt->fetchColumn() > 0) {
+        return;
+    }
+    $pdo->exec(sprintf(
+        'ALTER TABLE `%s` ADD CONSTRAINT `%s` %s',
+        str_replace('`', '``', $table),
+        str_replace('`', '``', $constraint),
+        $definition
+    ));
 }
 
 function forms_client_ip(): string
@@ -641,10 +702,159 @@ function forms_normalize_organization(string $value): string
     return preg_replace('/\s+/u', ' ', $value) ?? $value;
 }
 
+function forms_build_folder_record(array $row): array
+{
+    return [
+        'id' => (int)$row['id'],
+        'parent_id' => isset($row['parent_id']) ? (int)$row['parent_id'] : null,
+        'name' => (string)$row['name'],
+        'sort_order' => (int)$row['sort_order'],
+        'form_count' => (int)($row['form_count'] ?? 0),
+        'created_at' => (string)($row['created_at'] ?? ''),
+        'updated_at' => (string)($row['updated_at'] ?? ''),
+    ];
+}
+
+function forms_fetch_folders(): array
+{
+    forms_bootstrap();
+    $rows = forms_db()->query(
+        'SELECT f.*, (SELECT COUNT(*) FROM managed_forms m WHERE m.folder_id = f.id) AS form_count '
+        . 'FROM managed_form_folders f '
+        . 'ORDER BY f.sort_order ASC, f.name ASC, f.id ASC'
+    )->fetchAll();
+    return array_map('forms_build_folder_record', $rows ?: []);
+}
+
+function forms_resolve_folder_id(PDO $pdo, mixed $value): ?int
+{
+    $folderId = (int)$value;
+    if ($folderId < 1) {
+        return null;
+    }
+    $stmt = $pdo->prepare('SELECT id FROM managed_form_folders WHERE id = :id LIMIT 1');
+    $stmt->execute([':id' => $folderId]);
+    if (!$stmt->fetchColumn()) {
+        throw new InvalidArgumentException('指定されたフォルダーが見つかりません。');
+    }
+    return $folderId;
+}
+
+function forms_save_folder(array $folderData): array
+{
+    forms_bootstrap();
+    $pdo = forms_db();
+    $id = (int)($folderData['id'] ?? 0);
+    $name = trim((string)($folderData['name'] ?? ''));
+    if ($name === '') {
+        throw new InvalidArgumentException('フォルダー名を入力してください。');
+    }
+    if (mb_strlen($name, 'UTF-8') > 120) {
+        throw new InvalidArgumentException('フォルダー名は120文字以内で入力してください。');
+    }
+
+    $parentId = forms_resolve_folder_id($pdo, $folderData['parent_id'] ?? null);
+    if ($id > 0 && $parentId === $id) {
+        throw new InvalidArgumentException('フォルダー自身を親にはできません。');
+    }
+
+    if ($id > 0 && $parentId !== null) {
+        $cursor = $parentId;
+        $checked = [];
+        $parentStmt = $pdo->prepare('SELECT parent_id FROM managed_form_folders WHERE id = :id LIMIT 1');
+        while ($cursor !== null && $cursor > 0) {
+            if ($cursor === $id) {
+                throw new InvalidArgumentException('子フォルダーの下へ移動することはできません。');
+            }
+            if (isset($checked[$cursor])) {
+                throw new RuntimeException('フォルダー階層に循環参照があります。');
+            }
+            $checked[$cursor] = true;
+            $parentStmt->execute([':id' => $cursor]);
+            $next = $parentStmt->fetchColumn();
+            $cursor = $next !== false && $next !== null ? (int)$next : null;
+        }
+    }
+
+    $duplicateSql = 'SELECT id FROM managed_form_folders WHERE name = :name '
+        . 'AND ((parent_id = :parent_id) OR (parent_id IS NULL AND :parent_is_null = 1))';
+    $duplicateParams = [
+        ':name' => $name,
+        ':parent_id' => $parentId,
+        ':parent_is_null' => $parentId === null ? 1 : 0,
+    ];
+    if ($id > 0) {
+        $duplicateSql .= ' AND id != :id';
+        $duplicateParams[':id'] = $id;
+    }
+    $duplicateStmt = $pdo->prepare($duplicateSql . ' LIMIT 1');
+    $duplicateStmt->execute($duplicateParams);
+    if ($duplicateStmt->fetchColumn()) {
+        throw new InvalidArgumentException('同じ階層に同名のフォルダーがあります。');
+    }
+
+    $params = [
+        ':parent_id' => $parentId,
+        ':name' => $name,
+        ':sort_order' => (int)($folderData['sort_order'] ?? 0),
+    ];
+    if ($id > 0) {
+        $existsStmt = $pdo->prepare('SELECT id FROM managed_form_folders WHERE id = :id LIMIT 1');
+        $existsStmt->execute([':id' => $id]);
+        if (!$existsStmt->fetchColumn()) {
+            throw new InvalidArgumentException('編集対象のフォルダーが見つかりません。');
+        }
+        $params[':id'] = $id;
+        $stmt = $pdo->prepare('UPDATE managed_form_folders SET parent_id = :parent_id, name = :name, sort_order = :sort_order WHERE id = :id');
+        $stmt->execute($params);
+        $folderId = $id;
+    } else {
+        $stmt = $pdo->prepare('INSERT INTO managed_form_folders (parent_id, name, sort_order) VALUES (:parent_id, :name, :sort_order)');
+        $stmt->execute($params);
+        $folderId = (int)$pdo->lastInsertId();
+    }
+
+    $loadStmt = $pdo->prepare(
+        'SELECT f.*, (SELECT COUNT(*) FROM managed_forms m WHERE m.folder_id = f.id) AS form_count '
+        . 'FROM managed_form_folders f WHERE f.id = :id LIMIT 1'
+    );
+    $loadStmt->execute([':id' => $folderId]);
+    $row = $loadStmt->fetch();
+    return $row ? forms_build_folder_record($row) : [];
+}
+
+function forms_delete_folder(int $folderId): void
+{
+    forms_bootstrap();
+    if ($folderId < 1) {
+        throw new InvalidArgumentException('削除対象のフォルダーが不正です。');
+    }
+    $pdo = forms_db();
+    $countStmt = $pdo->prepare(
+        'SELECT '
+        . '(SELECT COUNT(*) FROM managed_form_folders WHERE parent_id = :child_folder_id) AS child_count, '
+        . '(SELECT COUNT(*) FROM managed_forms WHERE folder_id = :form_folder_id) AS form_count'
+    );
+    $countStmt->execute([
+        ':child_folder_id' => $folderId,
+        ':form_folder_id' => $folderId,
+    ]);
+    $counts = $countStmt->fetch() ?: [];
+    if ((int)($counts['child_count'] ?? 0) > 0 || (int)($counts['form_count'] ?? 0) > 0) {
+        throw new InvalidArgumentException('フォームまたは子フォルダーが入っているため削除できません。先に移動してください。');
+    }
+    $deleteStmt = $pdo->prepare('DELETE FROM managed_form_folders WHERE id = :id');
+    $deleteStmt->execute([':id' => $folderId]);
+    if ($deleteStmt->rowCount() < 1) {
+        throw new InvalidArgumentException('削除対象のフォルダーが見つかりません。');
+    }
+}
+
 function forms_build_form_record(array $row): array
 {
     return [
         'id' => (int)$row['id'],
+        'folder_id' => isset($row['folder_id']) ? (int)$row['folder_id'] : null,
         'slug' => (string)$row['slug'],
         'name' => (string)$row['name'],
         'description' => (string)($row['description'] ?? ''),
@@ -820,6 +1030,10 @@ function forms_save_form(array $formData, array $fields): array
     if ($name === '') {
         throw new InvalidArgumentException('フォーム名を入力してください。');
     }
+    if (mb_strlen($name, 'UTF-8') > 150) {
+        throw new InvalidArgumentException('フォーム名は150文字以内で入力してください。');
+    }
+    $folderId = forms_resolve_folder_id($pdo, $formData['folder_id'] ?? null);
 
     $settings = forms_default_settings();
     if ($id > 0) {
@@ -889,6 +1103,7 @@ function forms_save_form(array $formData, array $fields): array
     $slug = forms_make_unique_slug($pdo, $slugSource, $id > 0 ? $id : null);
 
     $payload = [
+        ':folder_id' => $folderId,
         ':slug' => $slug,
         ':name' => $name,
         ':description' => trim((string)($formData['description'] ?? '')),
@@ -900,7 +1115,7 @@ function forms_save_form(array $formData, array $fields): array
     $pdo->beginTransaction();
     try {
         if ($id > 0) {
-            $stmt = $pdo->prepare('UPDATE managed_forms SET slug = :slug, name = :name, description = :description, is_active = :is_active, sort_order = :sort_order, settings_json = :settings_json WHERE id = :id');
+            $stmt = $pdo->prepare('UPDATE managed_forms SET folder_id = :folder_id, slug = :slug, name = :name, description = :description, is_active = :is_active, sort_order = :sort_order, settings_json = :settings_json WHERE id = :id');
             $payload[':id'] = $id;
             $stmt->execute($payload);
             $formId = $id;
@@ -908,7 +1123,7 @@ function forms_save_form(array $formData, array $fields): array
             $deleteStmt = $pdo->prepare('DELETE FROM managed_form_fields WHERE form_id = :form_id');
             $deleteStmt->execute([':form_id' => $formId]);
         } else {
-            $stmt = $pdo->prepare('INSERT INTO managed_forms (slug, name, description, is_active, sort_order, settings_json) VALUES (:slug, :name, :description, :is_active, :sort_order, :settings_json)');
+            $stmt = $pdo->prepare('INSERT INTO managed_forms (folder_id, slug, name, description, is_active, sort_order, settings_json) VALUES (:folder_id, :slug, :name, :description, :is_active, :sort_order, :settings_json)');
             $stmt->execute($payload);
             $formId = (int)$pdo->lastInsertId();
         }
@@ -938,6 +1153,69 @@ function forms_save_form(array $formData, array $fields): array
     }
 
     return forms_load_form($formId) ?? [];
+}
+
+function forms_duplicate_form(int $sourceFormId, array $overrides = []): array
+{
+    $source = forms_load_form($sourceFormId);
+    if (!$source) {
+        throw new InvalidArgumentException('コピー元のフォームが見つかりません。');
+    }
+
+    $sourceSettings = is_array($source['settings'] ?? null) ? $source['settings'] : forms_default_settings();
+    $name = trim((string)($overrides['name'] ?? ''));
+    if ($name === '') {
+        $name = (string)$source['name'] . '（コピー）';
+    }
+
+    $formData = [
+        'id' => 0,
+        'folder_id' => array_key_exists('folder_id', $overrides)
+            ? $overrides['folder_id']
+            : ($source['folder_id'] ?? null),
+        'name' => $name,
+        'slug' => trim((string)($overrides['slug'] ?? '')) ?: (string)$source['slug'] . '-copy',
+        'description' => (string)($source['description'] ?? ''),
+        // コピー直後の意図しない公開を防ぐため、必ず非公開で作成する。
+        'is_active' => false,
+        'sort_order' => (int)($source['sort_order'] ?? 0),
+        'enable_date_field' => (bool)($sourceSettings['enable_date_field'] ?? true),
+        'date_required' => (bool)($sourceSettings['date_required'] ?? false),
+        'date_label' => (string)($sourceSettings['date_label'] ?? '希望日'),
+        'allow_file_upload' => (bool)($sourceSettings['allow_file_upload'] ?? false),
+        'file_required' => (bool)($sourceSettings['file_required'] ?? false),
+        'file_label' => (string)($sourceSettings['file_label'] ?? '添付ファイル'),
+        'allowed_extensions' => (string)($sourceSettings['allowed_extensions'] ?? forms_default_settings()['allowed_extensions']),
+        'max_upload_size_mb' => (int)($sourceSettings['max_upload_size_mb'] ?? 5),
+        'max_upload_files' => (int)($sourceSettings['max_upload_files'] ?? 1),
+        'distribution_enabled' => (bool)($sourceSettings['distribution_enabled'] ?? false),
+        'distribution_title' => (string)($sourceSettings['distribution_title'] ?? ''),
+        'distribution_body' => (string)($sourceSettings['distribution_body'] ?? ''),
+        'distribution_download_label' => (string)($sourceSettings['distribution_download_label'] ?? '資料をダウンロード'),
+        'public_start_date' => (string)($sourceSettings['public_start_date'] ?? ''),
+        'public_start_time' => (string)($sourceSettings['public_start_time'] ?? ''),
+        'public_end_date' => (string)($sourceSettings['public_end_date'] ?? ''),
+        'public_end_time' => (string)($sourceSettings['public_end_time'] ?? ''),
+        'submit_button_label' => (string)($sourceSettings['submit_button_label'] ?? '送信する'),
+        'completion_message' => (string)($sourceSettings['completion_message'] ?? '送信を受け付けました。'),
+    ];
+
+    $fields = array_map(static function (array $field): array {
+        return [
+            'field_label' => (string)($field['field_label'] ?? ''),
+            'field_key' => (string)($field['field_key'] ?? ''),
+            'field_type' => (string)($field['field_type'] ?? 'text'),
+            'placeholder' => (string)($field['placeholder'] ?? ''),
+            'help_text' => (string)($field['help_text'] ?? ''),
+            'options_text' => implode("\n", (array)($field['options'] ?? [])),
+            'default_value' => (string)($field['default_value'] ?? ''),
+            'is_required' => (bool)($field['is_required'] ?? false),
+            'is_enabled' => (bool)($field['is_enabled'] ?? true),
+        ];
+    }, (array)($source['fields'] ?? []));
+
+    // 回答・履歴・提出ファイル・配布ファイル本体は意図的にコピーしない。
+    return forms_save_form($formData, $fields);
 }
 
 function forms_delete_form(int $formId): void

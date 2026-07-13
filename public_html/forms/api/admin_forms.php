@@ -7,6 +7,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     json_response([
         'ok' => true,
         'forms' => forms_fetch_forms(false),
+        'folders' => forms_fetch_folders(),
     ]);
 }
 
@@ -40,6 +41,40 @@ if ($action === 'delete') {
         'message' => 'フォームを削除しました。',
         'deleted_form_id' => $formId,
         'forms' => forms_fetch_forms(false),
+        'folders' => forms_fetch_folders(),
+    ]);
+}
+
+if ($action === 'copy') {
+    $sourceFormId = (int)($data['source_form_id'] ?? 0);
+    if ($sourceFormId < 1) {
+        json_response(['ok' => false, 'message' => 'コピー元のフォームを選択してください。'], 422);
+    }
+
+    try {
+        $form = forms_duplicate_form($sourceFormId, [
+            'name' => (string)($data['name'] ?? ''),
+            'slug' => (string)($data['slug'] ?? ''),
+            'folder_id' => $data['folder_id'] ?? null,
+        ]);
+        forms_admin_audit_log('form.copy', 'managed_form', (int)($form['id'] ?? 0), [
+            'source_form_id' => $sourceFormId,
+            'slug' => (string)($form['slug'] ?? ''),
+            'name' => (string)($form['name'] ?? ''),
+        ], $actor);
+    } catch (InvalidArgumentException $e) {
+        json_response(['ok' => false, 'message' => $e->getMessage()], 422);
+    } catch (Throwable $e) {
+        error_log('[forms admin_forms copy] ' . (string)$e);
+        json_response(['ok' => false, 'message' => 'フォームのコピーに失敗しました。時間をおいて再試行してください。'], 500);
+    }
+
+    json_response([
+        'ok' => true,
+        'message' => 'フォームを非公開でコピーしました。内容を確認してから公開してください。',
+        'form' => $form,
+        'forms' => forms_fetch_forms(false),
+        'folders' => forms_fetch_folders(),
     ]);
 }
 
@@ -66,4 +101,5 @@ json_response([
     'message' => 'フォームを保存しました。',
     'form' => $form,
     'forms' => forms_fetch_forms(false),
+    'folders' => forms_fetch_folders(),
 ]);
