@@ -44,9 +44,9 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
       'csrfToken' => $csrfToken,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
   </script>
-  <link rel="stylesheet" href="./assets/common/tokens.css?v=20260624c">
+  <link rel="stylesheet" href="./assets/common/tokens.css?v=20260716a">
   <link rel="stylesheet" href="./css/reservation-admin.css?v=20260715a">
-  <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260624c">
+  <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260716a">
   <link rel="stylesheet" href="./css/reservation-admin-responsive.css?v=20260713">
   <script src="./assets/common/context-menu-guard.js?v=20260713" defer></script>
 </head>

@@ -68,9 +68,9 @@ if ($setupAllowed && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>初回管理者セットアップ</title>
-  <link rel="stylesheet" href="./assets/common/tokens.css?v=20260624c">
+  <link rel="stylesheet" href="./assets/common/tokens.css?v=20260716a">
   <link rel="stylesheet" href="./css/admin-auth.css?v=20260715a">
-  <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260624c">
+  <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260716a">
   <script src="./assets/common/context-menu-guard.js?v=20260713" defer></script>
 </head>
 <body>

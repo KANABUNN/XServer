@@ -426,3 +426,140 @@ textarea:focus {
   .sidebar-link { padding-left: 38px !important; }
   .sidebar-link::after { left: 12px; }
 }
+
+/* ============================================================
+   v6 vivid refresh (append; overrides the rules above)
+   インディゴ基調 + グラデ + ナビ循環配色。最初の admin.book 準拠。
+   ============================================================ */
+
+/* 立体的な多層背景 */
+body {
+  background:
+    radial-gradient(1100px 620px at 100% -6%, rgba(var(--brand-rgb), .10), transparent 60%),
+    radial-gradient(900px 520px at -8% 112%, rgba(15, 118, 110, .06), transparent 58%),
+    var(--bg) !important;
+  background-attachment: fixed;
+}
+
+/* 主CTA: グラデ + ホバーで浮き上がり + 色付き影 */
+.primary,
+.button.primary,
+.btn.primary,
+.auth-primary,
+.submit-btn,
+.result-back-btn,
+.link-button.primary,
+input[type="file"]::file-selector-button {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--brand) 88%, #fff), var(--brand)) !important;
+  border-color: var(--brand) !important;
+  box-shadow: 0 2px 8px rgba(var(--brand-rgb), .28) !important;
+  transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease), filter var(--dur) var(--ease);
+}
+
+.primary:hover,
+.button.primary:hover,
+.btn.primary:hover,
+.auth-primary:hover,
+.submit-btn:hover,
+.result-back-btn:hover,
+.link-button.primary:hover,
+input[type="file"]::file-selector-button:hover {
+  background: linear-gradient(180deg, var(--brand), var(--brand-strong)) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(var(--brand-rgb), .36) !important;
+}
+
+.primary:active,
+.button.primary:active,
+.btn.primary:active,
+.auth-primary:active,
+.submit-btn:active,
+.result-back-btn:active {
+  transform: translateY(0);
+  filter: brightness(.98);
+}
+
+/* danger も同じ質感 */
+.danger,
+.button.danger,
+.btn.danger {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--danger) 90%, #fff), var(--danger)) !important;
+  box-shadow: 0 2px 8px rgba(192, 38, 51, .26) !important;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), filter var(--dur) var(--ease);
+}
+.danger:hover,
+.button.danger:hover,
+.btn.danger:hover { transform: translateY(-1px); filter: brightness(1.04); }
+
+/* secondary/ghost はホバーでわずかに持ち上げ */
+.secondary:hover,
+.button.ghost:hover,
+.btn.ghost:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--line)) !important; transform: translateY(-1px); }
+
+/* 見出しアイブロウをインディゴ→バイオレットのグラデに */
+.page-head > div:first-child::before,
+.section-head > div:first-child::before {
+  width: 40px !important;
+  height: 4px !important;
+  background: linear-gradient(90deg, var(--brand), var(--sec-4)) !important;
+}
+
+/* カードの立体感を強調 + 触れると持ち上がる */
+.card,
+.panel,
+.summary-card,
+.subcard,
+.list-panel,
+.mail-summary-card {
+  box-shadow: var(--shadow-md) !important;
+}
+
+/* テーブル: ゼブラ + 行ホバー強調 */
+tbody tr:nth-child(even) > * { background: color-mix(in srgb, var(--brand) 3%, var(--surface)); }
+tbody tr:hover > * { background: var(--brand-soft) !important; }
+
+/* 入力フォーカスをやや強めに */
+input:focus,
+select:focus,
+textarea:focus {
+  box-shadow: 0 0 0 4px rgba(var(--brand-rgb), .16) !important;
+}
+
+/* ---- サイドバー: 各ナビ項目に循環配色 (識別性・視線誘導) ---- */
+.sidebar { box-shadow: 1px 0 0 rgba(255,255,255,.06) inset, var(--shadow-lg); }
+
+.sidebar-nav .sidebar-link { --sec-dot: var(--sec-1-dot); }
+.sidebar-nav .sidebar-link:nth-child(5n+2) { --sec-dot: var(--sec-2-dot); }
+.sidebar-nav .sidebar-link:nth-child(5n+3) { --sec-dot: var(--sec-3-dot); }
+.sidebar-nav .sidebar-link:nth-child(5n+4) { --sec-dot: var(--sec-4-dot); }
+.sidebar-nav .sidebar-link:nth-child(5n+5) { --sec-dot: var(--sec-5-dot); }
+
+/* アイコンをセクション色で着色 */
+.sidebar-link::after { background: var(--sec-dot, #93C5FD) !important; opacity: .96; }
+
+/* ホバー(非アクティブ)は中立の淡色 */
+.sidebar-link:hover:not(.is-active) {
+  background: rgba(148,163,184,.12) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+
+/* アクティブはセクション色で強調 */
+.sidebar-link.is-active {
+  background: color-mix(in srgb, var(--sec-dot, #818CF8) 20%, transparent) !important;
+  color: #fff !important;
+  border-color: color-mix(in srgb, var(--sec-dot, #818CF8) 45%, transparent) !important;
+}
+.sidebar-link.is-active::before {
+  background: var(--sec-dot, rgba(96,165,250,.72)) !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--sec-dot, #818CF8) 70%, transparent);
+}
+
+/* 汎用 .container は book 側でスコープするため、ここでは触らない */
+
+@media (prefers-reduced-motion: reduce) {
+  .primary, .submit-btn, .danger, .secondary, .btn, .button, .sidebar-link, .card, .panel, input, select, textarea {
+    transition: none !important;
+  }
+}
+

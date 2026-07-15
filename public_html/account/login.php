@@ -41,9 +41,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>アカウント管理ログイン</title>
-    <link rel="stylesheet" href="assets/common/tokens.css?v=20260624c">
+    <link rel="stylesheet" href="assets/common/tokens.css?v=20260716a">
     <link rel="stylesheet" href="assets/css/account.css">
-    <link rel="stylesheet" href="assets/common/fit-sc-skin.css?v=20260624c">
+    <link rel="stylesheet" href="assets/common/fit-sc-skin.css?v=20260716a">
     <link rel="stylesheet" href="assets/css/account-responsive.css?v=20260713">
     <script src="assets/common/context-menu-guard.js?v=20260713" defer></script>
 </head>

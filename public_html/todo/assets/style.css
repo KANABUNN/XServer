@@ -1,19 +1,20 @@
 :root {
-    --bg: #f4f7fb;
+    /* v6: 主操作色を indigo に刷新（共通FIT-SC v6 と整合）。 */
+    --bg: #eaecf6;
     --card: #ffffff;
-    --text: #1a2740;
-    --muted: #6c778c;
-    --border: #dde5f0;
-    --accent: #2759c7;
-    --accent-soft: #e8efff;
-    --success: #197c43;
-    --success-soft: #e7f6ed;
-    --warn: #b96a00;
-    --warn-soft: #fff1dc;
-    --danger: #bb2233;
-    --danger-soft: #fde9ec;
-    --gray-soft: #eef2f7;
-    --shadow: 0 10px 30px rgba(16, 34, 74, 0.08);
+    --text: #1a2033;
+    --muted: #5a6079;
+    --border: #dee3f0;
+    --accent: #4f46e5;
+    --accent-soft: #eef1fe;
+    --success: #1e7a46;
+    --success-soft: #e7f5ec;
+    --warn: #9a6400;
+    --warn-soft: #fff3d6;
+    --danger: #c02633;
+    --danger-soft: #fceaec;
+    --gray-soft: #f5f7fc;
+    --shadow: 0 18px 44px rgba(23, 26, 54, 0.13);
     --radius: 18px;
 }
 

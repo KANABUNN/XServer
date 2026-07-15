@@ -2,23 +2,24 @@
    FIT-SC common design tokens
    primitive -> semantic の2層に整理。各サブシステムはこれを参照する。
 
-   v5: v4再レビュー対応。
-       主操作色は brand blue、差し色は琥珀 #B5722A。
-       差し色は見出しアイブロウと主要KPIに限定する。
+   v6: 鮮やかリフレッシュ。
+       主操作色を indigo (#4F46E5) に刷新し、立体感（グラデ/影）を強化。
+       ナビ各項目に循環配色 (--sec-1..5) を割り当て、識別性・視線誘導を高める。
+       差し色の琥珀 #B5722A は KPI などの少数強調に温存する。
    ============================================================ */
 :root {
   color-scheme: light;
 
-  /* ---- Brand / Primary ---- */
-  --brand:          #1B4FB0;
-  --brand-rgb:      27, 79, 176;
-  --brand-strong:   #15407F;
-  --brand-soft:     #EAF1FB;
+  /* ---- Brand / Primary (indigo) ---- */
+  --brand:          #4F46E5;
+  --brand-rgb:      79, 70, 229;
+  --brand-strong:   #4338CA;
+  --brand-soft:     #EEF1FE;
   --brand-contrast: #FFFFFF;
-  --brand-glow:     rgba(27,79,176,.16);
+  --brand-glow:     rgba(79,70,229,.18);
 
   /* ---- UI Accent / Warm highlight ----
-     主CTAではなく、見出しアイブロウ・主要KPIなど少数箇所の視線誘導に使う。 */
+     主CTAではなく、主要KPI・少数の温かみ強調に使う。 */
   --ui-accent:          #B5722A;
   --ui-accent-rgb:      181, 114, 42;
   --ui-accent-strong:   #7A4A12;
@@ -27,17 +28,24 @@
   --ui-accent-contrast: #FFFFFF;
   --ui-accent-glow:     rgba(181,114,42,.16);
 
+  /* ---- Section palette (ナビ循環配色: indigo/teal/amber/violet/rose) ---- */
+  --sec-1: #4F46E5; --sec-1-soft: #EEF1FE; --sec-1-ink: #3730A3; --sec-1-dot: #818CF8;
+  --sec-2: #0F766E; --sec-2-soft: #E2F4F0; --sec-2-ink: #115E59; --sec-2-dot: #2DD4BF;
+  --sec-3: #C2410C; --sec-3-soft: #FCEEE4; --sec-3-ink: #9A3412; --sec-3-dot: #FB923C;
+  --sec-4: #6D28D9; --sec-4-soft: #F2EAFC; --sec-4-ink: #5B21B6; --sec-4-dot: #A78BFA;
+  --sec-5: #BE123C; --sec-5-soft: #FCE9EE; --sec-5-ink: #9F1239; --sec-5-dot: #FB7185;
+
   /* ---- Neutrals ---- */
-  --bg:             #E9EDF4;
+  --bg:             #EAECF6;
   --surface:        #FFFFFF;
-  --surface-2:      #F6F8FB;
-  --line:           #D4DCE7;
-  --line-strong:    #C0CAD8;
+  --surface-2:      #F5F7FC;
+  --line:           #DEE3F0;
+  --line-strong:    #C6CEE1;
 
   /* ---- Text ---- */
-  --text:           #1A2433;
-  --text-muted:     #5A6675;
-  --text-subtle:    #8794A4;
+  --text:           #1A2033;
+  --text-muted:     #5A6079;
+  --text-subtle:    #8A90A8;
 
   /* ---- Semantic ---- */
   --success:        #1E7A46;
@@ -52,13 +60,13 @@
   --info:           var(--brand);
   --info-soft:      var(--brand-soft);
 
-  /* ---- Sidebar ---- */
-  --sidebar-bg:            linear-gradient(180deg, #15233D 0%, #101B30 100%);
-  --sidebar-text:          rgba(255,255,255,.86);
-  --sidebar-muted:         rgba(255,255,255,.62);
-  --sidebar-link:          rgba(255,255,255,.82);
-  --sidebar-active-bg:     rgba(96,165,250,.16);
-  --sidebar-active-border: rgba(96,165,250,.45);
+  /* ---- Sidebar (dark indigo) ---- */
+  --sidebar-bg:            linear-gradient(190deg, #1C2140 0%, #151935 60%, #0F1124 100%);
+  --sidebar-text:          rgba(255,255,255,.88);
+  --sidebar-muted:         rgba(203,211,236,.66);
+  --sidebar-link:          rgba(226,230,248,.82);
+  --sidebar-active-bg:     rgba(129,140,248,.18);
+  --sidebar-active-border: rgba(129,140,248,.45);
   --sidebar-card-bg:       rgba(255,255,255,.07);
 
   /* ---- Radius ---- */
@@ -68,10 +76,10 @@
   --radius-xl:  22px;
   --radius-pill: 999px;
 
-  /* ---- Elevation ---- */
-  --shadow-sm: 0 1px 2px rgba(20,30,50,.06), 0 1px 1px rgba(20,30,50,.04);
-  --shadow-md: 0 4px 12px rgba(20,30,50,.06), 0 2px 4px rgba(20,30,50,.04);
-  --shadow-lg: 0 12px 28px rgba(20,30,50,.10), 0 4px 10px rgba(20,30,50,.05);
+  /* ---- Elevation (少し深め) ---- */
+  --shadow-sm: 0 1px 2px rgba(23,26,54,.06), 0 1px 1px rgba(23,26,54,.04);
+  --shadow-md: 0 6px 16px rgba(23,26,54,.08), 0 2px 6px rgba(23,26,54,.05);
+  --shadow-lg: 0 18px 44px rgba(23,26,54,.13), 0 6px 14px rgba(23,26,54,.07);
 
   /* ---- Typography ---- */
   --font-base: "Noto Sans JP","Hiragino Sans","Yu Gothic UI","Segoe UI",system-ui,sans-serif;

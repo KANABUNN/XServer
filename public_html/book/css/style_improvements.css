@@ -1,5 +1,5 @@
-@import url("../assets/common/tokens.css?v=20260624c");
-@import url("../assets/common/fit-sc-skin.css?v=20260624c");
+@import url("../assets/common/tokens.css?v=20260716a");
+@import url("../assets/common/fit-sc-skin.css?v=20260716a");
 
 /* =========================================================================
    貸し部屋予約 UI 改善パッチ (v=20260502b)
@@ -700,10 +700,10 @@ body > .container {
   position: absolute;
   top: 0;
   left: 0;
-  width: 34px;
+  width: 38px;
   height: 4px;
   border-radius: var(--radius-pill);
-  background: var(--ui-accent);
+  background: linear-gradient(90deg, var(--brand), var(--sec-4));
 }
 
 /* 現在ステップの番号を主操作色で強調し、進捗を追いやすくする。 */

@@ -1,26 +1,27 @@
 :root{
-  --fit-bg:#f5f7fb;
+  /* v6: 主操作色を indigo に刷新（共通FIT-SC v6 と整合）。 */
+  --fit-bg:#eaecf6;
   --fit-surface:#ffffff;
-  --fit-surface-soft:#f8fafc;
-  --fit-border:#d8e0ef;
-  --fit-border-strong:#b8c4d8;
-  --fit-text:#172033;
-  --fit-muted:#64748b;
-  --fit-primary:#1d4ed8;
-  --fit-primary-hover:#1e40af;
-  --fit-primary-soft:#dbeafe;
-  --fit-danger:#b91c1c;
-  --fit-danger-soft:#fee2e2;
-  --fit-warning:#92400e;
-  --fit-warning-soft:#fef3c7;
-  --fit-success:#166534;
-  --fit-success-soft:#dcfce7;
-  --fit-info:#075985;
-  --fit-info-soft:#e0f2fe;
+  --fit-surface-soft:#f5f7fc;
+  --fit-border:#dee3f0;
+  --fit-border-strong:#c6cee1;
+  --fit-text:#1a2033;
+  --fit-muted:#5a6079;
+  --fit-primary:#4f46e5;
+  --fit-primary-hover:#4338ca;
+  --fit-primary-soft:#eef1fe;
+  --fit-danger:#c02633;
+  --fit-danger-soft:#fceaec;
+  --fit-warning:#9a6400;
+  --fit-warning-soft:#fff3d6;
+  --fit-success:#1e7a46;
+  --fit-success-soft:#e7f5ec;
+  --fit-info:#4f46e5;
+  --fit-info-soft:#eef1fe;
   --fit-radius-sm:8px;
   --fit-radius:12px;
   --fit-radius-lg:16px;
-  --fit-shadow:0 16px 40px rgba(15,23,42,.08);
+  --fit-shadow:0 18px 44px rgba(23,26,54,.13);
   --fit-sidebar-width:260px;
-  --fit-font:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --fit-font:"Noto Sans JP","Hiragino Sans","Yu Gothic UI",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 }

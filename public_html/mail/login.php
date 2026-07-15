@@ -72,9 +72,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '' && 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ログイン | mail.fit-sc.jp</title>
-  <link rel="stylesheet" href="./assets/common/tokens.css?v=20260624c">
+  <link rel="stylesheet" href="./assets/common/tokens.css?v=20260716a">
   <link rel="stylesheet" href="./css/admin-auth.css">
-  <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260624c">
+  <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260716a">
   <link rel="stylesheet" href="./css/mail-responsive.css?v=20260713">
   <script src="./assets/common/context-menu-guard.js?v=20260713" defer></script>
 </head>
