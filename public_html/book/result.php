@@ -130,8 +130,8 @@ $inputUrl = ($basePath !== '' ? $basePath : '') . '/';
   <meta name="referrer" content="no-referrer">
   <title><?php echo h($title); ?> - 貸し部屋予約 - 福岡工業大学</title>
   <link rel="icon" href="icon.png">
-  <link rel="stylesheet" href="css/style.css?v=20260407e">
-  <link rel="stylesheet" href="css/style_improvements.css?v=20260502b">
+  <link rel="stylesheet" href="css/style.css?v=20260715a">
+  <link rel="stylesheet" href="css/style_improvements.css?v=20260715a">
   <link rel="stylesheet" href="css/style_responsive.css?v=20260713">
     <script src="assets/common/context-menu-guard.js?v=20260713" defer></script>
 </head>

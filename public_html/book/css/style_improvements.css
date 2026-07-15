@@ -82,7 +82,7 @@ body > .container {
   align-items: center;
   gap: 6px;
   padding: 12px 6px 10px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 14px;
   background: #ffffff;
   text-align: center;
@@ -96,8 +96,8 @@ body > .container {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #e5e7eb;
-  color: #6b7280;
+  background: var(--line);
+  color: var(--text-muted);
   font-weight: 800;
   font-size: 14px;
   transition: background 0.2s, color 0.2s;
@@ -106,37 +106,37 @@ body > .container {
 .step-label {
   font-size: 12px;
   font-weight: 700;
-  color: #6b7280;
+  color: var(--text-muted);
   line-height: 1.4;
 }
 
 .step.is-active {
-  border-color: #2563eb;
-  background: #eff6ff;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.12);
 }
 
 .step.is-active .step-num {
-  background: #2563eb;
+  background: var(--brand);
   color: #ffffff;
 }
 
 .step.is-active .step-label {
-  color: #1e3a8a;
+  color: var(--brand-strong);
 }
 
 .step.is-done {
-  border-color: #86efac;
-  background: #f0fdf4;
+  border-color: var(--success-line);
+  background: var(--success-soft);
 }
 
 .step.is-done .step-num {
-  background: #16a34a;
+  background: var(--success);
   color: #ffffff;
 }
 
 .step.is-done .step-label {
-  color: #166534;
+  color: var(--success);
 }
 
 @media (max-width: 640px) {
@@ -162,8 +162,8 @@ body > .container {
   padding: 8px 12px;
   border-radius: 10px;
   background: rgba(220, 38, 38, 0.08);
-  border-left: 3px solid #dc2626;
-  color: #991b1b;
+  border-left: 3px solid var(--danger);
+  color: var(--danger);
   font-size: 13px;
   font-weight: 500;
   line-height: 1.6;
@@ -176,13 +176,13 @@ body > .container {
 }
 
 .date-config-card.has-error {
-  border-color: #fca5a5;
-  background: #fffafa;
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
 }
 
 .form-group input[aria-invalid="true"],
 .form-group select[aria-invalid="true"] {
-  border-color: #dc2626 !important;
+  border-color: var(--danger) !important;
   box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.10) !important;
   background-color: rgba(254, 242, 242, 0.5);
 }
@@ -191,9 +191,9 @@ body > .container {
   margin: 0 0 4px;
   padding: 12px 16px;
   border-radius: 12px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-line);
+  color: var(--danger);
   font-size: 14px;
   font-weight: 600;
   line-height: 1.6;
@@ -216,9 +216,9 @@ body > .container {
   margin: 12px 0 0;
   padding: 8px 12px;
   border-radius: 10px;
-  background: rgba(37, 99, 235, 0.06);
-  border-left: 3px solid #2563eb;
-  color: #1e40af;
+  background: rgba(var(--brand-rgb), 0.07);
+  border-left: 3px solid var(--brand);
+  color: var(--brand-strong);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.6;
@@ -249,9 +249,9 @@ body > .container {
 .passcode-card {
   margin-top: 20px;
   padding: 22px;
-  border: 2px solid #2563eb;
+  border: 2px solid var(--brand);
   border-radius: 18px;
-  background: linear-gradient(180deg, #eff6ff 0%, #ffffff 70%);
+  background: linear-gradient(180deg, var(--brand-soft) 0%, #ffffff 70%);
 }
 
 .passcode-card,
@@ -264,7 +264,7 @@ body > .container {
   margin: 0 0 14px;
   font-size: 13px;
   font-weight: 800;
-  color: #1e3a8a;
+  color: var(--brand-strong);
   letter-spacing: 0.08em;
 }
 
@@ -284,7 +284,7 @@ body > .container {
   gap: 10px 16px;
   padding: 14px 16px;
   background: #ffffff;
-  border: 1px solid #dbeafe;
+  border: 1px solid rgba(var(--brand-rgb), 0.22);
   border-radius: 12px;
 }
 
@@ -292,7 +292,7 @@ body > .container {
   flex: 1 1 220px;
   min-width: 0;
   font-size: 13px;
-  color: #475569;
+  color: var(--text-muted);
   line-height: 1.6;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -300,7 +300,7 @@ body > .container {
 
 .passcode-meta strong {
   display: block;
-  color: #1f2937;
+  color: var(--text);
   font-size: 14px;
   margin-bottom: 2px;
 }
@@ -309,11 +309,11 @@ body > .container {
   font-family: 'Courier New', Consolas, 'Menlo', monospace;
   font-size: 26px;
   font-weight: 800;
-  color: #1e3a8a;
+  color: var(--brand-strong);
   letter-spacing: 0.18em;
   user-select: all;
   -webkit-user-select: all;
-  background: #eff6ff;
+  background: var(--brand-soft);
   padding: 6px 16px;
   border-radius: 8px;
   white-space: nowrap;
@@ -323,7 +323,7 @@ body > .container {
 .passcode-note {
   margin: 14px 0 0;
   font-size: 12px;
-  color: #475569;
+  color: var(--text-muted);
   line-height: 1.7;
 }
 
@@ -363,8 +363,8 @@ body > .container {
   font-size: 17px;
   font-weight: 800;
   color: #ffffff;
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
-  box-shadow: 0 12px 26px rgba(79, 70, 229, 0.24);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-strong) 100%);
+  box-shadow: 0 12px 26px rgba(var(--brand-rgb), 0.24);
   transition: transform 0.15s, box-shadow 0.15s;
 }
 
@@ -377,7 +377,7 @@ body > .container {
   text-align: center;
   margin-top: 6px;
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-muted);
   text-decoration: none;
 }
 
@@ -410,15 +410,15 @@ body > .container {
 }
 
 .room-chip.is-open {
-  background: #ecfdf5;
-  border-color: #6ee7b7;
-  color: #065f46;
+  background: var(--success-soft);
+  border-color: var(--success-line);
+  color: var(--success);
 }
 
 .room-chip.is-taken {
-  background: #fef2f2;
-  border-color: #fca5a5;
-  color: #991b1b;
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+  color: var(--danger);
   text-decoration: line-through;
   text-decoration-thickness: 1px;
 }
@@ -472,7 +472,7 @@ body > .container {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: #2563eb;
+  background: var(--brand);
   color: #ffffff;
   font-size: 13px;
   font-weight: 800;
@@ -502,19 +502,19 @@ body > .container {
   margin: 0;
   font-size: 15px;
   line-height: 1.7;
-  color: #1f2937;
+  color: var(--text);
   word-break: break-word;
 }
 
 .confirm-dialog .terms-dialog-actions {
-  background: #f9fafb;
+  background: var(--surface-2);
 }
 
 .confirm-dialog-ok-btn {
   border: none;
   border-radius: 12px;
   padding: 10px 18px;
-  background: #dc2626;
+  background: var(--danger);
   color: #ffffff;
   font-family: inherit;
   font-weight: 800;
@@ -545,7 +545,7 @@ body > .container {
   vertical-align: 2px;
   letter-spacing: 0.02em;
   background: rgba(220, 38, 38, 0.10);
-  color: #b91c1c;
+  color: var(--danger);
   border: 1px solid rgba(220, 38, 38, 0.22);
 }
 
@@ -566,7 +566,7 @@ body > .container {
 .manual-mobile-fallback p {
   margin: 0;
   font-size: 14px;
-  color: #475569;
+  color: var(--text-muted);
   line-height: 1.7;
 }
 
@@ -574,13 +574,13 @@ body > .container {
   display: inline-block;
   justify-self: center;
   padding: 14px 24px;
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-strong) 100%);
   color: #ffffff;
   font-weight: 800;
   font-size: 15px;
   border-radius: 12px;
   text-decoration: none;
-  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.20);
+  box-shadow: 0 8px 18px rgba(var(--brand-rgb), 0.20);
   transition: transform 0.15s;
 }
 
@@ -595,9 +595,9 @@ body > .container {
 .mistake-error-id {
   margin: 18px 0 0;
   padding: 14px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: #f9fafb;
+  background: var(--surface-2);
   user-select: text;
   -webkit-user-select: text;
 }
@@ -611,7 +611,7 @@ body > .container {
 .mistake-error-id strong {
   display: block;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-muted);
   margin-bottom: 6px;
 }
 
@@ -619,12 +619,12 @@ body > .container {
   display: inline-block;
   padding: 4px 10px;
   background: #ffffff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line);
   border-radius: 6px;
   font-family: 'Courier New', Consolas, monospace;
   font-size: 16px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text);
   user-select: all;
   -webkit-user-select: all;
 }
@@ -632,22 +632,22 @@ body > .container {
 .mistake-error-id p {
   margin: 8px 0 0;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-muted);
   line-height: 1.6;
 }
 
 .mistake-contact {
   margin: 16px 0 0;
   padding: 14px 18px;
-  border: 1px solid #dbeafe;
+  border: 1px solid rgba(var(--brand-rgb), 0.22);
   border-radius: 12px;
-  background: #eff6ff;
+  background: var(--brand-soft);
 }
 
 .mistake-contact p {
   margin: 0 0 4px;
   font-size: 13px;
-  color: #1e40af;
+  color: var(--brand-strong);
   line-height: 1.7;
 }
 
@@ -657,7 +657,7 @@ body > .container {
 
 .mistake-contact strong {
   font-size: 14px;
-  color: #1e3a8a;
+  color: var(--brand-strong);
 }
 
 /* ===== スマホ最適化: 月カレンダーのセル密度を下げる (<=640px) ===== */
@@ -681,4 +681,42 @@ body > .container {
   .calendar-room-chips { display: none; }
 
   .calendar-weekday { font-size: 12px; }
+}
+
+
+/* -------------------------------------------------------------------------
+   v5: 青＋琥珀への統一仕上げ (book 公開画面)
+   - セクション見出しに琥珀のアイブロウを付与し、他アプリの .section-head と
+     視覚言語を揃える (差し色 = 見出し限定という共通トークン方針に準拠)。
+   - 選択中の日付・現在ステップの視認性を補強する。
+   ------------------------------------------------------------------------- */
+.panel-head h2 {
+  position: relative;
+  padding-top: 12px;
+}
+
+.panel-head h2::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 34px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--ui-accent);
+}
+
+/* 現在ステップの番号を主操作色で強調し、進捗を追いやすくする。 */
+.step.is-active {
+  box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.12), var(--shadow-sm);
+}
+
+/* 選択中の日付をより明確に (ホバーと区別)。 */
+.calendar-day.is-selected {
+  box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.16), 0 6px 14px rgba(var(--brand-rgb), 0.14);
+}
+
+@media (max-width: 640px) {
+  .panel-head h2 { padding-top: 10px; }
+  .panel-head h2::before { width: 28px; height: 3px; }
 }

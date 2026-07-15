@@ -1,14 +1,10 @@
 :root {
   color-scheme: light;
-  --bg: #eef3f9;
-  --card: #ffffff;
-  --line: #d8e0ea;
-  --text: #1b2430;
-  --muted: #5e6b7a;
-  --accent: #1f6feb;
-  --danger: #c62828;
-  --warn: #956400;
-  --shadow: 0 18px 40px rgba(20, 30, 50, 0.10);
+  /* 共通 v5 トークンへ整合。--bg/--line/--text/--muted/--danger は共通定義を継承。 */
+  --card: var(--surface);
+  --accent: var(--brand);
+  --warn: var(--warning);
+  --shadow: var(--shadow-lg);
 }
 
 * {
@@ -20,8 +16,8 @@ body {
   min-height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background:
-    radial-gradient(circle at top right, rgba(31, 111, 235, 0.10), transparent 34%),
-    linear-gradient(180deg, #f4f8fd 0%, #eaf0f8 100%);
+    radial-gradient(circle at top right, rgba(var(--brand-rgb), 0.10), transparent 34%),
+    var(--bg);
   color: var(--text);
   -webkit-user-select: none;
   user-select: none;
@@ -134,17 +130,17 @@ textarea {
 }
 
 .auth-message-info {
-  background: #edf5ff;
-  color: #124191;
+  background: var(--brand-soft);
+  color: var(--brand-strong);
 }
 
 .auth-message-error {
-  background: #fdecec;
+  background: var(--danger-soft);
   color: var(--danger);
 }
 
 .auth-message-warn {
-  background: #fff5d8;
+  background: var(--warning-soft);
   color: var(--warn);
 }
 
