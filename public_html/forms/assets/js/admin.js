@@ -19,6 +19,10 @@ const adminState = {
   activeFormId: 0,
   activeWorkspaceTab: readSessionValue(WORKSPACE_TAB_STORAGE_KEY, 'overview'),
   formSearch: '',
+  formSearchOrganizationQuery: '',
+  formSearchOrganizationFormIds: new Set(),
+  formSearchOrganizationPending: false,
+  formSearchOrganizationError: '',
   recentFormIds: readNumberList(RECENT_FORMS_STORAGE_KEY),
   expandedFolderIds: new Set(readNumberList(EXPANDED_FOLDERS_STORAGE_KEY)),
   folderExpansionInitialized: false,
@@ -26,6 +30,8 @@ const adminState = {
   activeEntryId: 0,
   activeEntryHistory: null,
 };
+
+let formOrganizationSearchController = null;
 
 const formContextMenuState = {
   formId: 0,
@@ -63,6 +69,35 @@ function writeNumberList(key, values) {
   } catch (error) {
     // プライベートブラウズ等で保存できない場合も、現在の画面内では継続する。
   }
+}
+
+function createFormOrganizationSearchController() {
+  const searchApi = window.FormsAdminFormSearch;
+  if (!searchApi?.createOrganizationSearchController) {
+    return null;
+  }
+
+  return searchApi.createOrganizationSearchController({
+    debounceMs: 250,
+    search: async (query) => {
+      const params = new URLSearchParams({
+        search_scope: 'submission_organization',
+        query,
+      });
+      const result = await apiGet(`api/admin_forms.php?${params.toString()}`);
+      if (!result.ok) {
+        throw new Error(result.message || '提出団体からフォームを検索できませんでした。');
+      }
+      return result.matching_form_ids || [];
+    },
+    onStateChange: (state) => {
+      adminState.formSearchOrganizationQuery = state.query;
+      adminState.formSearchOrganizationFormIds = state.matchingFormIds;
+      adminState.formSearchOrganizationPending = state.pending;
+      adminState.formSearchOrganizationError = state.error;
+      renderFormList();
+    },
+  });
 }
 
 function getFolder(folderId) {
@@ -908,7 +943,16 @@ function renderFormList() {
   if (!root) return;
   hideFormHoverTooltip();
 
-  const keyword = adminState.formSearch.trim().toLowerCase();
+  const searchApi = window.FormsAdminFormSearch;
+  const normalizeSearchText = searchApi?.normalizeText
+    ? searchApi.normalizeText
+    : (value) => String(value ?? '').trim().toLowerCase();
+  const keyword = normalizeSearchText(adminState.formSearch);
+  const organizationQueryIsCurrent = keyword !== ''
+    && normalizeSearchText(adminState.formSearchOrganizationQuery) === keyword;
+  const organizationFormIds = organizationQueryIsCurrent
+    ? adminState.formSearchOrganizationFormIds
+    : new Set();
   const folderMap = new Map(adminState.folders.map((folder) => [folder.id, folder]));
   const childrenByParent = new Map();
   adminState.folders.forEach((folder) => {
@@ -934,11 +978,15 @@ function renderFormList() {
     || a.id - b.id
   )));
 
-  const formMatches = (form) => !keyword || [form.name, form.slug, form.description, getFolderPath(form.folder_id)]
-    .filter(Boolean)
-    .some((value) => String(value).toLowerCase().includes(keyword));
+  const localFormMatches = (form) => searchApi?.matchesLocalForm
+    ? searchApi.matchesLocalForm(form, keyword, getFolderPath(form.folder_id))
+    : (!keyword || [form.name, form.slug, form.description, getFolderPath(form.folder_id)]
+      .filter(Boolean)
+      .some((value) => normalizeSearchText(value).includes(keyword)));
+  const formMatches = (form) => localFormMatches(form)
+    || organizationFormIds.has(Number(form.id));
   const folderMatches = (folder) => keyword && [folder.name, getFolderPath(folder.id)]
-    .some((value) => String(value).toLowerCase().includes(keyword));
+    .some((value) => normalizeSearchText(value).includes(keyword));
 
   const countFolderForms = (folderId, visited = new Set()) => {
     if (visited.has(folderId)) return 0;
@@ -1020,9 +1068,20 @@ function renderFormList() {
   const folderHtml = (childrenByParent.get(0) || [])
     .map((folder) => renderFolder(folder, 0))
     .join('');
+  const organizationSearchPending = organizationQueryIsCurrent
+    && adminState.formSearchOrganizationPending;
   root.innerHTML = (folderHtml || unfiledHtml)
     ? `${folderHtml}${unfiledHtml}`
-    : '<div class="directory-empty-state">条件に一致するフォームはありません。</div>';
+    : organizationSearchPending
+      ? '<div class="directory-empty-state">提出団体名からフォームを検索しています…</div>'
+      : '<div class="directory-empty-state">条件に一致するフォームはありません。</div>';
+
+  renderFormSearchStatus(
+    keyword === '' ? adminState.forms.length : adminState.forms.filter(formMatches).length,
+    organizationQueryIsCurrent
+      ? adminState.forms.filter((form) => organizationFormIds.has(Number(form.id))).length
+      : 0
+  );
 
   renderRecentForms();
   const expandButton = document.getElementById('expand-all-folders-button');
@@ -1031,6 +1090,34 @@ function renderFormList() {
     const allExpanded = allFolderIds.length > 0 && allFolderIds.every((id) => adminState.expandedFolderIds.has(id));
     expandButton.textContent = allExpanded ? 'すべて折りたたむ' : 'すべて展開';
   }
+}
+
+function renderFormSearchStatus(matchCount = 0, organizationMatchCount = 0) {
+  const root = document.getElementById('form-search-status');
+  if (!root) return;
+
+  root.classList.remove('is-searching', 'is-error');
+  if (adminState.formSearch.trim() === '') {
+    root.textContent = 'フォーム名・説明・フォルダー名・提出団体名から検索できます。';
+    return;
+  }
+
+  if (adminState.formSearchOrganizationPending) {
+    root.classList.add('is-searching');
+    root.textContent = 'フォーム情報の一致を表示中。提出団体名も検索しています…';
+    return;
+  }
+
+  if (adminState.formSearchOrganizationError) {
+    root.classList.add('is-error');
+    root.textContent = '提出団体名の検索に失敗したため、フォーム情報の一致のみ表示しています。';
+    return;
+  }
+
+  const organizationNote = organizationMatchCount > 0
+    ? `（提出団体名から ${organizationMatchCount}件）`
+    : '';
+  root.textContent = `${matchCount}件のフォームが一致しました${organizationNote}`;
 }
 
 function renderRecentForms() {
@@ -2060,7 +2147,11 @@ function bindEvents() {
 
   document.getElementById('form-search')?.addEventListener('input', (event) => {
     adminState.formSearch = event.target.value;
-    renderFormList();
+    if (formOrganizationSearchController) {
+      formOrganizationSearchController.update(adminState.formSearch);
+    } else {
+      renderFormList();
+    }
   });
 
   document.getElementById('new-form-button')?.addEventListener('click', openNewFormDialog);
@@ -2318,6 +2409,7 @@ function bindEvents() {
 
 function initAdminPage() {
   populateStatusFilter();
+  formOrganizationSearchController = createFormOrganizationSearchController();
   bindEvents();
   bindFormHoverTooltips();
   bindFormContextMenu();

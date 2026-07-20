@@ -4,6 +4,27 @@ forms_bootstrap();
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     api_require_admin();
+
+    if ((string)($_GET['search_scope'] ?? '') === 'submission_organization') {
+        $query = mb_substr(trim((string)($_GET['query'] ?? '')), 0, 200, 'UTF-8');
+        try {
+            $matchingFormIds = forms_find_form_ids_by_submission_organization($query);
+        } catch (Throwable $e) {
+            error_log('[forms admin_forms submission_organization search] ' . (string)$e);
+            json_response([
+                'ok' => false,
+                'message' => '提出団体からフォームを検索できませんでした。時間をおいて再試行してください。',
+            ], 500);
+        }
+
+        json_response([
+            'ok' => true,
+            'search_scope' => 'submission_organization',
+            'query' => $query,
+            'matching_form_ids' => $matchingFormIds,
+        ]);
+    }
+
     json_response([
         'ok' => true,
         'forms' => forms_fetch_forms(false),

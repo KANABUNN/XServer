@@ -48,6 +48,28 @@ function reservation_allowed_time_bounds(array $cfg): array
     return [$timeStart, $timeEnd];
 }
 
+function reservation_allowed_email_domains(array $cfg): array
+{
+    $configuredDomains = $cfg['reservation']['email_domains'] ?? null;
+    if (!is_array($configuredDomains)) {
+        // Keep existing installations that still use the singular setting working.
+        $configuredDomains = [
+            $cfg['reservation']['email_domain'] ?? 'bene.fit.ac.jp',
+            'fit.ac.jp',
+        ];
+    }
+
+    $domains = [];
+    foreach ($configuredDomains as $configuredDomain) {
+        $domain = strtolower(trim((string)$configuredDomain));
+        if ($domain !== '') {
+            $domains[$domain] = true;
+        }
+    }
+
+    return $domains !== [] ? array_keys($domains) : ['bene.fit.ac.jp', 'fit.ac.jp'];
+}
+
 function reservation_validate_form_input(array $cfg, array $source): array
 {
     $email = trim((string)($source['email'] ?? ''));
@@ -62,12 +84,16 @@ function reservation_validate_form_input(array $cfg, array $source): array
         throw new RuntimeException('利用規約への同意が必要です。');
     }
 
-    $allowedDomain = strtolower(trim((string)($cfg['reservation']['email_domain'] ?? 'bene.fit.ac.jp')));
+    $allowedDomains = reservation_allowed_email_domains($cfg);
     if (!preg_match('/^[^@\s]+@([^@\s]+)$/u', $email, $matches)) {
         throw new RuntimeException('メールアドレスの形式が不正です。');
     }
-    if (strtolower($matches[1]) !== $allowedDomain) {
-        throw new RuntimeException('@' . $allowedDomain . ' のメールアドレスのみ利用できます。');
+    if (!in_array(strtolower($matches[1]), $allowedDomains, true)) {
+        $allowedDomainText = implode(
+            ' または ',
+            array_map(static fn(string $domain): string => '@' . $domain, $allowedDomains)
+        );
+        throw new RuntimeException($allowedDomainText . ' のメールアドレスのみ利用できます。');
     }
 
     $orgLength = function_exists('mb_strlen') ? mb_strlen($organizationName, 'UTF-8') : strlen($organizationName);

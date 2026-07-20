@@ -906,6 +906,33 @@ function forms_fetch_forms(bool $activeOnly = false): array
     return array_values($forms);
 }
 
+function forms_prepare_submission_organization_search_query(string $query): string
+{
+    return forms_normalize_organization(mb_substr($query, 0, 200, 'UTF-8'));
+}
+
+function forms_find_form_ids_by_submission_organization(string $query): array
+{
+    $normalizedQuery = forms_prepare_submission_organization_search_query($query);
+    if ($normalizedQuery === '') {
+        return [];
+    }
+
+    forms_bootstrap();
+    $stmt = forms_db()->prepare(
+        'SELECT DISTINCT form_id '
+        . 'FROM managed_form_submissions '
+        . 'WHERE LOCATE(:organization_query, normalized_organization) > 0 '
+        . 'ORDER BY form_id ASC'
+    );
+    $stmt->execute([':organization_query' => $normalizedQuery]);
+
+    return array_values(array_map(
+        static fn($formId): int => (int)$formId,
+        $stmt->fetchAll(PDO::FETCH_COLUMN)
+    ));
+}
+
 function forms_build_field_record(array $row): array
 {
     return [

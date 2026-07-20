@@ -138,7 +138,7 @@ return [
 
     'reservation' => [
         'timezone' => 'Asia/Tokyo',
-        'email_domain' => 'bene.fit.ac.jp',
+        'email_domains' => ['bene.fit.ac.jp', 'fit.ac.jp'],
         'booking_min_days_before' => 2,
         'booking_max_months_ahead' => 2,
         'time_step_minutes' => 15,

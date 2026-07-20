@@ -31,9 +31,10 @@ page_header('フォーム管理', 'forms-admin-page');
                 <div id="admin-message" class="alert hidden"></div>
 
                 <label class="search-box">
-                    <span class="visually-hidden">フォームを検索</span>
-                    <input type="search" id="form-search" placeholder="フォーム名・フォルダー名を検索" autocomplete="off">
+                    <span class="visually-hidden">フォームまたは提出団体を検索</span>
+                    <input type="search" id="form-search" placeholder="フォーム名・フォルダー名・提出団体名を検索" maxlength="200" autocomplete="off" aria-describedby="form-search-status">
                 </label>
+                <p id="form-search-status" class="form-search-status small-note" aria-live="polite">フォーム名・説明・フォルダー名・提出団体名から検索できます。</p>
 
                 <section id="recent-forms-section" class="form-browser-group hidden" aria-labelledby="recent-forms-heading">
                     <div class="form-browser-group-title">
@@ -546,4 +547,4 @@ page_header('フォーム管理', 'forms-admin-page');
     </article>
 </template>
 
-<?php page_footer(['assets/js/common.js', 'assets/js/admin.js', 'assets/js/distribution_multi_admin.js']); ?>
+<?php page_footer(['assets/js/common.js', 'assets/js/admin_form_search.js', 'assets/js/admin.js', 'assets/js/distribution_multi_admin.js']); ?>

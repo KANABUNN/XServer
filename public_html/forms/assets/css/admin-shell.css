@@ -523,6 +523,22 @@
   background: #f7f9fd;
 }
 
+.forms-admin-page .form-search-status {
+  min-height: 16px;
+  margin: -3px 3px 1px;
+  color: #687995;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.forms-admin-page .form-search-status.is-searching {
+  color: #3659c8;
+}
+
+.forms-admin-page .form-search-status.is-error {
+  color: #ad4b18;
+}
+
 .forms-admin-page .form-browser-group {
   display: grid;
   gap: 7px;
