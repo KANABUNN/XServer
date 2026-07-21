@@ -144,12 +144,19 @@ CREATE TABLE IF NOT EXISTS switchbot_passcode_requests (
     event_device_type VARCHAR(100) DEFAULT NULL,
     event_device_mac VARCHAR(100) DEFAULT NULL,
     time_of_sample BIGINT DEFAULT NULL,
+    switchbot_key_id BIGINT UNSIGNED DEFAULT NULL,
+    key_deleted_at DATETIME DEFAULT NULL,
+    key_delete_status VARCHAR(40) DEFAULT NULL,
+    key_delete_command_id VARCHAR(120) DEFAULT NULL,
+    key_delete_error VARCHAR(500) DEFAULT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uq_switchbot_passcode_requests_local_request_id (local_request_id),
     UNIQUE KEY uq_switchbot_passcode_requests_command_id (command_id),
     KEY idx_switchbot_passcode_requests_room_code (room_code),
     KEY idx_switchbot_passcode_requests_status (status),
-    KEY idx_switchbot_passcode_requests_requested_at (requested_at)
+    KEY idx_switchbot_passcode_requests_requested_at (requested_at),
+    KEY idx_switchbot_passcode_requests_end_at (end_at),
+    KEY idx_switchbot_passcode_requests_key_deleted_at (key_deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 SQL;
 }
@@ -260,6 +267,18 @@ function reservation_migrate_existing_schema(PDO $pdo): void
         reservation_add_index_if_missing($pdo, 'room_calendar_reservations', 'idx_room_calendar_reservations_use_date', 'KEY `idx_room_calendar_reservations_use_date` (`use_date`)');
         reservation_add_index_if_missing($pdo, 'room_calendar_reservations', 'idx_room_calendar_reservations_switchbot_status', 'KEY `idx_room_calendar_reservations_switchbot_status` (`switchbot_status`)');
         reservation_add_index_if_missing($pdo, 'room_calendar_reservations', 'idx_room_calendar_reservations_google_sync_status', 'KEY `idx_room_calendar_reservations_google_sync_status` (`google_sync_status`)');
+    }
+
+    if (reservation_table_exists($pdo, 'switchbot_passcode_requests')) {
+        // 期限切れパスコードの端末側削除を追跡するための列。
+        reservation_add_column_if_missing($pdo, 'switchbot_passcode_requests', 'switchbot_key_id', 'BIGINT UNSIGNED DEFAULT NULL AFTER `time_of_sample`');
+        reservation_add_column_if_missing($pdo, 'switchbot_passcode_requests', 'key_deleted_at', 'DATETIME DEFAULT NULL AFTER `switchbot_key_id`');
+        reservation_add_column_if_missing($pdo, 'switchbot_passcode_requests', 'key_delete_status', 'VARCHAR(40) DEFAULT NULL AFTER `key_deleted_at`');
+        reservation_add_column_if_missing($pdo, 'switchbot_passcode_requests', 'key_delete_command_id', 'VARCHAR(120) DEFAULT NULL AFTER `key_delete_status`');
+        reservation_add_column_if_missing($pdo, 'switchbot_passcode_requests', 'key_delete_error', 'VARCHAR(500) DEFAULT NULL AFTER `key_delete_command_id`');
+
+        reservation_add_index_if_missing($pdo, 'switchbot_passcode_requests', 'idx_switchbot_passcode_requests_end_at', 'KEY `idx_switchbot_passcode_requests_end_at` (`end_at`)');
+        reservation_add_index_if_missing($pdo, 'switchbot_passcode_requests', 'idx_switchbot_passcode_requests_key_deleted_at', 'KEY `idx_switchbot_passcode_requests_key_deleted_at` (`key_deleted_at`)');
     }
 }
 

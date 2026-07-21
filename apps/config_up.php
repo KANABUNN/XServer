@@ -184,6 +184,27 @@ return [
         ],
     ],
 
+    // 期限切れパスコードの自動削除（apps/jobs/switchbot_passcode_cleanup.php）
+    'switchbot_passcode_cleanup' => [
+        'enabled' => true,
+        // true の間は削除せず対象の列挙のみ行う。初回導入時は true で様子を見る。
+        'dry_run' => false,
+        // 期限到来から実際に削除するまでの猶予。延長・忘れ物対応の余地を残す。
+        'grace_hours' => 24,
+        // 1 回の実行で削除する上限。想定外の大量削除を防ぐ安全弁。
+        'max_deletions_per_run' => 50,
+        // DB 照合が取れない孤児コードは、SwitchBot 自身が expired と返した場合のみ削除する。
+        'require_expired_status_for_orphans' => true,
+        // 本システムが発行したパスコード名の判定（YYYY-MM-DD_部屋名_団体名）。
+        'managed_name_pattern' => '/^(\d{4}-\d{2}-\d{2})_/u',
+        'api_sleep_ms' => 500,
+        // 端末から削除できたら DB 上の平文パスコードも即時破棄する。
+        'purge_passcode_on_delete' => true,
+        'log_file' => __DIR__ . '/storage/switchbot/passcode_cleanup.jsonl',
+        'lock_file' => __DIR__ . '/storage/switchbot/passcode_cleanup.lock',
+        'log_retention_days' => 365,
+    ],
+
     'storage_maintenance' => [
         'enabled' => true,
         'timezone' => 'Asia/Tokyo',
