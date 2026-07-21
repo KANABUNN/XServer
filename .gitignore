@@ -12,3 +12,4 @@ favicon.ico
 config.local.php
 google-service-account.json
 apps/storage/mail_htmlpurifier_cache/
+tests/
