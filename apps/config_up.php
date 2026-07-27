@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-$mysqlHost = 'localhost';
+$mysqlHost = 'db';
 $mysqlPort = 3306;
 $mysqlCharset = 'utf8mb4';
 
@@ -55,29 +55,29 @@ return [
         ],
         'mail' => [
             'driver' => 'mysql',
-            'host' => 'localhost',
-            'port' => 3306,
+            'host' => $mysqlHost,
+            'port' => $mysqlPort,
             'dbname' => 'fitsc_mail',
-            'charset' => 'utf8mb4',
+            'charset' => $mysqlCharset,
             'user' => 'fitsc_mail',
             'password' => '',
         ],
         'backup' => [
             'driver' => 'mysql',
-            'host' => 'localhost',
-            'port' => 3306,
+            'host' => $mysqlHost,
+            'port' => $mysqlPort,
             'dbname' => 'fitsc_backup',
-            'charset' => 'utf8mb4',
+            'charset' => $mysqlCharset,
             'user' => 'fitsc_backup',
             'password' => '',
         ],  
         //kintone用  
         'org' => [
             'driver' => 'mysql',
-            'host' => 'localhost',
-            'port' => 3306,
+            'host' => $mysqlHost,
+            'port' => $mysqlPort,
             'dbname' => 'fitsc_org',
-            'charset' => 'utf8mb4',
+            'charset' => $mysqlCharset,
             'user' => 'fitsc_org',
             'password' => '',
         ]

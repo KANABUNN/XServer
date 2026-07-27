@@ -1,0 +1,104 @@
+name: fitsc-local
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        HOST_UID: ${HOST_UID:-1000}
+        HOST_GID: ${HOST_GID:-1000}
+
+    ports:
+      - "127.0.0.1:${HTTP_PORT:-8080}:80"
+
+    volumes:
+      - ./:/srv/xserver
+      - ./docker/apache/vhosts.conf:/etc/apache2/sites-enabled/000-default.conf:ro
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/99-local.ini:ro
+
+    working_dir: /srv/xserver
+
+    environment:
+      TZ: Asia/Tokyo
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${MARIADB_USER}
+      DB_PASSWORD: ${MARIADB_PASSWORD}
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    networks:
+      - frontend
+      - backend
+
+    restart: unless-stopped
+
+  db:
+    image: mariadb:10.5.22
+
+    environment:
+      TZ: Asia/Tokyo
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      MARIADB_USER: ${MARIADB_USER}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max-allowed-packet=128M
+
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./docker/mariadb/init:/docker-entrypoint-initdb.d:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mariadb-admin ping -h 127.0.0.1 -uroot -p$${MARIADB_ROOT_PASSWORD} --silent"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+    networks:
+      - backend
+
+    restart: unless-stopped
+
+  phpmyadmin:
+    image: phpmyadmin:5
+
+    profiles:
+      - tools
+
+    ports:
+      - "127.0.0.1:${PHPMYADMIN_PORT:-8081}:80"
+
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 128M
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    networks:
+      - frontend
+      - backend
+
+    restart: unless-stopped
+
+volumes:
+  mariadb_data:
+
+networks:
+  frontend:
+  backend:
+    internal: true
