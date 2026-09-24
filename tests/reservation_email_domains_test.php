@@ -48,6 +48,24 @@ function reservation_domain_test_assert(
     exit(1);
 }
 
+function reservation_switchbot_retry_test_assert(array $slot, bool $expected): void
+{
+    $actual = reservation_can_retry_switchbot_slot($slot);
+    if ($actual === $expected) {
+        return;
+    }
+
+    fwrite(
+        STDERR,
+        sprintf(
+            "reservation SwitchBot retry test failed: status=%s, expected %s\n",
+            (string)($slot['switchbot_status'] ?? ''),
+            $expected ? 'retryable' : 'blocked'
+        )
+    );
+    exit(1);
+}
+
 $reservationDefaults = [
     'timezone' => 'Asia/Tokyo',
     'booking_min_days_before' => 0,
@@ -77,4 +95,14 @@ $legacyConfig = [
 reservation_domain_test_assert($legacyConfig, 'user@bene.fit.ac.jp', $useDate, true);
 reservation_domain_test_assert($legacyConfig, 'user@fit.ac.jp', $useDate, true);
 
-fwrite(STDOUT, "reservation email domain tests passed\n");
+$retrySlot = [
+    'id' => 123,
+    'access_code' => '123456',
+    'switchbot_status' => 'error',
+];
+reservation_switchbot_retry_test_assert($retrySlot, true);
+reservation_switchbot_retry_test_assert(array_merge($retrySlot, ['switchbot_status' => 'api_error']), true);
+reservation_switchbot_retry_test_assert(array_merge($retrySlot, ['switchbot_status' => 'requested']), false);
+reservation_switchbot_retry_test_assert(array_merge($retrySlot, ['access_code' => '']), false);
+
+fwrite(STDOUT, "reservation email domain and SwitchBot retry tests passed\n");

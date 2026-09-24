@@ -603,10 +603,26 @@ button.danger {
   margin-top: 12px;
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .muted-inline {
   color: var(--muted);
+}
+
+.switchbot-retry-btn {
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.table-status-message {
+  max-width: 280px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 

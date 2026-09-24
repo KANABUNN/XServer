@@ -417,7 +417,34 @@ function reservation_google_event_window(array $cfg, string $useDate, string $us
     return [$start, $end];
 }
 
-function reservation_issue_switchbot_access_code(array $cfg, string $roomCode, string $organizationName, string $accessCode, string $useDate, string $usageStartTime, string $usageEndTime): array
+function reservation_switchbot_retryable_statuses(): array
+{
+    return ['failed', 'error', 'api_error', 'device_not_found', 'not_configured'];
+}
+
+function reservation_is_switchbot_retryable_status(string $status): bool
+{
+    return in_array(trim($status), reservation_switchbot_retryable_statuses(), true);
+}
+
+function reservation_can_retry_switchbot_slot(array $slot): bool
+{
+    return (int)($slot['id'] ?? 0) > 0
+        && trim((string)($slot['access_code'] ?? '')) !== ''
+        && reservation_is_switchbot_retryable_status((string)($slot['switchbot_status'] ?? ''));
+}
+
+function reservation_issue_switchbot_access_code(
+    array $cfg,
+    string $roomCode,
+    string $organizationName,
+    string $accessCode,
+    string $useDate,
+    string $usageStartTime,
+    string $usageEndTime,
+    ?string $accessCodeStartAt = null,
+    ?string $accessCodeEndAt = null
+): array
 {
     if (!function_exists('switchbot_is_configured') || !switchbot_is_configured($cfg)) {
         return [
@@ -446,7 +473,11 @@ function reservation_issue_switchbot_access_code(array $cfg, string $roomCode, s
         ];
     }
 
-    [$startAt, $endAt] = reservation_access_code_window($cfg, $useDate, $usageStartTime, $usageEndTime);
+    $startAt = trim((string)$accessCodeStartAt);
+    $endAt = trim((string)$accessCodeEndAt);
+    if ($startAt === '' || $endAt === '') {
+        [$startAt, $endAt] = reservation_access_code_window($cfg, $useDate, $usageStartTime, $usageEndTime);
+    }
     $localRequestId = switchbot_generate_local_request_id();
     $passcodeNameSource = $useDate . '_' . reservation_room_label($roomCode) . '_' . $organizationName;
     $passcodeName = function_exists('mb_substr') ? mb_substr($passcodeNameSource, 0, 100, 'UTF-8') : substr($passcodeNameSource, 0, 100);
@@ -914,7 +945,7 @@ function reservation_recalculate_summary_status(PDO $pdo, int $reservationId): v
     $googleStatuses = array_map(static fn(array $r): string => (string)($r['google_sync_status'] ?? ''), $rows);
 
     $allSwitchOk = count(array_filter($switchStatuses, static fn(string $s): bool => in_array($s, ['success', 'completed', 'requested'], true))) === count($switchStatuses);
-    $hasSwitchFail = count(array_filter($switchStatuses, static fn(string $s): bool => in_array($s, ['failed', 'api_error', 'device_not_found', 'not_configured'], true))) > 0;
+    $hasSwitchFail = count(array_filter($switchStatuses, 'reservation_is_switchbot_retryable_status')) > 0;
 
     $googleAllOk = count(array_filter($googleStatuses, static fn(string $s): bool => in_array($s, ['synced', 'disabled'], true))) === count($googleStatuses);
     $googleFail = count(array_filter($googleStatuses, static fn(string $s): bool => $s === 'failed')) > 0;

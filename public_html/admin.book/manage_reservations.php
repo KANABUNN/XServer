@@ -15,6 +15,10 @@ require_once __DIR__ . '/../../apps/reservation_service.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
+final class ManageConflictException extends RuntimeException
+{
+}
+
 try {
     admin_auth_bootstrap();
     $user = admin_auth_require_login();
@@ -55,6 +59,10 @@ try {
         case 'passcode_list':
             manage_require_permission($user, 'access.view');
             manage_passcode_list($pdo);
+            break;
+        case 'switchbot_retry':
+            manage_require_permission($user, 'access.edit');
+            manage_switchbot_retry($pdo, $cfg, $user, $input);
             break;
         case 'admin_user_list':
             manage_require_permission($user, 'admin.user.manage');
@@ -115,6 +123,12 @@ try {
         default:
             throw new RuntimeException('未対応の action です。');
     }
+} catch (ManageConflictException $e) {
+    http_response_code(409);
+    echo json_encode([
+        'ok' => false,
+        'message' => $e->getMessage(),
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     $errorId = 'BOOK-' . date('YmdHis') . '-' . bin2hex(random_bytes(4));
     error_log(sprintf('[manage_reservations][%s] %s in %s:%d', $errorId, $e->getMessage(), $e->getFile(), $e->getLine()));
@@ -215,7 +229,7 @@ function manage_calendar_month(PDO $pdo, array $input): void
     $monthEnd = (new DateTimeImmutable($monthStart))->modify('+1 month')->format('Y-m-d');
 
     $stmt = $pdo->prepare(
-        'SELECT id, reservation_id, use_date, room_code, room_label, organization_name, email, usage_start_time, usage_end_time, usage_time, switchbot_status, google_sync_status '
+        'SELECT id, reservation_id, use_date, room_code, room_label, organization_name, email, usage_start_time, usage_end_time, usage_time, access_code, switchbot_status, google_sync_status '
         . 'FROM room_calendar_reservations '
         . 'WHERE use_date >= :month_start AND use_date < :month_end '
         . 'ORDER BY use_date ASC, room_code ASC'
@@ -225,6 +239,11 @@ function manage_calendar_month(PDO $pdo, array $input): void
         ':month_end' => $monthEnd,
     ]);
     $rows = $stmt->fetchAll();
+    foreach ($rows as &$row) {
+        $row['can_retry_switchbot'] = reservation_can_retry_switchbot_slot($row);
+        unset($row['access_code']);
+    }
+    unset($row);
 
     $dayMap = [];
     foreach ($rows as $row) {
@@ -561,14 +580,131 @@ function manage_is_google_missing_event_error(string $message): bool
 function manage_passcode_list(PDO $pdo): void
 {
     $stmt = $pdo->query(
-        'SELECT use_date, usage_time, room_label, organization_name, email, access_code, access_code_start_at, access_code_end_at, switchbot_status, switchbot_request_id '
+        'SELECT id, use_date, usage_time, room_label, organization_name, email, access_code, access_code_start_at, access_code_end_at, switchbot_status, switchbot_message, switchbot_request_id '
         . 'FROM room_calendar_reservations '
         . 'ORDER BY use_date DESC, id DESC LIMIT 200'
     );
+    $rows = $stmt->fetchAll();
+    foreach ($rows as &$row) {
+        $row['can_retry_switchbot'] = reservation_can_retry_switchbot_slot($row);
+    }
+    unset($row);
+
     json_response([
         'ok' => true,
-        'rows' => $stmt->fetchAll(),
+        'rows' => $rows,
         'message' => 'パスコード状況を取得しました。',
+    ]);
+}
+
+function manage_switchbot_retry(PDO $pdo, array $cfg, array $user, array $input): void
+{
+    $slotId = (int)($input['slot_id'] ?? 0);
+    if ($slotId < 1) {
+        throw new ManageConflictException('再試行対象が不正です。画面を再読み込みしてください。');
+    }
+
+    $slot = null;
+    $switchResult = [];
+    $previousRequestId = '';
+    $previousStatus = '';
+
+    try {
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare('SELECT * FROM room_calendar_reservations WHERE id = :id LIMIT 1 FOR UPDATE');
+        $stmt->execute([':id' => $slotId]);
+        $fetched = $stmt->fetch();
+        if (!is_array($fetched)) {
+            throw new ManageConflictException('再試行対象の予約枠が見つかりません。画面を再読み込みしてください。');
+        }
+        $slot = $fetched;
+
+        if (!reservation_can_retry_switchbot_slot($slot)) {
+            throw new ManageConflictException('この予約枠は現在、SwitchBot の再試行対象ではありません。画面を再読み込みしてください。');
+        }
+
+        $reservationId = (int)($slot['reservation_id'] ?? 0);
+        if ($reservationId < 1) {
+            throw new RuntimeException('再試行対象の予約IDを取得できませんでした。');
+        }
+
+        $previousRequestId = trim((string)($slot['switchbot_request_id'] ?? ''));
+        $previousStatus = trim((string)($slot['switchbot_status'] ?? ''));
+
+        try {
+            $switchResult = reservation_issue_switchbot_access_code(
+                $cfg,
+                (string)$slot['room_code'],
+                (string)$slot['organization_name'],
+                (string)$slot['access_code'],
+                (string)$slot['use_date'],
+                (string)$slot['usage_start_time'],
+                (string)$slot['usage_end_time'],
+                (string)$slot['access_code_start_at'],
+                (string)$slot['access_code_end_at']
+            );
+        } catch (Throwable $e) {
+            $switchResult = [
+                'ok' => false,
+                'status' => 'api_error',
+                'message' => $e->getMessage(),
+                'local_request_id' => '',
+                'command_id' => '',
+            ];
+        }
+
+        $message = trim((string)($switchResult['message'] ?? ''));
+        if (function_exists('mb_substr')) {
+            $message = mb_substr($message, 0, 500, 'UTF-8');
+        } else {
+            $message = substr($message, 0, 500);
+        }
+
+        $newStatus = trim((string)($switchResult['status'] ?? ''));
+        if ($newStatus === '') {
+            $newStatus = 'api_error';
+        }
+
+        reservation_update_slot($pdo, $slotId, [
+            'switchbot_status' => $newStatus,
+            'switchbot_request_id' => (string)($switchResult['local_request_id'] ?? ''),
+            'switchbot_command_id' => (string)($switchResult['command_id'] ?? ''),
+            'switchbot_message' => $message,
+        ]);
+        manage_refresh_reservation_from_slots($pdo, $reservationId);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    $newRequestId = (string)($switchResult['local_request_id'] ?? '');
+    admin_auth_write_audit_log($pdo, $user, 'switchbot.retry', 'reservation_slot', $slotId, [
+        'reservation_id' => (int)($slot['reservation_id'] ?? 0),
+        'use_date' => (string)($slot['use_date'] ?? ''),
+        'room_code' => (string)($slot['room_code'] ?? ''),
+        'previous_status' => $previousStatus,
+        'new_status' => $newStatus,
+        'previous_request_id' => $previousRequestId,
+        'new_request_id' => $newRequestId,
+        'command_id' => (string)($switchResult['command_id'] ?? ''),
+    ]);
+
+    $accepted = (bool)($switchResult['ok'] ?? false)
+        && in_array($newStatus, ['requested', 'success', 'completed'], true);
+    json_response([
+        'ok' => true,
+        'message' => $accepted
+            ? 'SwitchBot へ再実行リクエストを送信しました。'
+            : 'SwitchBot の再実行に失敗しました。状態とエラー内容を確認して、必要に応じて再試行してください。',
+        'slot_id' => $slotId,
+        'switchbot_status' => $newStatus,
+        'switchbot_message' => $message,
+        'switchbot_request_id' => $newRequestId,
     ]);
 }
 
@@ -730,11 +866,10 @@ function manage_refresh_reservation_from_slots(PDO $pdo, int $reservationId, str
         }
     }
 
-    $switchFailures = ['failed', 'api_error', 'device_not_found', 'not_configured'];
     $switchOk = ['success', 'completed', 'requested', 'skipped', 'disabled'];
     $googleOk = ['synced', 'disabled', 'skipped'];
 
-    $hasSwitchFail = count(array_filter($switchStatuses, static fn(string $status): bool => in_array($status, $switchFailures, true))) > 0;
+    $hasSwitchFail = count(array_filter($switchStatuses, 'reservation_is_switchbot_retryable_status')) > 0;
     $allSwitchOk = count(array_filter($switchStatuses, static fn(string $status): bool => in_array($status, $switchOk, true))) === count($switchStatuses);
     $allSwitchSkipped = count(array_filter($switchStatuses, static fn(string $status): bool => in_array($status, ['skipped', 'disabled'], true))) === count($switchStatuses);
 
@@ -762,7 +897,7 @@ function manage_refresh_reservation_from_slots(PDO $pdo, int $reservationId, str
         $googleSummary = 'queued';
     }
 
-    if ($hasSwitchFail) {
+    if ($hasSwitchFail || $hasGoogleFail) {
         $reservationStatus = 'error';
     } elseif ($allSwitchOk) {
         $reservationStatus = 'confirmed';

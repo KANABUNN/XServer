@@ -45,7 +45,7 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
   </script>
   <link rel="stylesheet" href="./assets/common/tokens.css?v=20260716a">
-  <link rel="stylesheet" href="./css/reservation-admin.css?v=20260715a">
+  <link rel="stylesheet" href="./css/reservation-admin.css?v=20260924">
   <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260716a">
   <link rel="stylesheet" href="./css/reservation-admin-responsive.css?v=20260713">
   <script src="./assets/common/context-menu-guard.js?v=20260713" defer></script>
@@ -358,10 +358,11 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
                     <th>有効期間</th>
                     <th>SwitchBot</th>
                     <th>request_id</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody id="passcodeTableBody">
-                  <tr><td colspan="9" class="empty">読み込み前です。</td></tr>
+                  <tr><td colspan="10" class="empty">読み込み前です。</td></tr>
                 </tbody>
               </table>
             </div>
@@ -496,6 +497,6 @@ function admin_index_time_options(string $selected = '', bool $allow2400 = false
     </main>
   </div>
 
-  <script src="./js/admin-app.js?v=20260625" defer></script>
+  <script src="./js/admin-app.js?v=20260924" defer></script>
 </body>
 </html>

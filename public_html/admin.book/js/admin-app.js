@@ -44,6 +44,21 @@
     return `<span class="${badgeClass(label)}">${escapeHtml(label)}</span>`;
   }
 
+  function switchbotRetryButton(row, statusTargetId) {
+    if (!hasPermission('access.edit') || row.can_retry_switchbot !== true) return '';
+    return `
+      <button
+        type="button"
+        class="secondary switchbot-retry-btn"
+        data-slot-id="${escapeHtml(String(row.id || ''))}"
+        data-status-target-id="${escapeHtml(statusTargetId)}"
+        data-use-date="${escapeHtml(row.use_date || '')}"
+        data-room-label="${escapeHtml(row.room_label || '')}"
+        data-organization-name="${escapeHtml(row.organization_name || '')}"
+      >SwitchBotを再試行</button>
+    `;
+  }
+
   function rangeLabel(row) {
     const first = row.use_date || '';
     const last = row.use_date_end || row.use_date || '';
@@ -229,8 +244,10 @@
             <div><dt>SwitchBot</dt><dd>${statusBadge(row.switchbot_status || '')}</dd></div>
             <div><dt>Google</dt><dd>${statusBadge(row.google_sync_status || '')}</dd></div>
           </dl>
-          ${hasPermission('calendar.delete') ? `
+          ${(hasPermission('calendar.delete') || (hasPermission('access.edit') && row.can_retry_switchbot === true)) ? `
             <div class="calendar-detail-actions">
+              ${switchbotRetryButton(row, 'calendarDetailStatusText')}
+              ${hasPermission('calendar.delete') ? `
               <button
                 type="button"
                 class="danger calendar-slot-delete-btn"
@@ -239,6 +256,7 @@
                 data-room-label="${escapeHtml(row.room_label || '')}"
                 data-organization-name="${escapeHtml(row.organization_name || '')}"
               >この予約枠を削除</button>
+              ` : ''}
             </div>
           ` : ''}
         </div>
@@ -424,11 +442,15 @@
             <td>${escapeHtml(row.email || '')}</td>
             <td>${escapeHtml(row.access_code || '')}</td>
             <td>${escapeHtml(row.access_code_start_at || '')}<br>${escapeHtml(row.access_code_end_at || '')}</td>
-            <td>${statusBadge(row.switchbot_status || '')}</td>
+            <td>
+              ${statusBadge(row.switchbot_status || '')}
+              ${row.switchbot_message ? `<div class="table-status-message">${escapeHtml(row.switchbot_message)}</div>` : ''}
+            </td>
             <td>${escapeHtml(row.switchbot_request_id || '')}</td>
+            <td>${switchbotRetryButton(row, 'passcodeStatusText')}</td>
           </tr>
         `).join('')
-        : '<tr><td colspan="9" class="empty">表示できるデータがありません。</td></tr>';
+        : '<tr><td colspan="10" class="empty">表示できるデータがありません。</td></tr>';
 
       setText('#passcodeMetaText', `${json.rows.length}件を表示しています。`);
       setText('#passcodeStatusText', json.message || '読込完了');
@@ -601,6 +623,40 @@
     }
   }
 
+  async function handleSwitchbotRetryClick(event) {
+    if (!(event.target instanceof Element)) return;
+    const button = event.target.closest('.switchbot-retry-btn');
+    if (!(button instanceof HTMLButtonElement)) return;
+
+    const slotId = Number(button.dataset.slotId || 0);
+    if (!slotId) return;
+
+    const useDate = button.dataset.useDate || '';
+    const roomLabel = button.dataset.roomLabel || '';
+    const organizationName = button.dataset.organizationName || '';
+    const confirmed = window.confirm(
+      `${useDate}\n${roomLabel} / ${organizationName}\n\n既存のパスコードを使って、SwitchBotへの発行を再試行しますか？`
+    );
+    if (!confirmed) return;
+
+    const statusTargetId = button.dataset.statusTargetId || 'passcodeStatusText';
+    button.disabled = true;
+    setText(`#${statusTargetId}`, 'SwitchBotへ再実行中...');
+
+    try {
+      const json = await api('switchbot_retry', { slot_id: slotId });
+      await Promise.allSettled([loadCalendar(), loadDashboard(), loadPasscodes(), loadAuditLogs()]);
+      const detail = json.switchbot_message && json.switchbot_status !== 'requested'
+        ? ` (${json.switchbot_status || 'failed'}: ${json.switchbot_message})`
+        : '';
+      setText(`#${statusTargetId}`, `${json.message || '再実行しました。'}${detail}`);
+    } catch (error) {
+      setText(`#${statusTargetId}`, error instanceof Error ? error.message : 'SwitchBotの再実行に失敗しました。');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   function initButtons() {
     const now = new Date();
     const monthString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -637,6 +693,7 @@
     });
 
     q('#passcodeReloadBtn')?.addEventListener('click', loadPasscodes);
+    document.addEventListener('click', handleSwitchbotRetryClick);
 
     q('#adminReloadBtn')?.addEventListener('click', () => {
       loadAdminUsers();
