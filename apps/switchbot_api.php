@@ -346,11 +346,23 @@ function switchbot_build_room_status(array $cfg, string $roomCode, array $keypad
 
 function switchbot_datetime_to_unix_seconds(string $datetimeLocal, string $timezone): int
 {
-    $dt = DateTimeImmutable::createFromFormat('Y-m-d\TH:i', $datetimeLocal, new DateTimeZone($timezone));
-    if (!$dt || $dt->format('Y-m-d\TH:i') !== $datetimeLocal) {
-        throw new InvalidArgumentException('日時は YYYY-MM-DDTHH:MM 形式で入力してください。');
+    $value = trim($datetimeLocal);
+    $tz = new DateTimeZone($timezone);
+    $formats = ['Y-m-d\TH:i', 'Y-m-d H:i:s', 'Y-m-d H:i', 'Y-m-d\TH:i:s'];
+
+    foreach ($formats as $format) {
+        $dt = DateTimeImmutable::createFromFormat($format, $value, $tz);
+        if ($dt !== false && $dt->format($format) === $value) {
+            return $dt->getTimestamp();
+        }
     }
-    return $dt->getTimestamp();
+
+    try {
+        $fallback = new DateTimeImmutable($value, $tz);
+        return $fallback->getTimestamp();
+    } catch (Throwable $e) {
+        throw new InvalidArgumentException('日時は YYYY-MM-DDTHH:MM または YYYY-MM-DD HH:MM[:SS] 形式で入力してください。');
+    }
 }
 
 function switchbot_create_time_limited_key(array $cfg, string $deviceId, string $name, string $password, string $startAt, string $endAt): array
@@ -1341,12 +1353,106 @@ function switchbot_get_request_detail(array $cfg, string $localRequestId = '', i
 
 function switchbot_validate_webhook_secret(array $cfg, ?string $providedToken): bool
 {
-    $expected = switchbot_config($cfg)['webhook_secret'];
+    $expected = trim((string)switchbot_config($cfg)['webhook_secret']);
     if ($expected === '') {
-        return true;
-    }
-    if ($providedToken === null) {
+        switchbot_error_log('SwitchBot webhook secret is not configured; rejecting webhook request');
         return false;
     }
-    return hash_equals($expected, $providedToken);
+
+    $provided = trim((string)($providedToken ?? ''));
+    if ($provided === '') {
+        return false;
+    }
+
+    return hash_equals($expected, $provided);
+}
+
+/**
+ * パスコードを ID 指定で削除する。
+ *
+ * SwitchBot API v1.1 の Keypad / Keypad Touch は `deleteKey` コマンドで
+ * `{"id": passcode_id}` を受け取る。ID は createKey のレスポンスにも
+ * webhook にも含まれないため、必ず端末の keyList から取得すること。
+ */
+function switchbot_delete_key(array $cfg, string $deviceId, int $keyId): array
+{
+    if (trim($deviceId) === '') {
+        throw new InvalidArgumentException('deviceId が空です。');
+    }
+    if ($keyId <= 0) {
+        throw new InvalidArgumentException('パスコード ID が不正です。');
+    }
+
+    $payload = [
+        'commandType' => 'command',
+        'command' => 'deleteKey',
+        'parameter' => [
+            'id' => $keyId,
+        ],
+    ];
+
+    return switchbot_request($cfg, 'POST', 'devices/' . rawurlencode($deviceId) . '/commands', $payload);
+}
+
+/**
+ * デバイスの keyList を正規化して返す。
+ *
+ * keyList はオブジェクト／配列いずれの形でも返り得るため、
+ * 数値添字の配列に均してから必要なキーだけを取り出す。
+ * password / iv は開発者シークレットで暗号化された値なので保持しない。
+ */
+function switchbot_extract_key_list(array $device): array
+{
+    $rawList = $device['keyList'] ?? [];
+    if (!is_array($rawList)) {
+        return [];
+    }
+
+    $keys = [];
+    foreach ($rawList as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+        $id = (int)($entry['id'] ?? 0);
+        if ($id <= 0) {
+            continue;
+        }
+        $keys[] = [
+            'id' => $id,
+            'name' => trim((string)($entry['name'] ?? '')),
+            'type' => trim((string)($entry['type'] ?? '')),
+            'status' => strtolower(trim((string)($entry['status'] ?? ''))),
+            'create_time' => isset($entry['createTime']) ? (int)$entry['createTime'] : null,
+        ];
+    }
+
+    return $keys;
+}
+
+/**
+ * 設定済みキーパッドごとの keyList を取得する。
+ *
+ * keyList は GET /v1.1/devices（デバイス一覧）のレスポンスに含まれる。
+ * 個別のステータス取得エンドポイントには含まれない点に注意。
+ */
+function switchbot_get_keypad_key_lists(array $cfg): array
+{
+    $keypads = switchbot_filter_keypads(switchbot_get_devices($cfg));
+
+    $result = [];
+    foreach ($keypads as $device) {
+        $deviceId = trim((string)($device['deviceId'] ?? ''));
+        if ($deviceId === '') {
+            continue;
+        }
+        $result[$deviceId] = [
+            'device_id' => $deviceId,
+            'device_name' => trim((string)($device['deviceName'] ?? '')),
+            'device_type' => trim((string)($device['deviceType'] ?? '')),
+            'keys' => switchbot_extract_key_list($device),
+            'key_list_supported' => array_key_exists('keyList', $device),
+        ];
+    }
+
+    return $result;
 }

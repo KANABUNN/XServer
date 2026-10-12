@@ -1,0 +1,120 @@
+/* Backup manager: responsive overrides for the current report layout. */
+
+@media (max-width: 760px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .top {
+    padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 16px max(14px, env(safe-area-inset-left));
+  }
+
+  .top p,
+  .card,
+  .alert,
+  .notice,
+  .flash {
+    overflow-wrap: anywhere;
+  }
+
+  .nav {
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 8px max(14px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left));
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .nav a {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
+  .wrap {
+    min-width: 0;
+    padding: 16px max(14px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card {
+    min-width: 0;
+    padding: 16px;
+  }
+
+  .section-title {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inline-form {
+    display: grid;
+    gap: 10px;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 20px;
+    height: 20px;
+  }
+
+  .btn,
+  .primary,
+  button {
+    min-height: 44px;
+  }
+
+  table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+
+  .pre,
+  .command {
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .login {
+    min-height: 100dvh;
+    padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  }
+
+  .loginbox {
+    padding: 20px 16px;
+  }
+
+  .footer {
+    padding: 18px 14px max(18px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 420px) {
+  .top h1 {
+    font-size: 18px;
+  }
+
+  .top p {
+    font-size: 13px;
+  }
+}

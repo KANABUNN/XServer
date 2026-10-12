@@ -2,51 +2,60 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../vendor/autoload.php';
+/** @var mixed $cfg */
 $cfg = require __DIR__ . '/../../apps/config.php';
-require_once __DIR__ . '/../../apps/build_mail.php';
-require_once __DIR__ . '/../../apps/reply_mail_build.php';
-require_once __DIR__ . '/../../apps/smtp_mailer.php';
-require_once __DIR__ . '/../../apps/response_limit.php';
 require_once __DIR__ . '/../../apps/db.php';
+require_once __DIR__ . '/../../apps/response_limit.php';
+require_once __DIR__ . '/../../apps/switchbot_api.php';
+require_once __DIR__ . '/../../apps/google_calendar_sync.php';
+require_once __DIR__ . '/../../apps/smtp_mailer.php';
+require_once __DIR__ . '/../../apps/mail_html_templates.php';
+require_once __DIR__ . '/../../apps/reservation_service.php';
+
+function reservation_current_base_path(): string
+{
+    $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    $dir = trim(str_replace('\\', '/', dirname($scriptName)));
+    if ($dir === '' || $dir === '.') {
+        return '';
+    }
+    return rtrim($dir, '/');
+}
+
 
 try {
+    if (!is_array($cfg)) {
+        throw new RuntimeException('config.php の形式が不正です。');
+    }
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         http_response_code(405);
         exit('Method Not Allowed');
     }
 
-    // 簡易的なレート制限（IPアドレス単位で5分(300秒)に3回まで）
-    // Cloudflare プロキシ（オレンジ雲）を有効にした場合は
-    // $ip = get_client_ip(); に変更すること
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-    rate_limit_or_throw($ip, __DIR__ . '/../../apps/rate_limit.json', 3, 300);
+    rate_limit_or_throw($ip, __DIR__ . '/../../apps/rate_limit.json', 5, 300);
 
-    // フォームデータの検証・構築（ファイルはまだtmp_nameのまま）
-    $mailData = build_mail_from_request($cfg);
-
-    // DB保存を先に行う（失敗したらここで例外、メールは送信されない）
-    // move_uploaded_file() によりファイルが storage/ に移動される
+    $validated = reservation_validate_form_input($cfg, $_POST);
     $pdo = db_connect($cfg);
-    $storedPath = save_reservation_with_uploaded_file($pdo, $cfg, $mailData, $_FILES['file'] ?? null);
+    $reservation = reservation_process_submission($cfg, $pdo, $validated);
+    if ($reservation === [] || !isset($reservation['request_token'])) {
+        throw new RuntimeException('予約処理結果を取得できませんでした。');
+    }
 
-    // attachment.path を移動後のパスに差し替える
-    //    tmp_name はもう存在しないので必須
-    $mailData['attachment']['path'] = $storedPath;
+    reservation_send_emails($cfg, $pdo, $reservation);
 
-    // メール送信（DB保存が成功した場合のみここに到達）
-    send_mail_smtp($cfg, $mailData);
-
-    $replyData = build_mail_reply($mailData);
-    send_mail_smtp($cfg, $replyData);
-
-    header('Location: /success.html', true, 303);
+    $basePath = reservation_current_base_path();
+    header('Location: ' . ($basePath !== '' ? $basePath : '') . '/result.php?token=' . rawurlencode((string)$reservation['request_token']), true, 303);
     exit;
 } catch (Throwable $e) {
     $id = bin2hex(random_bytes(6));
-    error_log("[upload:$id] " . $e->getMessage());
-    error_log("[upload:$id] " . $e->getFile() . ':' . $e->getLine());
-    error_log("[upload:$id] FILES=" . json_encode($_FILES, JSON_UNESCAPED_UNICODE));
-    error_log("[upload:$id] POST keys=" . implode(',', array_keys($_POST)));
+    error_log('[reservation:' . $id . '] ' . $e->getMessage());
+    error_log('[reservation:' . $id . '] ' . $e->getFile() . ':' . $e->getLine());
+    error_log('[reservation:' . $id . '] POST=' . json_encode($_POST, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-    header('Location: /mistake.html', true, 303);
+    // 改善 (G2): mistake.html?eid=... 形式でエラーIDを引き継ぐ。
+    // 利用者が問い合わせる際に管理者がログを追跡できるようにするため。
+    $basePath = reservation_current_base_path();
+    header('Location: ' . ($basePath !== '' ? $basePath : '') . '/mistake.html?eid=' . rawurlencode($id), true, 303);
+    exit;
 }

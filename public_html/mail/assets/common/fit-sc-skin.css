@@ -1,0 +1,565 @@
+/* ============================================================
+   FIT-SC common skin
+   既存クラス名へ共通トークンを流し込む後段CSS。
+
+   v5方針:
+   - 添付モックアップ準拠: 差し色は琥珀 #B5722A。
+   - 主操作色は brand blue のまま維持する。
+   - 差し色は「見出しアイブロウ + 主要KPI」に絞る。
+       CSS生成テキストは使わず、装飾バーのみ生成する。
+   - サイドバーにはCSS maskのインラインSVGアイコンを付与し、外部依存を増やさない。
+   - 未割当項目はデフォルトアイコンへフォールバックし、mask非対応環境ではアイコンを非表示にする。
+   - button[type="submit"] の属性ヒューリスティックは使わず、塗る対象を明示クラスへ限定する。
+   - 汎用 .container はここでは触らず、book 固有CSS側でスコープする。
+   ============================================================ */
+
+/* 既存CSSが参照している古い別名を新トークンへ接続する。 */
+:root {
+  --card: var(--surface);
+  --panel: var(--surface);
+  --soft: var(--brand-soft);
+  --muted: var(--text-muted);
+  --accent: var(--brand);
+  --accent-dark: var(--brand-strong);
+  --accent-soft: var(--brand-soft);
+  --accent-warm: var(--ui-accent);
+  --accent-warm-strong: var(--ui-accent-strong);
+  --accent-warm-soft: var(--ui-accent-soft);
+  --accent-warm-line: var(--ui-accent-line);
+  --warn: var(--warning);
+  --warn-soft: var(--warning-soft);
+  --shadow: var(--shadow-md);
+  --radius: var(--radius-lg);
+}
+
+body {
+  font-family: var(--font-base) !important;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(var(--brand-rgb), .035) 0%, var(--bg) 280px) !important;
+  line-height: var(--lh-body);
+}
+
+.admin-shell { background: var(--bg); }
+.sidebar {
+  background: var(--sidebar-bg) !important;
+  color: var(--sidebar-text) !important;
+  box-shadow: 1px 0 0 rgba(255,255,255,.06) inset;
+}
+.sidebar-brand h1,
+.sidebar-brand strong { color: #fff; }
+.sidebar-brand p,
+.sidebar-user-card span { color: var(--sidebar-muted) !important; }
+.brand-kicker,
+.auth-kicker { color: var(--brand) !important; font-weight: var(--fw-bold); letter-spacing: .06em; }
+.sidebar .brand-kicker { color: #93C5FD !important; }
+
+/* Sidebar icons: CSS-only, CSP friendly, no external icon font. */
+.sidebar-link {
+  --nav-icon-default: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='8' y1='7' x2='20' y2='7'/%3E%3Cline x1='8' y1='12' x2='20' y2='12'/%3E%3Cline x1='8' y1='17' x2='20' y2='17'/%3E%3Ccircle cx='4' cy='7' r='1'/%3E%3Ccircle cx='4' cy='12' r='1'/%3E%3Ccircle cx='4' cy='17' r='1'/%3E%3C/svg%3E");
+  --nav-icon: var(--nav-icon-default);
+  position: relative;
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding-left: 42px !important;
+  color: var(--sidebar-link) !important;
+  border-radius: var(--radius-md) !important;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.sidebar-link::before {
+  content: "";
+  position: absolute;
+  inset: 8px auto 8px 0;
+  width: 3px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+}
+.sidebar-link::after {
+  content: "";
+  display: none;
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  background: currentColor;
+  opacity: .92;
+}
+@supports ((-webkit-mask: url("") center / contain no-repeat) or (mask: url("") center / contain no-repeat)) {
+  .sidebar-link::after {
+    display: block;
+    -webkit-mask: var(--nav-icon, var(--nav-icon-default)) center / contain no-repeat;
+    mask: var(--nav-icon, var(--nav-icon-default)) center / contain no-repeat;
+  }
+}
+.sidebar-link[data-view-target="dashboardView"],
+.sidebar-link[data-sidebar-href="index.php"],
+.sidebar-link:nth-child(1) { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='8' y1='7' x2='20' y2='7'/%3E%3Cline x1='8' y1='12' x2='20' y2='12'/%3E%3Cline x1='8' y1='17' x2='20' y2='17'/%3E%3Ccircle cx='4' cy='7' r='1'/%3E%3Ccircle cx='4' cy='12' r='1'/%3E%3Ccircle cx='4' cy='17' r='1'/%3E%3C/svg%3E"); }
+.sidebar-link[data-view-target="calendarView"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cline x1='3' y1='9' x2='21' y2='9'/%3E%3Cline x1='8' y1='3' x2='8' y2='6'/%3E%3Cline x1='16' y1='3' x2='16' y2='6'/%3E%3C/svg%3E"); }
+.sidebar-link[data-view-target="passcodeView"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='8' cy='14' r='4'/%3E%3Cline x1='11' y1='11' x2='20' y2='4'/%3E%3Cline x1='17' y1='7' x2='20' y2='10'/%3E%3C/svg%3E"); }
+.sidebar-link[data-view-target="adminView"],
+.sidebar-link[data-sidebar-href="settings.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='4' y1='8' x2='20' y2='8'/%3E%3Ccircle cx='15' cy='8' r='2.4'/%3E%3Cline x1='4' y1='16' x2='20' y2='16'/%3E%3Ccircle cx='9' cy='16' r='2.4'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="compose.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="batches.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='8' y1='7' x2='20' y2='7'/%3E%3Cline x1='8' y1='12' x2='20' y2='12'/%3E%3Cline x1='8' y1='17' x2='20' y2='17'/%3E%3Ccircle cx='4' cy='7' r='1'/%3E%3Ccircle cx='4' cy='12' r='1'/%3E%3Ccircle cx='4' cy='17' r='1'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="drafts.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='14' rx='2'/%3E%3Cpath d='m3 7 9 6 9-6'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="attachments.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.4 11.6-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 1 1-2.8-2.8l8.5-8.5'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="templates.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z'/%3E%3Cpath d='M14 2v6h6'/%3E%3Cline x1='8' y1='13' x2='16' y2='13'/%3E%3Cline x1='8' y1='17' x2='16' y2='17'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="organizations.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M22 21v-2a4 4 0 0 0-3-3.9'/%3E%3Cpath d='M16 3.1a4 4 0 0 1 0 7.8'/%3E%3C/svg%3E"); }
+.sidebar-link[data-sidebar-href="send_logs.php"],
+.sidebar-link[data-sidebar-href="logs.php"] { --nav-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 3v18h18'/%3E%3Cpath d='M7 14l3-3 3 2 5-6'/%3E%3C/svg%3E"); }
+.sidebar-link:hover,
+.sidebar-link.is-active {
+  background: var(--sidebar-active-bg) !important;
+  color: #fff !important;
+  border-color: var(--sidebar-active-border) !important;
+}
+.sidebar-link.is-active::before { background: rgba(96,165,250,.72); }
+.sidebar-user-card {
+  background: var(--sidebar-card-bg) !important;
+  border: 1px solid rgba(255,255,255,.14) !important;
+  border-radius: var(--radius-lg) !important;
+}
+.sidebar-logout-link {
+  background: rgba(255,255,255,.10) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255,255,255,.12) !important;
+  box-shadow: none !important;
+}
+.sidebar-logout-link:hover { background: rgba(255,255,255,.16) !important; }
+
+.wrap,
+.layout-grid,
+.page-shell { color: var(--text); }
+.page-head,
+.section-head,
+.section-title-row,
+.public-site-header,
+.topbar { gap: var(--sp-4); }
+h1 { font-size: var(--fs-h1); line-height: 1.25; letter-spacing: -.02em; }
+h2 { font-size: var(--fs-h2); line-height: 1.35; }
+h3 { font-size: var(--fs-h3); line-height: 1.45; }
+.lead,
+.muted,
+.small-note,
+.subline,
+.summary-card span,
+.stat-card span,
+.mini-stat-label { color: var(--text-muted) !important; }
+
+.card,
+.panel,
+.summary-card,
+.subcard,
+.list-panel,
+.public-hero-card,
+.public-form-panel,
+.public-sidebar,
+.auth-card,
+.account-login-card,
+.current-user-box,
+.flash.toast,
+.helper-panel,
+.settings-grid > div,
+.help-box,
+.template-sample {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.auth-card,
+.account-login-card,
+.public-hero-card { border-radius: var(--radius-xl) !important; }
+.glass-card { backdrop-filter: none !important; }
+.surface-2,
+.preview-snippet,
+.settings-grid > div,
+.help-box,
+.table-wrap thead th,
+th { background: var(--surface-2) !important; }
+
+.summary-card strong,
+.stat-card strong,
+.mini-stat-card strong,
+.stat-value,
+[id^="summary"][id$="Count"] {
+  font-family: var(--font-num) !important;
+  font-size: var(--fs-stat) !important;
+  font-weight: var(--fw-heavy) !important;
+  color: var(--text) !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -.03em;
+}
+.summary-card.kpi-card,
+.stat-card.kpi-card,
+.mini-stat-card.kpi-card,
+.kpi-card,
+.kpi-flag,
+.summary-card:has(> #summarySwitchbotIssueCount),
+.summary-card:has(> #summaryMailIssueCount),
+.summary-card:has(> #summaryPendingCount),
+.summary-card:has(> #summaryReviewCount) {
+  background: var(--ui-accent-soft) !important;
+  border-color: var(--ui-accent-line) !important;
+}
+.summary-card.kpi-card strong,
+.stat-card.kpi-card strong,
+.mini-stat-card.kpi-card strong,
+.kpi-card strong,
+.kpi-flag strong,
+.summary-card:has(> #summarySwitchbotIssueCount) strong,
+.summary-card:has(> #summaryMailIssueCount) strong,
+.summary-card:has(> #summaryPendingCount) strong,
+.summary-card:has(> #summaryReviewCount) strong,
+.summary-card:has(> #summarySwitchbotIssueCount) [id^="summary"],
+.summary-card:has(> #summaryMailIssueCount) [id^="summary"],
+.summary-card:has(> #summaryPendingCount) [id^="summary"],
+.summary-card:has(> #summaryReviewCount) [id^="summary"] {
+  color: var(--ui-accent) !important;
+}
+.summary-card.kpi-card .pill,
+.kpi-card .pill,
+.kpi-flag .pill {
+  background: var(--surface) !important;
+  color: var(--ui-accent-strong) !important;
+  border-color: var(--ui-accent-line) !important;
+}
+
+/* 添付モックアップに合わせ、差し色は小さなアイブロウに限定する。 */
+.eyebrow,
+.page-eyebrow,
+.section-eyebrow,
+.public-hero-meta,
+.public-hero-meta strong {
+  color: var(--ui-accent-strong) !important;
+  font-weight: var(--fw-bold);
+  letter-spacing: .06em;
+}
+.page-head > div:first-child::before,
+.section-head > div:first-child::before {
+  content: "";
+  display: block;
+  width: 36px;
+  height: 4px;
+  margin: 0 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--ui-accent);
+}
+
+/* テーブル */
+table { border-color: var(--line); }
+th,
+td { border-color: var(--line) !important; }
+th {
+  color: var(--text-muted) !important;
+  font-weight: var(--fw-bold) !important;
+}
+tbody tr { transition: background var(--dur) var(--ease); }
+tbody tr:hover { background: var(--brand-soft) !important; }
+.is-selected-row { background: var(--brand-soft) !important; }
+.needs-review-row { background: var(--warning-soft) !important; }
+
+.badge,
+.pill,
+.status-badge,
+.required-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-pill) !important;
+  border: 1px solid var(--line) !important;
+  background: var(--brand-soft) !important;
+  color: var(--brand-strong) !important;
+  font-weight: var(--fw-bold);
+}
+.badge::before,
+.status-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .72;
+}
+.accent-badge,
+.badge-accent,
+.badge.is-accent {
+  background: var(--ui-accent-soft) !important;
+  color: var(--ui-accent-strong) !important;
+  border-color: var(--ui-accent-line) !important;
+}
+
+.primary,
+.button.primary,
+.btn.primary,
+.auth-primary,
+.submit-btn,
+.result-back-btn,
+.link-button.primary {
+  background: var(--brand) !important;
+  color: var(--brand-contrast) !important;
+  border: 1px solid var(--brand) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-sm);
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+input[type="file"]::file-selector-button {
+  background: var(--brand) !important;
+  color: var(--brand-contrast) !important;
+  border: 1px solid var(--brand) !important;
+  border-radius: var(--radius-md) !important;
+}
+.primary:hover,
+.button.primary:hover,
+.btn.primary:hover,
+.auth-primary:hover,
+.submit-btn:hover,
+.result-back-btn:hover,
+.link-button.primary:hover {
+  background: var(--brand-strong) !important;
+  border-color: var(--brand-strong) !important;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+input[type="file"]::file-selector-button:hover {
+  background: var(--brand-strong) !important;
+  border-color: var(--brand-strong) !important;
+}
+/* 補助CTAは差し色にして、主CTAと競合しないようにする。 */
+.hero-action-btn {
+  background: var(--ui-accent-soft) !important;
+  color: var(--ui-accent-strong) !important;
+  border: 1px solid var(--ui-accent-line) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.hero-action-btn:hover {
+  background: #fff !important;
+  color: var(--ui-accent-strong) !important;
+  border-color: var(--ui-accent) !important;
+  transform: translateY(-1px);
+}
+.secondary,
+.button.ghost,
+.btn.ghost,
+.text-button,
+.link-button:not(.primary) {
+  background: var(--surface-2) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-md) !important;
+}
+.danger,
+.button.danger,
+.btn.danger { background: var(--danger) !important; color: #fff !important; border-color: var(--danger) !important; }
+.text-link,
+.inline-nav-button { color: var(--brand) !important; }
+
+/* forms の縦型フォーム選択タブは、全面 brand 塗りではなく薄い選択面に留める。 */
+.public-form-nav-item.is-active,
+.public-form-nav-item[aria-selected="true"] {
+  background: var(--brand-soft) !important;
+  color: var(--brand-strong) !important;
+  border-color: var(--brand) !important;
+  border-left: 4px solid rgba(96,165,250,.72) !important;
+  box-shadow: none !important;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="search"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="month"],
+input[type="time"],
+input[type="file"],
+select,
+textarea {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-md) !important;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 4px var(--brand-soft) !important;
+  outline: none !important;
+}
+
+.alert,
+.auth-message,
+.flash.toast { border-radius: var(--radius-lg) !important; }
+.alert-info,
+.auth-message-info,
+.flash.toast.success,
+.flash.success { background: var(--success-soft) !important; color: var(--success) !important; border-color: var(--success-line) !important; }
+.alert-warn,
+.auth-message-warn { background: var(--warning-soft) !important; color: var(--warning) !important; border-color: var(--warning-line) !important; }
+.alert-danger,
+.auth-message-error,
+.flash.toast.error,
+.flash.error { background: var(--danger-soft) !important; color: var(--danger) !important; border-color: var(--danger-line) !important; }
+
+.auth-shell,
+.account-login-body {
+  background:
+    radial-gradient(circle at top left, rgba(var(--brand-rgb), .10), transparent 34%),
+    var(--bg) !important;
+}
+.public-site-header,
+.topbar { background: transparent !important; }
+
+@media (max-width: 760px) {
+  body { line-height: 1.65; }
+  .card,
+  .panel,
+  .summary-card,
+  .auth-card,
+  .account-login-card { border-radius: var(--radius-lg) !important; }
+  .sidebar-link { padding-left: 38px !important; }
+  .sidebar-link::after { left: 12px; }
+}
+
+/* ============================================================
+   v6 vivid refresh (append; overrides the rules above)
+   インディゴ基調 + グラデ + ナビ循環配色。最初の admin.book 準拠。
+   ============================================================ */
+
+/* 立体的な多層背景 */
+body {
+  background:
+    radial-gradient(1100px 620px at 100% -6%, rgba(var(--brand-rgb), .10), transparent 60%),
+    radial-gradient(900px 520px at -8% 112%, rgba(15, 118, 110, .06), transparent 58%),
+    var(--bg) !important;
+  background-attachment: fixed;
+}
+
+/* 主CTA: グラデ + ホバーで浮き上がり + 色付き影 */
+.primary,
+.button.primary,
+.btn.primary,
+.auth-primary,
+.submit-btn,
+.result-back-btn,
+.link-button.primary,
+input[type="file"]::file-selector-button {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--brand) 88%, #fff), var(--brand)) !important;
+  border-color: var(--brand) !important;
+  box-shadow: 0 2px 8px rgba(var(--brand-rgb), .28) !important;
+  transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease), filter var(--dur) var(--ease);
+}
+
+.primary:hover,
+.button.primary:hover,
+.btn.primary:hover,
+.auth-primary:hover,
+.submit-btn:hover,
+.result-back-btn:hover,
+.link-button.primary:hover,
+input[type="file"]::file-selector-button:hover {
+  background: linear-gradient(180deg, var(--brand), var(--brand-strong)) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(var(--brand-rgb), .36) !important;
+}
+
+.primary:active,
+.button.primary:active,
+.btn.primary:active,
+.auth-primary:active,
+.submit-btn:active,
+.result-back-btn:active {
+  transform: translateY(0);
+  filter: brightness(.98);
+}
+
+/* danger も同じ質感 */
+.danger,
+.button.danger,
+.btn.danger {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--danger) 90%, #fff), var(--danger)) !important;
+  box-shadow: 0 2px 8px rgba(192, 38, 51, .26) !important;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), filter var(--dur) var(--ease);
+}
+.danger:hover,
+.button.danger:hover,
+.btn.danger:hover { transform: translateY(-1px); filter: brightness(1.04); }
+
+/* secondary/ghost はホバーでわずかに持ち上げ */
+.secondary:hover,
+.button.ghost:hover,
+.btn.ghost:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--line)) !important; transform: translateY(-1px); }
+
+/* 見出しアイブロウをインディゴ→バイオレットのグラデに */
+.page-head > div:first-child::before,
+.section-head > div:first-child::before {
+  width: 40px !important;
+  height: 4px !important;
+  background: linear-gradient(90deg, var(--brand), var(--sec-4)) !important;
+}
+
+/* カードの立体感を強調 + 触れると持ち上がる */
+.card,
+.panel,
+.summary-card,
+.subcard,
+.list-panel,
+.mail-summary-card {
+  box-shadow: var(--shadow-md) !important;
+}
+
+/* テーブル: ゼブラ + 行ホバー強調 */
+tbody tr:nth-child(even) > * { background: color-mix(in srgb, var(--brand) 3%, var(--surface)); }
+tbody tr:hover > * { background: var(--brand-soft) !important; }
+
+/* 入力フォーカスをやや強めに */
+input:focus,
+select:focus,
+textarea:focus {
+  box-shadow: 0 0 0 4px rgba(var(--brand-rgb), .16) !important;
+}
+
+/* ---- サイドバー: 各ナビ項目に循環配色 (識別性・視線誘導) ---- */
+.sidebar { box-shadow: 1px 0 0 rgba(255,255,255,.06) inset, var(--shadow-lg); }
+
+.sidebar-nav .sidebar-link { --sec-dot: var(--sec-1-dot); }
+.sidebar-nav .sidebar-link:nth-child(5n+2) { --sec-dot: var(--sec-2-dot); }
+.sidebar-nav .sidebar-link:nth-child(5n+3) { --sec-dot: var(--sec-3-dot); }
+.sidebar-nav .sidebar-link:nth-child(5n+4) { --sec-dot: var(--sec-4-dot); }
+.sidebar-nav .sidebar-link:nth-child(5n+5) { --sec-dot: var(--sec-5-dot); }
+
+/* アイコンをセクション色で着色 */
+.sidebar-link::after { background: var(--sec-dot, #93C5FD) !important; opacity: .96; }
+
+/* ホバー(非アクティブ)は中立の淡色 */
+.sidebar-link:hover:not(.is-active) {
+  background: rgba(148,163,184,.12) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+
+/* アクティブはセクション色で強調 */
+.sidebar-link.is-active {
+  background: color-mix(in srgb, var(--sec-dot, #818CF8) 20%, transparent) !important;
+  color: #fff !important;
+  border-color: color-mix(in srgb, var(--sec-dot, #818CF8) 45%, transparent) !important;
+}
+.sidebar-link.is-active::before {
+  background: var(--sec-dot, rgba(96,165,250,.72)) !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--sec-dot, #818CF8) 70%, transparent);
+}
+
+/* 汎用 .container は book 側でスコープするため、ここでは触らない */
+
+@media (prefers-reduced-motion: reduce) {
+  .primary, .submit-btn, .danger, .secondary, .btn, .button, .sidebar-link, .card, .panel, input, select, textarea {
+    transition: none !important;
+  }
+}
+

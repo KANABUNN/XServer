@@ -1,0 +1,38 @@
+<?php
+require_once __DIR__ . '/../../../apps/forms_core/bootstrap.php';
+forms_bootstrap();
+$actor = api_require_admin();
+
+$downloadToken = (string)($_GET['csrf_token'] ?? '');
+if (!verify_csrf($downloadToken)) {
+    json_response(['ok' => false, 'message' => 'CSRF トークンが不正です。画面を再読み込みしてから再度お試しください。'], 419);
+}
+
+$revisionId = (int)($_GET['revision_id'] ?? 0);
+if ($revisionId <= 0) {
+    http_response_code(400);
+    exit('revision_id が必要です。');
+}
+
+$download = forms_resolve_revision_download($revisionId);
+if (!$download) {
+    http_response_code(404);
+    exit('対象ファイルが見つかりません。');
+}
+
+$filename = $download['filename'];
+$path = $download['path'];
+forms_admin_audit_log('attachment.download', 'managed_form_revision', $revisionId, [
+    'filename' => (string)$filename,
+    'from_archive' => !empty($download['from_archive']),
+], $actor);
+
+header('Content-Type: application/octet-stream');
+header('Content-Length: ' . filesize($path));
+header('X-Content-Type-Options: nosniff');
+header("Content-Disposition: attachment; filename*=UTF-8''" . rawurlencode($filename));
+readfile($path);
+if (!empty($download['cleanup_path']) && is_string($download['cleanup_path']) && is_file($download['cleanup_path'])) {
+    @unlink($download['cleanup_path']);
+}
+exit;
