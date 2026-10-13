@@ -19,128 +19,141 @@ $dbCounts = is_array($payload['db_counts'] ?? null) ? $payload['db_counts'] : []
 $policies = is_array($payload['policies'] ?? null) ? $payload['policies'] : [];
 $disk = is_array($payload['disk'] ?? null) ? $payload['disk'] : [];
 $cleanupLog = is_array($payload['cleanup_log'] ?? null) ? $payload['cleanup_log'] : [];
-backup_web_header('ストレージ状況', $user);
+$ratio = $disk['used_ratio'] ?? null;
+$ratioPct = is_numeric($ratio) ? max(0, min(100, (float)$ratio * 100)) : null;
+$latestTone = $latest ? backup_web_status_tone((string)$latest['status']) : '';
+backup_web_header('ストレージ', $user);
 ?>
-<section class="grid">
-  <div class="card">
-    <h2>最新収集状態</h2>
-    <div class="metric"><?= $latest ? backup_web_status_badge((string)$latest['status']) : '未収集' ?></div>
-    <p class="muted"><?= $latest ? backup_h((string)$latest['collected_at']) : 'backup_status_collect.php を実行してください。' ?></p>
+<div class="stat-grid">
+  <div class="stat<?= $latestTone !== '' ? ' stat--' . $latestTone : '' ?>">
+    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('activity') ?></span>最新の収集</span>
+    <span class="stat__value"><?= $latest ? backup_h(backup_status_label((string)$latest['status'])) : '未収集' ?></span>
+    <span class="stat__meta"><?= $latest ? backup_h((string)$latest['collected_at']) : '収集ジョブが未実行です' ?></span>
   </div>
-  <div class="card">
-    <h2>バックアップ保存量</h2>
-    <div class="metric"><?= $latest ? backup_h(backup_format_bytes((int)$latest['backup_root_bytes'])) : '-' ?></div>
-    <p class="muted">private_backups 配下</p>
+  <div class="stat stat--info">
+    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('archive') ?></span>バックアップ保存量</span>
+    <span class="stat__value"><?= $latest ? backup_h(backup_format_bytes((int)$latest['backup_root_bytes'])) : '—' ?></span>
+    <span class="stat__meta">private_backups 配下</span>
   </div>
-  <div class="card">
-    <h2>清掃cronログ</h2>
-    <div class="metric"><?= !empty($cleanupLog['exists']) ? 'あり' : 'なし' ?></div>
-    <p class="muted"><?= backup_h((string)($cleanupLog['mtime'] ?? '-')) ?></p>
+  <div class="stat <?= $ratioPct === null ? '' : ($ratioPct >= 90 ? 'stat--danger' : ($ratioPct >= 75 ? 'stat--warning' : 'stat--success')) ?>">
+    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('hard-drive') ?></span>ディスク使用率</span>
+    <span class="stat__value"><?= $ratioPct !== null ? backup_h((string)round($ratioPct, 1)) . '%' : '—' ?></span>
+    <?php if ($ratioPct !== null): ?><span class="progress<?= $ratioPct >= 90 ? ' progress--danger' : ($ratioPct >= 75 ? ' progress--warning' : ' progress--success') ?>"><span style="width: <?= $ratioPct ?>%"></span></span><?php endif; ?>
+    <span class="stat__meta">空き <?= isset($disk['free_bytes']) ? backup_h(backup_format_bytes((int)$disk['free_bytes'])) : '—' ?></span>
   </div>
-  <div class="card">
-    <h2>ディスク使用率</h2>
-    <?php $ratio = $disk['used_ratio'] ?? null; ?>
-    <div class="metric"><?= is_numeric($ratio) ? backup_h((string)round((float)$ratio * 100, 1)) . '%' : '-' ?></div>
-    <?php if (is_numeric($ratio)): ?><div class="bar"><span style="width:<?= max(0, min(100, (float)$ratio * 100)) ?>%"></span></div><?php endif; ?>
-    <p class="muted">空き: <?= isset($disk['free_bytes']) ? backup_h(backup_format_bytes((int)$disk['free_bytes'])) : '-' ?></p>
+  <div class="stat stat--teal">
+    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('file-text') ?></span>清掃ログ</span>
+    <span class="stat__value"><?= !empty($cleanupLog['exists']) ? 'あり' : 'なし' ?></span>
+    <span class="stat__meta"><?= backup_h((string)($cleanupLog['mtime'] ?? '—')) ?></span>
   </div>
-</section>
+</div>
 
 <?php if ($latest && (string)$latest['status'] !== 'success'): ?>
-<section class="card" style="margin-top:16px">
-  <h2>収集警告</h2>
-  <p class="warn"><?= backup_h((string)($payload['maintenance_error'] ?? '不明な警告')) ?></p>
-</section>
+  <div class="alert alert--warning"><?= fitsc_icon('alert-triangle') ?><div class="alert__body"><strong class="alert__title">収集時の警告</strong><span class="allow-select"><?= backup_h((string)($payload['maintenance_error'] ?? '不明な警告')) ?></span></div></div>
 <?php endif; ?>
 
-<section class="card" style="margin-top:16px">
-  <h2>ディレクトリ使用量</h2>
-  <?php if ($directories === []): ?>
-    <p class="muted">ディレクトリ情報がありません。</p>
-  <?php else: ?>
-    <table>
-      <thead><tr><th>区分</th><th>パス</th><th>存在</th><th>ファイル</th><th>ディレクトリ</th><th>サイズ</th><th>最終更新</th></tr></thead>
-      <tbody>
-      <?php foreach ($directories as $key => $stats): if (!is_array($stats)) continue; ?>
-        <tr>
-          <td><strong><?= backup_h((string)$key) ?></strong></td>
-          <td class="mono"><?= backup_h((string)($stats['masked_path'] ?? backup_mask_path((string)($stats['path'] ?? '')))) ?></td>
-          <td><?= !empty($stats['exists']) ? '<span class="ok">あり</span>' : '<span class="danger">なし</span>' ?></td>
-          <td><?= (int)($stats['files'] ?? 0) ?></td>
-          <td><?= (int)($stats['dirs'] ?? 0) ?></td>
-          <td><?= backup_h(backup_format_bytes((int)($stats['bytes'] ?? 0))) ?></td>
-          <td><?= backup_h((string)($stats['latest_mtime'] ?? '-')) ?></td>
-        </tr>
-      <?php endforeach; ?>
-      </tbody>
-    </table>
-  <?php endif; ?>
-</section>
+<section class="card" data-tabs-root>
+  <div class="card__header card__header--tabs">
+    <div class="tabs" data-tabs data-tabs-hash aria-label="ストレージの詳細">
+      <button type="button" class="tab" data-tab="dirs"><?= fitsc_icon('folder') ?>ディレクトリ</button>
+      <button type="button" class="tab" data-tab="db"><?= fitsc_icon('database') ?>DB蓄積</button>
+      <button type="button" class="tab" data-tab="policy"><?= fitsc_icon('sliders') ?>保持ポリシー</button>
+      <button type="button" class="tab" data-tab="log"><?= fitsc_icon('file-text') ?>清掃ログ</button>
+      <button type="button" class="tab" data-tab="history"><?= fitsc_icon('history') ?>収集履歴</button>
+    </div>
+  </div>
 
-<section class="card" style="margin-top:16px">
-  <h2>保持ポリシー</h2>
-  <?php if ($policies === []): ?>
-    <p class="muted">既存 storage_maintenance.php からポリシーを取得できませんでした。</p>
-  <?php else: ?>
-    <table>
-      <thead><tr><th>キー</th><th>値</th></tr></thead>
-      <tbody>
-      <?php foreach ($policies as $key => $value): ?>
-        <tr><td><?= backup_h((string)$key) ?></td><td><?= backup_h((string)$value) ?></td></tr>
-      <?php endforeach; ?>
-      </tbody>
-    </table>
-  <?php endif; ?>
-</section>
+  <div data-tab-panel="dirs">
+    <?php if ($directories === []): ?>
+      <?= backup_web_empty('folder', 'ディレクトリ情報がありません') ?>
+    <?php else: ?>
+      <div class="table-wrap is-stacked bk-table-flat">
+        <table class="table table--compact">
+          <thead><tr><th>区分</th><th>存在</th><th class="text-right">ファイル</th><th class="text-right">ディレクトリ</th><th class="text-right">サイズ</th><th>最終更新</th></tr></thead>
+          <tbody>
+          <?php foreach ($directories as $key => $stats): if (!is_array($stats)) continue; ?>
+            <tr>
+              <td><span class="cell-main"><?= backup_h((string)$key) ?></span><span class="cell-sub mono allow-select"><?= backup_h((string)($stats['masked_path'] ?? backup_mask_path((string)($stats['path'] ?? '')))) ?></span></td>
+              <td><?= !empty($stats['exists']) ? '<span class="badge badge--success badge--dot">あり</span>' : '<span class="badge badge--danger badge--dot">なし</span>' ?></td>
+              <td class="text-right num"><?= number_format((int)($stats['files'] ?? 0)) ?></td>
+              <td class="text-right num"><?= number_format((int)($stats['dirs'] ?? 0)) ?></td>
+              <td class="text-right num nowrap"><?= backup_h(backup_format_bytes((int)($stats['bytes'] ?? 0))) ?></td>
+              <td class="text-xs nowrap"><?= backup_h((string)($stats['latest_mtime'] ?? '—')) ?></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+  </div>
 
-<section class="card" style="margin-top:16px">
-  <h2>DB蓄積状況</h2>
-  <?php if ($dbCounts === []): ?>
-    <p class="muted">DB件数情報がありません。</p>
-  <?php else: ?>
-    <table>
-      <thead><tr><th>対象</th><th>総行数</th><th>保持期間超過</th><th>保持日数</th></tr></thead>
-      <tbody>
-      <?php foreach ($dbCounts as $row): if (!is_array($row)) continue; ?>
-        <tr>
-          <td><?= backup_h((string)($row['label'] ?? '')) ?></td>
-          <td><?= (int)($row['total_rows'] ?? 0) ?></td>
-          <td><?= (int)($row['rows_older_than_retention'] ?? 0) ?></td>
-          <td><?= (int)($row['retention_days'] ?? 0) ?></td>
-        </tr>
-      <?php endforeach; ?>
-      </tbody>
-    </table>
-  <?php endif; ?>
-</section>
+  <div data-tab-panel="db" hidden>
+    <?php if ($dbCounts === []): ?>
+      <?= backup_web_empty('database', 'DB件数の情報がありません') ?>
+    <?php else: ?>
+      <div class="table-wrap is-stacked bk-table-flat">
+        <table class="table table--compact">
+          <thead><tr><th>対象</th><th class="text-right">総行数</th><th class="text-right">保持期間超過</th><th class="text-right">保持日数</th></tr></thead>
+          <tbody>
+          <?php foreach ($dbCounts as $row): if (!is_array($row)) continue; $over = (int)($row['rows_older_than_retention'] ?? 0); ?>
+            <tr>
+              <td class="cell-main"><?= backup_h((string)($row['label'] ?? '')) ?></td>
+              <td class="text-right num"><?= number_format((int)($row['total_rows'] ?? 0)) ?></td>
+              <td class="text-right num<?= $over > 0 ? ' text-warning fw-bold' : '' ?>"><?= number_format($over) ?></td>
+              <td class="text-right num"><?= (int)($row['retention_days'] ?? 0) ?> 日</td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+  </div>
 
-<section class="card" style="margin-top:16px">
-  <h2>storage_cleanup.log 末尾</h2>
-  <?php if (empty($cleanupLog['tail'])): ?>
-    <p class="muted">ログ末尾を取得できませんでした。</p>
-  <?php else: ?>
-    <div class="pre"><?= backup_h((string)$cleanupLog['tail']) ?></div>
-  <?php endif; ?>
-</section>
+  <div data-tab-panel="policy" hidden>
+    <?php if ($policies === []): ?>
+      <?= backup_web_empty('sliders', 'ポリシーを取得できませんでした') ?>
+    <?php else: ?>
+      <div class="card__body">
+        <dl class="dl">
+          <?php foreach ($policies as $key => $value): ?>
+            <div><dt class="mono"><?= backup_h((string)$key) ?></dt><dd><?= backup_h(is_scalar($value) ? (string)$value : json_encode($value, JSON_UNESCAPED_UNICODE)) ?></dd></div>
+          <?php endforeach; ?>
+        </dl>
+      </div>
+    <?php endif; ?>
+  </div>
 
-<section class="card" style="margin-top:16px">
-  <h2>収集履歴</h2>
-  <table>
-    <thead><tr><th>ID</th><th>収集日時</th><th>状態</th><th>総量</th><th>Forms live</th><th>Forms archive</th><th>Backup root</th></tr></thead>
-    <tbody>
-    <?php foreach ($snapshots as $snapshot): ?>
-      <tr>
-        <td><?= (int)$snapshot['id'] ?></td>
-        <td><?= backup_h((string)$snapshot['collected_at']) ?></td>
-        <td><?= backup_web_status_badge((string)$snapshot['status']) ?></td>
-        <td><?= backup_h(backup_format_bytes((int)$snapshot['total_bytes'])) ?></td>
-        <td><?= backup_h(backup_format_bytes((int)$snapshot['forms_live_bytes'])) ?></td>
-        <td><?= backup_h(backup_format_bytes((int)$snapshot['forms_archive_bytes'])) ?></td>
-        <td><?= backup_h(backup_format_bytes((int)$snapshot['backup_root_bytes'])) ?></td>
-      </tr>
-    <?php endforeach; ?>
-    </tbody>
-  </table>
+  <div data-tab-panel="log" hidden>
+    <?php if (empty($cleanupLog['tail'])): ?>
+      <?= backup_web_empty('file-text', 'ログを取得できませんでした') ?>
+    <?php else: ?>
+      <div class="card__body"><pre class="bk-log allow-select"><?= backup_h((string)$cleanupLog['tail']) ?></pre></div>
+    <?php endif; ?>
+  </div>
+
+  <div data-tab-panel="history" hidden>
+    <?php if ($snapshots === []): ?>
+      <?= backup_web_empty('history', '収集履歴はありません') ?>
+    <?php else: ?>
+      <div class="table-wrap is-stacked bk-table-flat">
+        <table class="table table--compact">
+          <thead><tr><th>収集日時</th><th>状態</th><th class="text-right">総量</th><th class="text-right">Forms（公開中）</th><th class="text-right">Forms（アーカイブ）</th><th class="text-right">バックアップ</th></tr></thead>
+          <tbody>
+          <?php foreach ($snapshots as $snapshot): ?>
+            <tr>
+              <td class="nowrap"><?= backup_h((string)$snapshot['collected_at']) ?><span class="cell-sub mono">#<?= (int)$snapshot['id'] ?></span></td>
+              <td><?= backup_web_status_badge((string)$snapshot['status']) ?></td>
+              <td class="text-right num nowrap"><?= backup_h(backup_format_bytes((int)$snapshot['total_bytes'])) ?></td>
+              <td class="text-right num nowrap"><?= backup_h(backup_format_bytes((int)$snapshot['forms_live_bytes'])) ?></td>
+              <td class="text-right num nowrap"><?= backup_h(backup_format_bytes((int)$snapshot['forms_archive_bytes'])) ?></td>
+              <td class="text-right num nowrap"><?= backup_h(backup_format_bytes((int)$snapshot['backup_root_bytes'])) ?></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+  </div>
 </section>
 <?php
 backup_web_footer();

@@ -189,13 +189,27 @@ function backup_auth_require_login(): array
     return backup_auth_current_user();
 }
 
+function backup_auth_forbid_page(string $message): void
+{
+    http_response_code(403);
+    require_once dirname(__DIR__) . '/ui_kit.php';
+    echo '<!doctype html><html lang="ja" data-theme="dark"><head><meta charset="utf-8">'
+        . '<meta name="viewport" content="width=device-width, initial-scale=1"><title>権限がありません | バックアップ管理</title>'
+        . fitsc_ui_head(['guard' => 'context-menu-guard.js'])
+        . '</head><body><main class="auth"><section class="auth__card"><div class="auth__head">'
+        . '<span class="brand-mark brand-mark--lg">' . fitsc_icon('lock') . '</span>'
+        . '<h1>権限がありません</h1><p>' . backup_h($message) . '</p></div>'
+        . '<div class="stack"><button type="button" class="btn btn--primary btn--block" data-history-back>前の画面へ戻る</button>'
+        . '<a class="btn btn--ghost btn--block" href="logout.php">別のアカウントでログイン</a></div>'
+        . '</section></main></body></html>';
+    exit;
+}
+
 function backup_auth_require_view_access(): array
 {
     $user = backup_auth_require_login();
     if (!backup_auth_user_has_role($user, 'viewer') && !backup_auth_user_has_role($user, 'admin')) {
-        http_response_code(403);
-        echo '<!doctype html><meta charset="utf-8"><title>権限がありません</title><script src="context-menu-guard.js?v=20260713" defer></script><p>バックアップ管理画面を表示する権限がありません。</p>';
-        exit;
+        backup_auth_forbid_page('バックアップ管理画面を表示する権限がありません。');
     }
     return $user;
 }
@@ -204,9 +218,7 @@ function backup_auth_require_admin_access(): array
 {
     $user = backup_auth_require_login();
     if (!backup_auth_user_has_role($user, 'admin')) {
-        http_response_code(403);
-        echo '<!doctype html><meta charset="utf-8"><title>権限がありません</title><script src="context-menu-guard.js?v=20260713" defer></script><p>この操作を実行するにはバックアップ管理者権限が必要です。</p>';
-        exit;
+        backup_auth_forbid_page('この操作を実行するにはバックアップ管理者権限が必要です。');
     }
     return $user;
 }

@@ -250,7 +250,9 @@
     modalStack.push(dialog);
     lockScroll();
     nextFrame(function () { dialog.classList.add('is-open'); });
-    var focusTarget = opts.focus ? dialog.querySelector(opts.focus) : dialog.querySelector('[autofocus], [data-autofocus]');
+    var focusTarget = opts.focus
+      ? (typeof opts.focus === 'string' ? dialog.querySelector(opts.focus) : opts.focus)
+      : dialog.querySelector('[autofocus], [data-autofocus]');
     window.setTimeout(function () {
       if (focusTarget) { try { focusTarget.focus({ preventScroll: true }); } catch (e) { focusTarget.focus(); } }
     }, 30);
