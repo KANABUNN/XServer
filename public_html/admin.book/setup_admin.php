@@ -62,80 +62,54 @@ if ($setupAllowed && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 }
 ?>
+<?php require_once __DIR__ . '/../../apps/ui_kit.php'; ?>
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>初回管理者セットアップ</title>
-  <link rel="stylesheet" href="./assets/common/tokens.css?v=20260716a">
-  <link rel="stylesheet" href="./css/admin-auth.css?v=20260715a">
-  <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260716a">
-  <script src="./assets/common/context-menu-guard.js?v=20260713" defer></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>初回セットアップ | 貸し部屋予約 管理</title>
+  <?php echo fitsc_ui_head(['css' => ['./css/app.css'], 'guard' => './assets/common/context-menu-guard.js']); ?>
 </head>
 <body>
-  <main class="auth-shell">
-    <section class="auth-card auth-card-wide">
-      <div class="auth-card-head">
-        <p class="auth-kicker">admin.book</p>
-        <h1>初回管理者セットアップ</h1>
-        <p class="auth-lead">認証テーブルの初期化と、最初の管理者アカウント作成を行います。作成後は login.php からログインしてください。</p>
+  <main class="auth">
+    <div class="auth__corner"><?php echo fitsc_theme_toggle(); ?></div>
+    <section class="auth__card auth__card--wide">
+      <div class="auth__head">
+        <span class="brand-mark brand-mark--lg"><?php echo fitsc_icon('shield'); ?></span>
+        <h1>初回セットアップ</h1>
+        <p>最初の管理者アカウントを作成します</p>
       </div>
 
-      <?php if ($infoMessage !== ''): ?>
-        <div class="auth-message auth-message-info"><?php echo admin_auth_h($infoMessage); ?></div>
-      <?php endif; ?>
+      <div class="stack">
+        <?php if ($infoMessage !== ''): ?>
+          <div class="alert alert--info"><?php echo fitsc_icon('info'); ?><div class="alert__body"><?php echo admin_auth_h($infoMessage); ?></div></div>
+        <?php endif; ?>
+        <?php if ($errorMessage !== ''): ?>
+          <div class="alert alert--danger" role="alert"><?php echo fitsc_icon('x-circle'); ?><div class="alert__body"><?php echo admin_auth_h($errorMessage); ?></div></div>
+        <?php endif; ?>
 
-      <?php if ($errorMessage !== ''): ?>
-        <div class="auth-message auth-message-error"><?php echo admin_auth_h($errorMessage); ?></div>
-      <?php endif; ?>
-
-      <?php if ($setupAllowed): ?>
-      <form method="post" class="auth-form" autocomplete="on">
-        <?php echo admin_auth_csrf_field(); ?>
-        <div class="auth-grid">
-          <label class="auth-field">
-            <span>ログインID</span>
-            <input type="text" name="login_id" maxlength="100" autocomplete="username" value="<?php echo admin_auth_h($values['login_id']); ?>" required>
-          </label>
-
-          <label class="auth-field">
-            <span>表示名</span>
-            <input type="text" name="display_name" maxlength="100" value="<?php echo admin_auth_h($values['display_name']); ?>" required>
-          </label>
-
-          <label class="auth-field auth-field-wide">
-            <span>メールアドレス</span>
-            <input type="email" name="email" maxlength="255" autocomplete="email" value="<?php echo admin_auth_h($values['email']); ?>">
-          </label>
-
-          <label class="auth-field">
-            <span>ロール</span>
-            <select name="role_key" required>
-              <option value="admin" <?php echo $values['role_key'] === 'admin' ? 'selected' : ''; ?>>管理者 (admin)</option>
-              <option value="user" <?php echo $values['role_key'] === 'user' ? 'selected' : ''; ?>>編集者 (user)</option>
-              <option value="viewer" <?php echo $values['role_key'] === 'viewer' ? 'selected' : ''; ?>>閲覧者 (viewer)</option>
-            </select>
-          </label>
-
-          <label class="auth-field">
-            <span>パスワード</span>
-            <input type="password" name="password" minlength="10" autocomplete="new-password" required>
-          </label>
-
-          <label class="auth-field auth-field-wide">
-            <span>パスワード（確認）</span>
-            <input type="password" name="password_confirm" minlength="10" autocomplete="new-password" required>
-          </label>
-        </div>
-
-        <button type="submit" class="auth-primary">初回管理者を作成</button>
-      </form>
-      <?php endif; ?>
-
-      <div class="auth-foot">
-        <p>この画面は最初のアカウント作成後は不要です。運用開始後は削除または無効化してください。</p>
-        <p><a href="login.php">ログイン画面へ</a></p>
+        <?php if ($setupAllowed): ?>
+          <form method="post" class="stack" autocomplete="on" data-busy>
+            <?php echo admin_auth_csrf_field(); ?>
+            <div class="form-grid">
+              <label class="field"><span>ログインID</span><input type="text" name="login_id" maxlength="100" autocomplete="username" value="<?php echo admin_auth_h($values['login_id']); ?>" required autofocus></label>
+              <label class="field"><span>表示名</span><input type="text" name="display_name" maxlength="100" value="<?php echo admin_auth_h($values['display_name']); ?>" required></label>
+              <label class="field span-full"><span>メールアドレス</span><input type="email" name="email" maxlength="255" autocomplete="email" value="<?php echo admin_auth_h($values['email']); ?>"></label>
+              <label class="field span-full"><span>ロール</span>
+                <select name="role_key" required>
+                  <option value="admin" <?php echo $values['role_key'] === 'admin' ? 'selected' : ''; ?>>管理者 (admin)</option>
+                  <option value="user" <?php echo $values['role_key'] === 'user' ? 'selected' : ''; ?>>編集者 (user)</option>
+                  <option value="viewer" <?php echo $values['role_key'] === 'viewer' ? 'selected' : ''; ?>>閲覧者 (viewer)</option>
+                </select>
+              </label>
+              <label class="field"><span>パスワード <span class="opt">10文字以上</span></span><input type="password" name="password" minlength="10" autocomplete="new-password" required></label>
+              <label class="field"><span>パスワード（確認）</span><input type="password" name="password_confirm" minlength="10" autocomplete="new-password" required></label>
+            </div>
+            <button type="submit" class="btn btn--primary btn--lg btn--block"><?php echo fitsc_icon('check'); ?>管理者を作成</button>
+          </form>
+        <?php endif; ?>
+        <a class="btn btn--ghost btn--block" href="login.php"><?php echo fitsc_icon('log-in'); ?>ログイン画面へ</a>
       </div>
     </section>
   </main>
