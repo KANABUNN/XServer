@@ -29,72 +29,92 @@ $checks = backup_latest_integrity_checks(30);
 $selectedId = (int)($_GET['id'] ?? ($checks[0]['id'] ?? 0));
 $selected = $selectedId > 0 ? backup_get_integrity_check($selectedId) : null;
 $items = $selected ? backup_integrity_items((int)$selected['id'], 300) : [];
-backup_web_header('整合性チェック', $user);
+$runButton = '';
+if ($isAdmin) {
+    $runButton = '<form method="post" data-busy><input type="hidden" name="_csrf" value="' . backup_h(backup_auth_csrf_token()) . '">'
+        . '<button class="btn btn--primary" type="submit">' . fitsc_icon('play') . '<span class="hide-mobile">今すぐ実行</span></button></form>';
+}
+backup_web_header('整合性チェック', $user, [
+    'subtitle' => 'DB に記録された添付・JSON と実ファイルの有無を照合',
+    'actions' => $runButton,
+]);
 backup_web_flash($flashType, $flashMessage);
+$selTone = $selected ? backup_web_status_tone((string)$selected['status']) : '';
 ?>
-<section class="section-title">
-  <div>
-    <h2>DB・ファイル整合性チェック</h2>
-    <p class="muted">Forms添付、Mail添付、SwitchBot詳細JSONについて、DB上の相対パスと実ファイルの存在を照合します。</p>
+<div class="stat-grid">
+  <div class="stat<?= $selTone !== '' ? ' stat--' . $selTone : '' ?>">
+    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('shield') ?></span><?= $selected ? 'チェック #' . (int)$selected['id'] : '最新の状態' ?></span>
+    <span class="stat__value"><?= $selected ? backup_h(backup_status_label((string)$selected['status'])) : '未実行' ?></span>
+    <span class="stat__meta"><?= $selected ? backup_h((string)$selected['finished_at']) : '整合性チェックはまだ実行されていません' ?></span>
   </div>
-  <?php if ($isAdmin): ?>
-    <form method="post">
-      <input type="hidden" name="_csrf" value="<?= backup_h(backup_auth_csrf_token()) ?>">
-      <button class="btn" type="submit">今すぐ実行</button>
-    </form>
-  <?php endif; ?>
-</section>
-
-<section class="grid">
-  <div class="card"><h2>最新状態</h2><div class="metric"><?= $selected ? backup_web_status_badge((string)$selected['status']) : '未実行' ?></div><p class="muted"><?= $selected ? backup_h((string)$selected['finished_at']) : 'backup_integrity_check.php を実行してください。' ?></p></div>
-  <div class="card"><h2>確認件数</h2><div class="metric"><?= $selected ? number_format((int)$selected['checked_items']) : '-' ?></div><p class="muted">OK <?= $selected ? number_format((int)$selected['ok_items']) : 0 ?> 件</p></div>
-  <div class="card"><h2>欠損</h2><div class="metric danger"><?= $selected ? number_format((int)$selected['missing_items']) : '-' ?></div><p class="muted">欠損は復元またはDB記録修正が必要です。</p></div>
-  <div class="card"><h2>警告</h2><div class="metric warn"><?= $selected ? number_format((int)$selected['warning_items']) : '-' ?></div><p class="muted">DB未設定などの確認不能項目です。</p></div>
-</section>
-
-<section class="section-title"><h2>実行履歴</h2></section>
-<section class="card">
-<table>
-<thead><tr><th>ID</th><th>キー</th><th>開始</th><th>終了</th><th>状態</th><th>確認</th><th>欠損</th><th></th></tr></thead>
-<tbody>
-<?php foreach ($checks as $check): ?>
-<tr>
-  <td><?= (int)$check['id'] ?></td>
-  <td class="mono"><?= backup_h((string)$check['check_key']) ?></td>
-  <td><?= backup_h((string)$check['started_at']) ?></td>
-  <td><?= backup_h((string)($check['finished_at'] ?? '')) ?></td>
-  <td><?= backup_web_status_badge((string)$check['status']) ?></td>
-  <td><?= number_format((int)$check['checked_items']) ?></td>
-  <td><?= number_format((int)$check['missing_items']) ?></td>
-  <td><a class="btn" href="integrity.php?id=<?= (int)$check['id'] ?>">詳細</a></td>
-</tr>
-<?php endforeach; ?>
-<?php if ($checks === []): ?><tr><td colspan="8" class="muted">履歴はありません。</td></tr><?php endif; ?>
-</tbody>
-</table>
-</section>
+  <div class="stat stat--info">
+    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('list-checks') ?></span>確認件数</span>
+    <span class="stat__value"><?= $selected ? number_format((int)$selected['checked_items']) : '—' ?></span>
+    <span class="stat__meta">正常 <?= $selected ? number_format((int)$selected['ok_items']) : 0 ?> 件</span>
+  </div>
+  <div class="stat <?= $selected && (int)$selected['missing_items'] > 0 ? 'stat--danger' : 'stat--success' ?>">
+    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('x-circle') ?></span>欠損</span>
+    <span class="stat__value"><?= $selected ? number_format((int)$selected['missing_items']) : '—' ?></span>
+    <span class="stat__meta">復元または DB 記録の修正が必要</span>
+  </div>
+  <div class="stat <?= $selected && (int)$selected['warning_items'] > 0 ? 'stat--warning' : 'stat--teal' ?>">
+    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('alert-triangle') ?></span>警告</span>
+    <span class="stat__value"><?= $selected ? number_format((int)$selected['warning_items']) : '—' ?></span>
+    <span class="stat__meta">DB 未設定などで確認できない項目</span>
+  </div>
+</div>
 
 <?php if ($selected): ?>
-<section class="section-title"><h2>検出項目</h2><span class="muted">欠損・警告のみ最大300件表示</span></section>
 <section class="card">
-<table>
-<thead><tr><th>ID</th><th>アプリ</th><th>テーブル</th><th>参照ID</th><th>状態</th><th>相対パス</th><th>推定パス</th><th>内容</th></tr></thead>
-<tbody>
-<?php foreach ($items as $item): ?>
-<tr>
-  <td><?= (int)$item['id'] ?></td>
-  <td><?= backup_h((string)$item['app_key']) ?></td>
-  <td class="mono"><?= backup_h((string)$item['source_table']) ?></td>
-  <td><?= backup_h((string)$item['source_id']) ?></td>
-  <td><?= backup_web_status_badge((string)$item['item_status']) ?></td>
-  <td class="mono"><?= backup_h((string)$item['relative_path']) ?></td>
-  <td class="mono"><?= backup_h((string)$item['resolved_path']) ?></td>
-  <td><?= backup_h((string)$item['message']) ?></td>
-</tr>
-<?php endforeach; ?>
-<?php if ($items === []): ?><tr><td colspan="8" class="muted">欠損・警告項目はありません。</td></tr><?php endif; ?>
-</tbody>
-</table>
+  <div class="card__header">
+    <div class="card__title"><?= fitsc_icon('alert-circle') ?>検出された項目 <small>欠損・警告のみ（最大300件）</small></div>
+  </div>
+  <?php if ($items === []): ?>
+    <?= backup_web_empty('check-circle', '欠損・警告はありません') ?>
+  <?php else: ?>
+    <div class="table-wrap is-stacked">
+      <table class="table table--compact">
+        <thead><tr><th>状態</th><th>アプリ・参照元</th><th>パス</th><th>内容</th></tr></thead>
+        <tbody>
+        <?php foreach ($items as $item): ?>
+          <tr>
+            <td><?= backup_web_status_badge((string)$item['item_status']) ?></td>
+            <td><span class="cell-main"><?= backup_h((string)$item['app_key']) ?></span><span class="cell-sub mono"><?= backup_h((string)$item['source_table']) ?> #<?= backup_h((string)$item['source_id']) ?></span></td>
+            <td><span class="mono text-xs allow-select bk-wrap"><?= backup_h((string)$item['relative_path']) ?></span><span class="cell-sub mono allow-select bk-wrap"><?= backup_h((string)$item['resolved_path']) ?></span></td>
+            <td class="text-sm"><?= backup_h((string)$item['message']) ?></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
 </section>
 <?php endif; ?>
+
+<section class="card">
+  <div class="card__header">
+    <div class="card__title"><?= fitsc_icon('history') ?>実行履歴</div>
+  </div>
+  <?php if ($checks === []): ?>
+    <?= backup_web_empty('history', '履歴はありません') ?>
+  <?php else: ?>
+    <div class="table-wrap is-stacked">
+      <table class="table table--compact">
+        <thead><tr><th>開始</th><th>状態</th><th class="text-right">確認</th><th class="text-right">欠損</th><th>終了</th><th class="col-actions"></th></tr></thead>
+        <tbody>
+        <?php foreach ($checks as $check): $isSel = $selected && (int)$check['id'] === (int)$selected['id']; ?>
+          <tr data-href="integrity.php?id=<?= (int)$check['id'] ?>" class="bk-row-link<?= $isSel ? ' is-selected' : '' ?>">
+            <td><span class="cell-main nowrap"><?= backup_h((string)$check['started_at']) ?></span><span class="cell-sub mono">#<?= (int)$check['id'] ?> <?= backup_h((string)$check['check_key']) ?></span></td>
+            <td><?= backup_web_status_badge((string)$check['status']) ?></td>
+            <td class="text-right num"><?= number_format((int)$check['checked_items']) ?></td>
+            <td class="text-right num<?= (int)$check['missing_items'] > 0 ? ' text-danger fw-bold' : '' ?>"><?= number_format((int)$check['missing_items']) ?></td>
+            <td class="text-xs nowrap"><?= backup_h((string)($check['finished_at'] ?? '')) ?></td>
+            <td class="col-actions"><a class="btn btn--ghost btn--icon btn--sm" href="integrity.php?id=<?= (int)$check['id'] ?>" aria-label="#<?= (int)$check['id'] ?> を表示"><?= fitsc_icon('chevron-right') ?></a></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
+</section>
 <?php backup_web_footer(); ?>

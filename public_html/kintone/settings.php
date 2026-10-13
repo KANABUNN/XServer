@@ -305,67 +305,153 @@ if ($lookupMapText !== '') {
     }
 }
 
-kintone_page_header('アプリレジストリ', $user);
+
+$isEditingExisting = ($selected['app_key'] ?? '') !== '';
+$postedAction = $_SERVER['REQUEST_METHOD'] === 'POST' ? (string)($_POST['action'] ?? 'save_app') : '';
+$openEditor = array_key_exists('app_key', $_GET) || ($error !== '' && $postedAction === 'save_app');
+kintone_page_header('アプリ設定', $user, [
+    'actions' => '<a class="btn btn--primary" href="settings.php?app_key=" data-new-app>' . fitsc_icon('plus') . '<span class="hide-mobile">アプリを追加</span></a>',
+]);
 kintone_render_flash();
-if ($error !== ''): ?><div class="alert alert-danger"><?= kintone_h($error) ?></div><?php endif; ?>
+if ($error !== '' && !$openEditor): ?><?= fitsc_flash_html('error', $error) ?><?php endif; ?>
 <section class="card">
-  <h2>kintoneアプリ一覧</h2>
-  <p class="muted">APIトークンはアプリ単位で暗号化保存します。一覧にはトークン値を表示しません。</p>
-  <div class="table-wrap"><table><thead><tr><th>app_key</th><th>表示名</th><th>ロール</th><th>アプリID</th><th>状態</th><th>トークン</th><th>最終同期</th><th>操作</th></tr></thead><tbody>
-    <?php foreach ($apps as $app): ?>
-      <tr>
-        <td><code><?= kintone_h($app['app_key']) ?></code></td>
-        <td><?= kintone_h($app['display_name']) ?></td>
-        <td><span class="badge"><?= kintone_h($app['app_role']) ?></span></td>
-        <td><?= kintone_h($app['kintone_app_id']) ?></td>
-        <td><?= ((int)$app['is_active'] === 1) ? '<span class="badge badge-success">有効</span>' : '<span class="badge badge-danger">無効</span>' ?> / <?= kintone_h($app['status']) ?></td>
-        <td><?= ((int)($app['has_token'] ?? 0) === 1) ? '<span class="badge badge-success">登録済み</span>' : '<span class="badge badge-warn">未登録</span>' ?></td>
-        <td><?= kintone_h($app['last_synced_at'] ?? '-') ?></td>
-        <td><a class="btn" href="settings.php?app_key=<?= rawurlencode((string)$app['app_key']) ?>">編集</a></td>
-      </tr>
-    <?php endforeach; ?>
-    <?php if ($apps === []): ?><tr><td colspan="8" class="empty">アプリはまだ登録されていません。</td></tr><?php endif; ?>
-  </tbody></table></div>
-  <p><a class="secondary" href="settings.php?app_key=">新規アプリを追加</a></p>
-</section>
-<section class="card">
-  <h2><?= ($selected['app_key'] ?? '') !== '' ? 'アプリ編集' : '新規アプリ追加' ?></h2>
-  <form method="post" class="form-grid">
-    <?= kintone_auth_csrf_field() ?>
-    <input type="hidden" name="action" value="save_app">
-    <input type="hidden" name="original_app_key" value="<?= kintone_h($selected['app_key'] ?? '') ?>">
-    <label>app_key</label><input name="app_key" value="<?= kintone_h($selected['app_key'] ?? '') ?>" <?= ($selected['app_key'] ?? '') !== '' ? 'readonly' : '' ?> placeholder="例: organizations / members / officers">
-    <label>表示名</label><input name="display_name" value="<?= kintone_h($selected['display_name'] ?? '') ?>" placeholder="例: 団体マスタ">
-    <label>サブドメイン</label><input name="kintone_subdomain" value="<?= kintone_h($selected['kintone_subdomain'] ?? '') ?>" placeholder="example または https://example.cybozu.com">
-    <label>アプリID</label><input name="kintone_app_id" type="number" value="<?= kintone_h($selected['kintone_app_id'] ?? '') ?>">
-    <label>同期ロール</label><select name="app_role"><option value="push" <?= ($selected['app_role'] ?? '') === 'push' ? 'selected' : '' ?>>push: XServer正本→kintone</option><option value="pull" <?= ($selected['app_role'] ?? '') === 'pull' ? 'selected' : '' ?>>pull: kintone→XServerキャッシュ</option><option value="manual" <?= ($selected['app_role'] ?? '') === 'manual' ? 'selected' : '' ?>>manual: 手動管理</option></select>
-    <label>update_key_field</label><input name="update_key_field" value="<?= kintone_h($selected['update_key_field'] ?? '') ?>" placeholder="例: organization_code / student_id / belongs_org_code">
-    <label>APIトークン</label><input name="api_token" type="password" autocomplete="new-password" placeholder="既存トークンを維持する場合は空欄">
-    <label>PIIを含む</label><label class="check-row"><input type="checkbox" name="contains_pii" value="1" <?= (int)($selected['contains_pii'] ?? 0) === 1 ? 'checked' : '' ?>> pull時はallowlist未設定なら取り込み拒否</label>
-    <label>フィールドマップ</label><textarea name="field_map_text" rows="8" placeholder="logical_key: kintone_field_code&#10;JSONも可"><?= kintone_h($fieldMapText) ?></textarea>
-    <label>キャッシュ許可フィールド</label><textarea name="cache_field_allowlist_text" rows="6" placeholder="pull時にrecord_jsonへ保存するフィールドコードを1行1件で指定"><?= kintone_h($allowlistText) ?></textarea>
-    <label>ルックアップマップ</label><textarea name="lookup_map_text" rows="6" placeholder="logical_key: target_app_key.target_logical_key&#10;例: organization_code: organizations.organization_code&#10;例: student_id: members.student_id&#10;JSONも可"><?= kintone_h($lookupMapText) ?></textarea>
-    <div class="form-actions"><button class="primary" type="submit">保存</button><a class="btn" href="sync.php?app_key=<?= rawurlencode((string)($selected['app_key'] ?? '')) ?>">同期画面へ</a></div>
-  </form>
-</section>
-<?php if (($selected['app_key'] ?? '') !== ''): ?>
-<section class="card">
-  <h2>接続テスト・状態変更</h2>
-  <p>状態: <span class="badge"><?= kintone_h($selected['status'] ?? 'not_connected') ?></span> / 最終テスト: <?= kintone_h($selected['last_tested_at'] ?? '-') ?> / トークン: <?= ((int)($selected['has_token'] ?? 0) === 1) ? '登録済み' : '未登録' ?></p>
-  <?php if (!empty($selected['last_error'])): ?><p class="alert alert-warning">前回エラー: <?= kintone_h($selected['last_error']) ?></p><?php endif; ?>
-  <form method="post" action="api/test_connection.php" class="form-actions">
-    <?= kintone_auth_csrf_field() ?>
-    <input type="hidden" name="app_key" value="<?= kintone_h($selected['app_key']) ?>">
-    <button class="secondary" type="submit">このアプリで接続テスト</button>
-  </form>
-  <?php if (($selected['app_key'] ?? '') !== 'organizations'): ?>
-    <form method="post" class="form-actions">
-      <?= kintone_auth_csrf_field() ?>
-      <input type="hidden" name="app_key" value="<?= kintone_h($selected['app_key']) ?>">
-      <input type="hidden" name="action" value="<?= (int)($selected['is_active'] ?? 1) === 1 ? 'deactivate_app' : 'reactivate_app' ?>">
-      <button class="danger" type="submit" onclick="return confirm('このアプリの有効状態を変更します。よろしいですか？');"><?= (int)($selected['is_active'] ?? 1) === 1 ? '無効化' : '再有効化' ?></button>
-    </form>
+  <div class="card__header">
+    <div class="card__title"><?= fitsc_icon('cloud') ?>kintoneアプリ <small><?= count($apps) ?>件</small></div>
+    <span class="text-xs text-subtle"><?= fitsc_icon('lock', 'ico--sm') ?> APIトークンは暗号化して保存され、画面には表示されません</span>
+  </div>
+  <?php if ($apps === []): ?>
+    <div class="empty"><span class="empty__icon"><?= fitsc_icon('cloud') ?></span><span>アプリはまだ登録されていません。</span><a class="btn btn--primary btn--sm" href="settings.php?app_key="><?= fitsc_icon('plus') ?>アプリを追加</a></div>
+  <?php else: ?>
+    <div class="table-wrap is-stacked kt-table-flat">
+      <table class="table">
+        <thead><tr><th>アプリ</th><th>同期</th><th>kintone</th><th>接続</th><th>トークン</th><th>状態</th><th class="col-actions"></th></tr></thead>
+        <tbody>
+        <?php foreach ($apps as $app): $key = (string)$app['app_key']; $active = (int)$app['is_active'] === 1; ?>
+          <tr data-href="settings.php?app_key=<?= rawurlencode($key) ?>" class="kt-row-link<?= $isEditingExisting && $openEditor && $key === (string)$selected['app_key'] ? ' is-selected' : '' ?><?= $active ? '' : ' is-muted' ?>">
+            <td><span class="cell-main"><?= kintone_h($app['display_name']) ?></span><span class="cell-sub mono"><?= kintone_h($key) ?></span></td>
+            <td><?= kintone_role_badge((string)$app['app_role']) ?></td>
+            <td><span class="mono">ID <?= kintone_h($app['kintone_app_id']) ?></span><span class="cell-sub mono"><?= kintone_h($app['kintone_subdomain'] ?? '') ?></span></td>
+            <td><?= kintone_status_badge((string)$app['status']) ?><?php if (!empty($app['last_error'])): ?><span class="cell-sub text-danger truncate kt-cell-error" title="<?= kintone_h($app['last_error']) ?>"><?= kintone_h($app['last_error']) ?></span><?php endif; ?></td>
+            <td><?= ((int)($app['has_token'] ?? 0) === 1) ? '<span class="badge badge--success badge--dot">登録済み</span>' : '<span class="badge badge--warning badge--dot">未登録</span>' ?></td>
+            <td><?= $active ? '<span class="badge badge--success">有効</span>' : '<span class="badge">無効</span>' ?></td>
+            <td class="col-actions">
+              <span class="menu-anchor">
+                <button type="button" class="btn btn--ghost btn--icon btn--sm" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="<?= kintone_h($app['display_name']) ?> の操作"><?= fitsc_icon('more') ?></button>
+                <div class="menu" role="menu">
+                  <a class="menu__item" role="menuitem" href="settings.php?app_key=<?= rawurlencode($key) ?>"><?= fitsc_icon('pen') ?>編集</a>
+                  <form method="post" action="api/test_connection.php" data-kt-test-connection>
+                    <?= kintone_auth_csrf_field() ?>
+                    <input type="hidden" name="app_key" value="<?= kintone_h($key) ?>">
+                    <button type="submit" class="menu__item" role="menuitem"><?= fitsc_icon('zap') ?>接続テスト</button>
+                  </form>
+                  <?php if ($active): ?><a class="menu__item" role="menuitem" href="sync.php?app_key=<?= rawurlencode($key) ?>"><?= fitsc_icon('refresh') ?>同期画面へ</a><?php endif; ?>
+                  <?php if ($key !== 'organizations'): ?>
+                    <div class="menu__sep"></div>
+                    <form method="post" action="settings.php" data-confirm="<?= $active ? '無効化すると同期対象から外れます。設定は残ります。' : 'このアプリを再び同期対象にします。' ?>" data-confirm-title="「<?= kintone_h($app['display_name']) ?>」を<?= $active ? '無効化' : '再有効化' ?>しますか？" data-confirm-ok="<?= $active ? '無効化する' : '再有効化する' ?>"<?= $active ? '' : ' data-confirm-tone="default"' ?>>
+                      <?= kintone_auth_csrf_field() ?>
+                      <input type="hidden" name="app_key" value="<?= kintone_h($key) ?>">
+                      <input type="hidden" name="action" value="<?= $active ? 'deactivate_app' : 'reactivate_app' ?>">
+                      <button type="submit" class="menu__item<?= $active ? ' menu__item--danger' : '' ?>" role="menuitem"><?= fitsc_icon($active ? 'eye-off' : 'eye') ?><?= $active ? '無効化' : '再有効化' ?></button>
+                    </form>
+                  <?php endif; ?>
+                </div>
+              </span>
+            </td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
   <?php endif; ?>
 </section>
-<?php endif; ?>
+
+<dialog class="modal modal--lg" id="appDialog" aria-labelledby="appDialogTitle"<?= $openEditor ? ' data-open-on-load' : '' ?>>
+  <form method="post" action="settings.php?app_key=<?= rawurlencode((string)($selected['app_key'] ?? '')) ?>" class="modal__panel" data-busy>
+    <div class="modal__header">
+      <span class="modal__icon"><?= fitsc_icon($isEditingExisting ? 'pen' : 'plus') ?></span>
+      <div>
+        <h2 class="modal__title" id="appDialogTitle"><?= $isEditingExisting ? kintone_h($selected['display_name'] ?: $selected['app_key']) : 'アプリを追加' ?></h2>
+        <p class="modal__desc"><?= $isEditingExisting ? '接続 ' . kintone_status_badge((string)($selected['status'] ?? '')) . ' ・ 最終テスト ' . kintone_h($selected['last_tested_at'] ?? '—') : 'kintoneアプリの接続情報と同期方法を登録します' ?></p>
+      </div>
+      <button type="button" class="btn btn--ghost btn--icon modal__close" data-modal-close aria-label="閉じる"><?= fitsc_icon('x') ?></button>
+    </div>
+    <div class="modal__body stack">
+      <?php if ($error !== ''): ?>
+        <div class="alert alert--danger" role="alert"><?= fitsc_icon('x-circle') ?><div class="alert__body"><?= kintone_h($error) ?></div></div>
+      <?php endif; ?>
+      <?php if ($isEditingExisting && !empty($selected['last_error'])): ?>
+        <div class="alert alert--warning"><?= fitsc_icon('alert-triangle') ?><div class="alert__body"><strong class="alert__title">前回のエラー</strong><span class="allow-select"><?= kintone_h($selected['last_error']) ?></span></div></div>
+      <?php endif; ?>
+      <?= kintone_auth_csrf_field() ?>
+      <input type="hidden" name="action" value="save_app">
+      <input type="hidden" name="original_app_key" value="<?= kintone_h($selected['app_key'] ?? '') ?>">
+      <div class="form-grid">
+        <label class="field">
+          <span>app_key <span class="req">必須</span></span>
+          <input name="app_key" class="mono" value="<?= kintone_h($selected['app_key'] ?? '') ?>" <?= $isEditingExisting ? 'readonly' : 'required' ?> placeholder="例: members">
+          <?php if ($isEditingExisting): ?><span class="field__hint">登録後は変更できません</span><?php endif; ?>
+        </label>
+        <label class="field">
+          <span>表示名 <span class="req">必須</span></span>
+          <input name="display_name" value="<?= kintone_h($selected['display_name'] ?? '') ?>" required placeholder="例: 団体マスタ">
+        </label>
+        <label class="field">
+          <span>サブドメイン <span class="req">必須</span></span>
+          <input name="kintone_subdomain" class="mono" value="<?= kintone_h($selected['kintone_subdomain'] ?? '') ?>" required placeholder="example または https://example.cybozu.com">
+        </label>
+        <label class="field">
+          <span>kintoneアプリID <span class="req">必須</span></span>
+          <input name="kintone_app_id" type="number" min="1" class="mono" value="<?= kintone_h($selected['kintone_app_id'] ?? '') ?>" required>
+        </label>
+        <label class="field">
+          <span>同期方向</span>
+          <select name="app_role">
+            <option value="push" <?= ($selected['app_role'] ?? '') === 'push' ? 'selected' : '' ?>>送信 push：XServer正本 → kintone</option>
+            <option value="pull" <?= ($selected['app_role'] ?? '') === 'pull' ? 'selected' : '' ?>>取得 pull：kintone → XServerキャッシュ</option>
+            <option value="manual" <?= ($selected['app_role'] ?? '') === 'manual' ? 'selected' : '' ?>>手動：自動同期しない</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>更新キー（update_key_field）</span>
+          <input name="update_key_field" class="mono" value="<?= kintone_h($selected['update_key_field'] ?? '') ?>" placeholder="例: organization_code">
+          <span class="field__hint">push / pull では必須です</span>
+        </label>
+        <label class="field">
+          <span>APIトークン <?= ((int)($selected['has_token'] ?? 0) === 1) ? '<span class="badge badge--success badge--dot">登録済み</span>' : '' ?></span>
+          <input name="api_token" type="password" autocomplete="new-password" placeholder="<?= ((int)($selected['has_token'] ?? 0) === 1) ? '変更しない場合は空欄' : 'トークンを入力' ?>">
+        </label>
+        <div class="field">
+          <span>個人情報</span>
+          <label class="switch"><input type="checkbox" name="contains_pii" value="1" <?= (int)($selected['contains_pii'] ?? 0) === 1 ? 'checked' : '' ?>>個人情報（PII）を含む</label>
+          <span class="field__hint">pull の場合、キャッシュ許可フィールドが未設定だと取り込みません</span>
+        </div>
+      </div>
+
+      <details class="disclosure"<?= $isEditingExisting ? '' : ' open' ?>>
+        <summary><?= fitsc_icon('sliders') ?><span>フィールドの対応づけ</span><small class="text-subtle">フィールドマップ・キャッシュ許可・ルックアップ</small></summary>
+        <div class="stack kt-disclosure__body">
+          <label class="field">
+            <span>フィールドマップ</span>
+            <textarea name="field_map_text" rows="7" class="mono" placeholder="logical_key: kintone_field_code（JSONも可）"><?= kintone_h($fieldMapText) ?></textarea>
+            <span class="field__hint">1行に1件、<code>論理キー: kintoneのフィールドコード</code></span>
+          </label>
+          <label class="field">
+            <span>キャッシュ許可フィールド</span>
+            <textarea name="cache_field_allowlist_text" rows="4" class="mono" placeholder="フィールドコードを1行1件"><?= kintone_h($allowlistText) ?></textarea>
+            <span class="field__hint">pull 時に保存するフィールドだけを指定します</span>
+          </label>
+          <label class="field">
+            <span>ルックアップマップ</span>
+            <textarea name="lookup_map_text" rows="4" class="mono" placeholder="organization_code: organizations.organization_code"><?= kintone_h($lookupMapText) ?></textarea>
+            <span class="field__hint">1行に1件、<code>論理キー: 参照先app_key.参照先の論理キー</code>（JSONも可）</span>
+          </label>
+        </div>
+      </details>
+    </div>
+    <div class="modal__footer">
+      <button type="button" class="btn btn--ghost" data-modal-close>キャンセル</button>
+      <button type="submit" class="btn btn--primary"><?= fitsc_icon('save') ?>保存</button>
+    </div>
+  </form>
+</dialog>
 <?php kintone_page_footer(); ?>

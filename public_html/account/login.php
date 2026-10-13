@@ -35,45 +35,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
+<?php require_once dirname(__DIR__, 2) . '/apps/ui_kit.php'; ?>
 <!doctype html>
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>アカウント管理ログイン</title>
-    <link rel="stylesheet" href="assets/common/tokens.css?v=20260716a">
-    <link rel="stylesheet" href="assets/css/account.css">
-    <link rel="stylesheet" href="assets/common/fit-sc-skin.css?v=20260716a">
-    <link rel="stylesheet" href="assets/css/account-responsive.css?v=20260713">
-    <script src="assets/common/context-menu-guard.js?v=20260713" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>ログイン | 共通アカウント管理</title>
+    <?= fitsc_ui_head(['css' => ['assets/css/app.css']]) ?>
 </head>
-<body class="account-login-body">
-<div class="account-login-card">
-    <div class="brand-block">
-        <div class="brand-kicker">FIT-SC</div>
-        <h1>共通アカウント管理</h1>
-        <p>account.fit-sc.jp では、共有アカウントの作成・権限付与・停止を一元管理します。</p>
-    </div>
-
-    <?php if ($flash): ?>
-        <div class="flash <?= account_site_h($flash['type']) ?>"><?= nl2br(account_site_h($flash['message'])) ?></div>
-    <?php endif; ?>
-    <?php if ($error !== ''): ?>
-        <div class="flash error"><?= nl2br(account_site_h($error)) ?></div>
-    <?php endif; ?>
-
-    <form method="post" class="panel form-stack">
-        <input type="hidden" name="_csrf" value="<?= account_site_h(account_site_csrf_token()) ?>">
-        <label>
-            <span>ログインID または メールアドレス</span>
-            <input type="text" name="identifier" autocomplete="username" required>
-        </label>
-        <label>
-            <span>パスワード</span>
-            <input type="password" name="password" autocomplete="current-password" required>
-        </label>
-        <button type="submit" class="button primary full">ログイン</button>
-    </form>
-</div>
+<body>
+<main class="auth">
+    <div class="auth__corner"><?= fitsc_theme_toggle() ?></div>
+    <section class="auth__card">
+        <div class="auth__head">
+            <span class="brand-mark brand-mark--lg"><?= fitsc_icon('users') ?></span>
+            <h1>共通アカウント管理</h1>
+            <p>アカウント管理の権限を持つ共通アカウントでログイン</p>
+        </div>
+        <div class="stack">
+            <?php if ($flash): ?>
+                <?= fitsc_flash_html((string)$flash['type'], (string)$flash['message']) ?>
+            <?php endif; ?>
+            <?php if ($error !== ''): ?>
+                <div class="alert alert--danger" role="alert"><?= fitsc_icon('x-circle') ?><div class="alert__body"><?= nl2br(account_site_h($error)) ?></div></div>
+            <?php endif; ?>
+            <form method="post" class="stack" data-busy>
+                <input type="hidden" name="_csrf" value="<?= account_site_h(account_site_csrf_token()) ?>">
+                <label class="field">
+                    <span>ログインID または メールアドレス</span>
+                    <span class="input-icon"><?= fitsc_icon('user') ?><input type="text" name="identifier" autocomplete="username" required autofocus></span>
+                </label>
+                <label class="field">
+                    <span>パスワード</span>
+                    <span class="input-icon"><?= fitsc_icon('lock') ?><input type="password" name="password" autocomplete="current-password" required></span>
+                </label>
+                <button type="submit" class="btn btn--primary btn--lg btn--block"><span>ログイン</span><?= fitsc_icon('arrow-right') ?></button>
+            </form>
+        </div>
+    </section>
+</main>
 </body>
 </html>

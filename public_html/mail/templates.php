@@ -51,113 +51,116 @@ $form = $editTemplate ?: [
 
 $form['body_template'] = mail_admin_body_to_editor_html((string)($form['body_template'] ?? ''), (string)($form['body_type'] ?? 'html'));
 $form['body_type'] = 'html';
-
-mail_render_page_header('テンプレート', $user, 'templates.php');
+mail_render_page_header('テンプレート', $user, 'templates.php', [
+    'subtitle' => '件名・本文に {{団体名}} などの変数を置くと、送信時に団体ごとの値に置き換わります',
+    'actions' => $editTemplate ? '<a class="btn btn--ghost" href="templates.php">' . fitsc_icon('plus') . '<span class="hide-mobile">新規作成に切替</span></a>' : '',
+]);
+$canEditTemplate = mail_auth_has_permission($user, 'template.edit');
+$variableButtons = ['{{識別番号}}', '{{団体名}}', '{{代表者氏名}}', '{{メールアドレス}}', '{{区分}}', '{{identifier}}', '{{organization_name}}', '{{representative_name}}', '{{email}}'];
 ?>
-<header class="page-head">
-  <div>
-    <h1>テンプレート</h1>
-    <p class="lead">件名・本文に <code>{{団体名}}</code> のような変数を置き、送信バッチ作成時に団体DBの値を代入します。</p>
-  </div>
-</header>
 <?php mail_render_db_error($dbError); ?>
-
 <?php if ($dbError === ''): ?>
-<div class="two-column-grid wide-left">
-  <section class="panel">
-    <div class="panel-head"><h2><?php echo $editTemplate ? 'テンプレートを編集' : 'テンプレートを追加'; ?></h2><span class="muted">変数名はクリックで挿入できます</span></div>
-    <form method="post" class="form-grid">
+
+<div class="split split--sidebar">
+  <section class="card">
+    <div class="card__header">
+      <div class="card__title"><?php echo fitsc_icon($editTemplate ? 'edit' : 'plus'); ?><?php echo $editTemplate ? 'テンプレートを編集' : '新しいテンプレート'; ?></div>
+      <?php if ($editTemplate): ?><span class="badge">#<?php echo (int)$form['id']; ?></span><?php endif; ?>
+    </div>
+    <form method="post" class="card__body stack" data-busy>
       <?php echo mail_auth_csrf_field(); ?>
       <input type="hidden" name="action" value="save">
       <input type="hidden" name="id" value="<?php echo (int)$form['id']; ?>">
-      <label><span>テンプレートキー</span><input type="text" name="template_key" value="<?php echo mail_h((string)$form['template_key']); ?>" placeholder="空欄なら自動生成"></label>
-      <label><span>表示名 *</span><input type="text" name="title" value="<?php echo mail_h((string)$form['title']); ?>" required></label>
-      <label class="full"><span>件名 *</span><input type="text" name="subject_template" id="templateSubject" data-variable-insert-target value="<?php echo mail_h((string)$form['subject_template']); ?>" required></label>
       <input type="hidden" name="body_type" value="html">
-      <label><span>状態</span><select name="is_active"><option value="1"<?php echo mail_selected($form['is_active'], 1); ?>>有効</option><option value="0"<?php echo mail_selected($form['is_active'], 0); ?>>無効</option></select></label>
-      <div class="full editor-field">
-        <span class="editor-field-label">本文 * <small class="muted">HTML形式で保存されます</small></span>
+      <div class="form-grid form-grid--3">
+        <label class="field"><span>表示名 <span class="req">必須</span></span><input type="text" name="title" value="<?php echo mail_h((string)$form['title']); ?>" required></label>
+        <label class="field"><span>キー <span class="opt">空欄で自動</span></span><input type="text" name="template_key" value="<?php echo mail_h((string)$form['template_key']); ?>" spellcheck="false"></label>
+        <label class="field"><span>状態</span><select name="is_active"><option value="1"<?php echo mail_selected($form['is_active'], 1); ?>>有効</option><option value="0"<?php echo mail_selected($form['is_active'], 0); ?>>無効</option></select></label>
+      </div>
+      <label class="field"><span>件名 <span class="req">必須</span></span><input type="text" name="subject_template" id="templateSubject" data-variable-insert-target value="<?php echo mail_h((string)$form['subject_template']); ?>" required></label>
+      <div class="field editor-field">
+        <span>本文 <span class="req">必須</span></span>
         <textarea name="body_template" id="templateBody" class="html-editor-source" data-html-editor-input required><?php echo mail_h((string)$form['body_template']); ?></textarea>
         <div class="html-editor-wrap">
-          <div class="html-editor-toolbar" data-editor-toolbar="templateBodyEditor">
-            <button type="button" data-editor-command="bold"><strong>B</strong></button>
-            <button type="button" data-editor-command="italic"><em>I</em></button>
-            <button type="button" data-editor-command="underline"><u>U</u></button>
-            <button type="button" data-editor-command="insertUnorderedList">箇条書き</button>
-            <select data-editor-size title="文字サイズ">
+          <div class="html-editor-toolbar" data-editor-toolbar="templateBodyEditor" role="toolbar" aria-label="書式">
+            <button type="button" data-editor-command="bold" title="太字"><strong>B</strong></button>
+            <button type="button" data-editor-command="italic" title="斜体"><em>I</em></button>
+            <button type="button" data-editor-command="underline" title="下線"><u>U</u></button>
+            <button type="button" data-editor-command="insertUnorderedList" title="箇条書き"><?php echo fitsc_icon('list', 'ico--sm'); ?></button>
+            <span class="html-editor-sep" aria-hidden="true"></span>
+            <select data-editor-size title="文字サイズ" aria-label="文字サイズ">
               <option value="3">標準</option>
               <option value="2">小さめ</option>
               <option value="4">大きめ</option>
               <option value="5">見出し</option>
             </select>
-            <label class="editor-color-picker">文字色 <input type="color" data-editor-color value="#1b2430"></label>
-            <button type="button" data-editor-command="removeFormat">書式解除</button>
+            <label class="editor-color-picker" title="文字色"><input type="color" data-editor-color value="#1b2430" aria-label="文字色"></label>
+            <button type="button" data-editor-command="removeFormat" title="書式を解除"><?php echo fitsc_icon('rotate-ccw', 'ico--sm'); ?></button>
           </div>
           <div id="templateBodyEditor" class="html-editor" contenteditable="true" data-variable-insert-target data-html-editor="templateBody" data-placeholder="本文を入力してください。"><?php echo mail_admin_sanitize_editor_html((string)$form['body_template']); ?></div>
         </div>
       </div>
-      <div class="form-actions full">
-        <button type="submit" class="primary"<?php echo mail_auth_has_permission($user, 'template.edit') ? '' : ' disabled'; ?>>保存</button>
-        <?php if ($editTemplate): ?><button type="button" class="secondary link-button" data-nav-href="templates.php">新規入力へ戻る</button><?php endif; ?>
+      <div class="form-actions form-actions--end">
+        <?php if ($editTemplate): ?><a class="btn btn--ghost" href="templates.php">キャンセル</a><?php endif; ?>
+        <button type="submit" class="btn btn--primary"<?php echo $canEditTemplate ? '' : ' disabled'; ?>><?php echo fitsc_icon('save'); ?>保存</button>
       </div>
     </form>
   </section>
 
-  <section class="panel">
-    <h2>使用可能な基本変数</h2>
-    <div class="variable-list vertical">
-      <button type="button" class="variable-chip" data-insert-variable="{{識別番号}}" data-insert-targets="templateSubject,templateBodyEditor">{{識別番号}}</button>
-      <button type="button" class="variable-chip" data-insert-variable="{{団体名}}" data-insert-targets="templateSubject,templateBodyEditor">{{団体名}}</button>
-      <button type="button" class="variable-chip" data-insert-variable="{{代表者氏名}}" data-insert-targets="templateSubject,templateBodyEditor">{{代表者氏名}}</button>
-      <button type="button" class="variable-chip" data-insert-variable="{{メールアドレス}}" data-insert-targets="templateSubject,templateBodyEditor">{{メールアドレス}}</button>
-      <button type="button" class="variable-chip" data-insert-variable="{{区分}}" data-insert-targets="templateSubject,templateBodyEditor">{{区分}}</button>
-      <button type="button" class="variable-chip" data-insert-variable="{{identifier}}" data-insert-targets="templateSubject,templateBodyEditor">{{identifier}}</button>
-      <button type="button" class="variable-chip" data-insert-variable="{{organization_name}}" data-insert-targets="templateSubject,templateBodyEditor">{{organization_name}}</button>
-      <button type="button" class="variable-chip" data-insert-variable="{{representative_name}}" data-insert-targets="templateSubject,templateBodyEditor">{{representative_name}}</button>
-      <button type="button" class="variable-chip" data-insert-variable="{{email}}" data-insert-targets="templateSubject,templateBodyEditor">{{email}}</button>
+  <aside class="card sticky-col">
+    <div class="card__header card__header--plain"><div class="card__title"><?php echo fitsc_icon('tag'); ?>差し込み変数</div></div>
+    <div class="card__body stack stack--sm">
+      <div class="variable-list">
+        <?php foreach ($variableButtons as $variable): ?>
+          <button type="button" class="chip variable-chip" data-insert-variable="<?php echo mail_h($variable); ?>" data-insert-targets="templateSubject,templateBodyEditor"><?php echo mail_h($variable); ?></button>
+        <?php endforeach; ?>
+      </div>
+      <p class="small-note">最後にカーソルを置いた件名または本文に挿入します。</p>
+      <p class="small-note">置き換えられない変数が残った宛先は「要確認」になります。</p>
     </div>
-    <p class="muted mt-14">挿入先は、最後にカーソルを置いた件名または本文です。どちらにもカーソルがない場合は件名に挿入します。</p>
-    <p class="muted mt-14">未定義の変数が残った場合、その宛先は <strong>要確認</strong> としてバッチに登録されます。</p>
-  </section>
+  </aside>
 </div>
 
-<section class="panel mt-18">
-  <div class="panel-head"><h2>テンプレート一覧</h2><span class="muted"><?php echo count($templates); ?>件</span></div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>ID</th><th>表示名</th><th>件名</th><th>本文形式</th><th>変数</th><th>状態</th><th>操作</th></tr></thead>
-      <tbody>
-        <?php if ($templates === []): ?><tr><td colspan="7" class="empty">テンプレートがありません。</td></tr><?php endif; ?>
-        <?php foreach ($templates as $tpl): ?>
-          <?php
-            $varInfo = [];
-            if (is_string($tpl['variables_json'] ?? null) && $tpl['variables_json'] !== '') {
-                $decoded = json_decode((string)$tpl['variables_json'], true);
-                $varInfo = is_array($decoded['variables'] ?? null) ? $decoded['variables'] : [];
-            }
-          ?>
-          <tr>
-            <td><?php echo (int)$tpl['id']; ?></td>
-            <td><?php echo mail_h((string)$tpl['title']); ?><br><span class="muted"><?php echo mail_h((string)$tpl['template_key']); ?></span></td>
-            <td><?php echo mail_h((string)$tpl['subject_template']); ?></td>
-            <td><span class="badge">HTML</span></td>
-            <td><?php echo mail_h(implode(', ', array_map('strval', $varInfo))); ?></td>
-            <td><span class="badge"><?php echo mail_h(mail_bool_label($tpl['is_active'])); ?></span></td>
-            <td class="action-cell">
-              <button type="button" class="text-link" data-nav-href="templates.php?edit=<?php echo (int)$tpl['id']; ?>">編集</button>
-              <form method="post" class="inline-form">
-                <?php echo mail_auth_csrf_field(); ?>
-                <input type="hidden" name="action" value="toggle">
-                <input type="hidden" name="id" value="<?php echo (int)$tpl['id']; ?>">
-                <input type="hidden" name="is_active" value="<?php echo (int)$tpl['is_active'] === 1 ? 0 : 1; ?>">
-                <button type="submit" class="text-button"<?php echo mail_auth_has_permission($user, 'template.edit') ? '' : ' disabled'; ?>><?php echo (int)$tpl['is_active'] === 1 ? '無効化' : '有効化'; ?></button>
-              </form>
-            </td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-  </div>
+<section class="card">
+  <div class="card__header"><div class="card__title"><?php echo fitsc_icon('template'); ?>テンプレート一覧 <small><?php echo count($templates); ?>件</small></div></div>
+  <?php if ($templates === []): ?>
+    <div class="empty"><span class="empty__icon"><?php echo fitsc_icon('template'); ?></span><span>テンプレートがありません。</span></div>
+  <?php else: ?>
+    <div class="table-wrap is-stacked">
+      <table class="table">
+        <thead><tr><th>表示名</th><th>件名</th><th>変数</th><th>状態</th><th class="col-actions"></th></tr></thead>
+        <tbody>
+          <?php foreach ($templates as $tpl): ?>
+            <?php
+              $varInfo = [];
+              if (is_string($tpl['variables_json'] ?? null) && $tpl['variables_json'] !== '') {
+                  $decoded = json_decode((string)$tpl['variables_json'], true);
+                  $varInfo = is_array($decoded['variables'] ?? null) ? $decoded['variables'] : [];
+              }
+            ?>
+            <tr<?php echo (int)$tpl['id'] === (int)$form['id'] && $editTemplate ? ' class="is-selected"' : ''; ?>>
+              <td><span class="cell-main"><?php echo mail_h((string)$tpl['title']); ?></span><span class="cell-sub"><code><?php echo mail_h((string)$tpl['template_key']); ?></code></span></td>
+              <td><?php echo mail_h((string)$tpl['subject_template']); ?></td>
+              <td><div class="cluster gap-1"><?php foreach ($varInfo as $var): ?><span class="chip"><?php echo mail_h((string)$var); ?></span><?php endforeach; ?><?php if ($varInfo === []): ?><span class="text-subtle">—</span><?php endif; ?></div></td>
+              <td><?php echo mail_active_badge($tpl['is_active']); ?></td>
+              <td class="col-actions">
+                <div class="btn-group">
+                  <a class="btn btn--ghost btn--sm" href="templates.php?edit=<?php echo (int)$tpl['id']; ?>"><?php echo fitsc_icon('pen'); ?>編集</a>
+                  <form method="post">
+                    <?php echo mail_auth_csrf_field(); ?>
+                    <input type="hidden" name="action" value="toggle">
+                    <input type="hidden" name="id" value="<?php echo (int)$tpl['id']; ?>">
+                    <input type="hidden" name="is_active" value="<?php echo (int)$tpl['is_active'] === 1 ? 0 : 1; ?>">
+                    <button type="submit" class="btn btn--ghost btn--sm"<?php echo $canEditTemplate ? '' : ' disabled'; ?>><?php echo (int)$tpl['is_active'] === 1 ? '無効化' : '有効化'; ?></button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
 </section>
 <?php endif; ?>
 <?php

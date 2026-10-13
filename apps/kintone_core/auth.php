@@ -187,7 +187,19 @@ function kintone_auth_require_login(): array
 function kintone_auth_forbid(string $message): void
 {
     http_response_code(403);
-    echo '<!doctype html><meta charset="utf-8"><title>権限がありません</title><script src="/assets/common/context-menu-guard.js?v=20260713" defer></script><p>' . kintone_h($message) . '</p>';
+    require_once dirname(__DIR__) . '/ui_kit.php';
+    // api/ 配下からも呼ばれるため、共通 UI はサイトのルートから絶対パスで読む
+    echo '<!doctype html><html lang="ja" data-theme="dark"><head><meta charset="utf-8">'
+        . '<meta name="viewport" content="width=device-width, initial-scale=1"><title>権限がありません | kintone管理</title>'
+        . fitsc_ui_fonts()
+        . '<link rel="stylesheet" href="/assets/ui/ui.css"><script src="/assets/ui/ui.js"></script>'
+        . '<script src="/assets/common/context-menu-guard.js?v=20260713" defer></script></head><body>'
+        . '<main class="auth"><section class="auth__card"><div class="auth__head">'
+        . '<span class="brand-mark brand-mark--lg"><svg class="ico" aria-hidden="true"><use href="/assets/ui/icons.svg#i-lock"></use></svg></span>'
+        . '<h1>権限がありません</h1><p>' . kintone_h($message) . '</p></div>'
+        . '<div class="stack"><button type="button" class="btn btn--primary btn--block" data-history-back>前の画面へ戻る</button>'
+        . '<a class="btn btn--ghost btn--block" href="/logout.php">別のアカウントでログイン</a></div>'
+        . '</section></main></body></html>';
     exit;
 }
 

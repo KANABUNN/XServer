@@ -28,39 +28,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $flashes = consume_flash();
+$appName = $config['app_name'] ?? '会議・ToDo';
 ?>
 <!doctype html>
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>ログイン</title>
-    <link rel="stylesheet" href="assets/style.css">
-    <link rel="stylesheet" href="assets/responsive.css?v=20260713">
-    <script src="assets/context-menu-guard.js?v=20260713" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>ログイン | <?= e($appName) ?></title>
+    <?= fitsc_ui_head(['css' => ['assets/app.css'], 'guard' => 'assets/context-menu-guard.js']) ?>
 </head>
-<body class="login-body">
-<div class="login-card">
-    <h1>ログイン</h1>
-    <p>総合管理事務局の会議・ToDo管理サイトです。</p>
-    <?php foreach ($flashes as $flash): ?>
-        <div class="flash <?= e($flash['type']) ?>"><?= e($flash['message']) ?></div>
-    <?php endforeach; ?>
-    <form method="post" class="form-grid single-col">
-        <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
-        <label>
-            <span>ログインIDまたはメールアドレス</span>
-            <input type="text" name="username" required value="<?= e(old('username', '')) ?>" autocomplete="username">
-        </label>
-        <label>
-            <span>パスワード</span>
-            <input type="password" name="password" required>
-        </label>
-        <button type="submit" class="btn">ログイン</button>
-    </form>
-    <div class="hint-box">
-        共通アカウントDB <code>fitsc_account</code> の <code>shared_accounts</code> / <code>shared_account_app_roles</code> に <code>app_key = todo</code> の利用者を登録してください。
-    </div>
-</div>
+<body>
+<main class="auth">
+    <div class="auth__corner"><?= fitsc_theme_toggle() ?></div>
+    <section class="auth__card">
+        <div class="auth__head">
+            <span class="brand-mark brand-mark--lg"><?= fitsc_icon('clipboard-check') ?></span>
+            <h1><?= e($appName) ?></h1>
+            <p>会議の議題・決定事項・タスクを管理します</p>
+        </div>
+        <div class="stack">
+            <?php foreach ($flashes as $flash): ?>
+                <?php $isError = ($flash['type'] ?? '') === 'error'; ?>
+                <div class="alert alert--<?= $isError ? 'danger' : 'success' ?>" role="<?= $isError ? 'alert' : 'status' ?>"><?= fitsc_icon($isError ? 'x-circle' : 'check-circle') ?><div class="alert__body"><?= e($flash['message']) ?></div></div>
+            <?php endforeach; ?>
+            <form method="post" class="stack" data-busy>
+                <input type="hidden" name="_csrf" value="<?= e(csrf_token()) ?>">
+                <label class="field">
+                    <span>ログインID または メールアドレス</span>
+                    <span class="input-icon"><?= fitsc_icon('user') ?><input type="text" name="username" required value="<?= e(old('username', '')) ?>" autocomplete="username" autofocus></span>
+                </label>
+                <label class="field">
+                    <span>パスワード</span>
+                    <span class="input-icon"><?= fitsc_icon('lock') ?><input type="password" name="password" required autocomplete="current-password"></span>
+                </label>
+                <button type="submit" class="btn btn--primary btn--lg btn--block"><span>ログイン</span><?= fitsc_icon('arrow-right') ?></button>
+            </form>
+        </div>
+        <p class="auth__foot">共通アカウントでログインします</p>
+    </section>
+</main>
 </body>
 </html>

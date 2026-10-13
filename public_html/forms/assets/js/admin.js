@@ -205,9 +205,13 @@ function getStatusMeta(status) {
   return STATUS_DEFINITIONS[status] || STATUS_DEFINITIONS.new;
 }
 
+const icon = (name, cls) => (window.UI ? UI.icon(name, cls) : '');
+
 function switchWorkspaceTab(tab) {
   const nextTab = WORKSPACE_TABS.has(tab) ? tab : 'overview';
+  const changed = adminState.activeWorkspaceTab !== nextTab;
   adminState.activeWorkspaceTab = nextTab;
+  if (changed && window.scrollY > 120) window.scrollTo({ top: 0, behavior: 'smooth' });
   try {
     window.sessionStorage.setItem(WORKSPACE_TAB_STORAGE_KEY, nextTab);
   } catch (error) {
@@ -239,7 +243,7 @@ function createStatusBadge(status, label = null) {
 
 function availabilityBadge(availability = {}, isActive = true) {
   if (!isActive) {
-    return '<span class="pill period-pill period-inactive">非公開</span>';
+    return '<span class="badge">非公開</span>';
   }
   const status = availability.status || 'always_open';
   const labelMap = {
@@ -249,7 +253,9 @@ function availabilityBadge(availability = {}, isActive = true) {
     closed: '受付終了',
     inactive: '非公開',
   };
-  return `<span class="pill period-pill period-${escapeHtml(status)}">${escapeHtml(availability.label || labelMap[status] || '公開状態')}</span>`;
+  const toneMap = { always_open: 'success', open: 'success', scheduled: 'info', closed: 'warning', inactive: '' };
+  const tone = toneMap[status] ?? '';
+  return `<span class="badge${tone ? ` badge--${tone}` : ''} badge--dot">${escapeHtml(availability.label || labelMap[status] || '公開状態')}</span>`;
 }
 
 function formatAvailabilityWindow(availability = {}, settings = {}) {
@@ -274,7 +280,7 @@ function syncDeleteButtonState(form = null) {
   const button = document.getElementById('delete-form-button');
   if (!button) return;
   button.disabled = !form || !form.id;
-  button.textContent = form?.id ? 'このフォームを削除' : '保存済みフォームを選択すると削除できます';
+  button.title = form?.id ? '' : '保存済みのフォームのみ削除できます';
 }
 
 function formatFileSize(bytes = 0) {
@@ -285,34 +291,60 @@ function formatFileSize(bytes = 0) {
   return `${size} B`;
 }
 
+// 配布ファイル（複数対応。旧形式の単一ファイル設定も一覧に含める）
+function distributionFiles(settings = {}) {
+  const files = [];
+  if (Array.isArray(settings.distribution_files)) {
+    settings.distribution_files.forEach((file) => {
+      if (!file || !file.relative_path) return;
+      files.push({
+        id: String(file.id || ''),
+        original_name: String(file.original_name || file.stored_name || '配布ファイル'),
+        size_bytes: Number(file.size_bytes || 0),
+        uploaded_at: String(file.uploaded_at || ''),
+      });
+    });
+  }
+  if (!files.length && settings.distribution_file_relative_path) {
+    files.push({
+      id: String(settings.distribution_file_id || ''),
+      original_name: String(settings.distribution_file_original_name || '配布ファイル'),
+      size_bytes: Number(settings.distribution_file_size_bytes || 0),
+      uploaded_at: String(settings.distribution_file_uploaded_at || ''),
+    });
+  }
+  return files;
+}
+
 function renderDistributionFileStatus(form = null) {
   const root = document.getElementById('distribution-file-status');
   if (!root) return;
-  const settings = form?.settings || {};
-  const hasFile = Boolean(settings.distribution_file_relative_path);
+  const files = distributionFiles(form?.settings || {});
   if (!form || !form.id) {
-    root.className = 'distribution-file-status empty-state';
-    root.innerHTML = '保存済みフォームを選択すると配布ファイルを登録できます。';
+    root.innerHTML = '<p class="small-note">フォームを保存すると配布ファイルを登録できます。</p>';
     return;
   }
-  if (!hasFile) {
-    root.className = 'distribution-file-status empty-state';
-    root.innerHTML = '配布ファイルは未設定です。';
+  if (!files.length) {
+    root.innerHTML = `<p class="small-note">${icon('file', 'ico--sm')} 配布ファイルは未登録です。</p>`;
     return;
   }
-  const sizeText = formatFileSize(settings.distribution_file_size_bytes);
-  const uploadedAt = settings.distribution_file_uploaded_at ? ` / ${escapeHtml(settings.distribution_file_uploaded_at)}` : '';
-  root.className = 'distribution-file-status file-ready-card';
-  root.innerHTML = `
-    <div class="file-ready-main">
-      <strong>${escapeHtml(settings.distribution_file_original_name || '配布ファイル')}</strong>
-      <div class="small-note">${escapeHtml([sizeText, uploadedAt.replace(/^ \/ /, '')].filter(Boolean).join(' / '))}</div>
-    </div>
-    <div class="inline-actions">
-      <a class="btn btn-small" href="api/admin_download_form_asset.php?form_id=${encodeURIComponent(String(form.id))}&csrf_token=${encodeURIComponent(csrfToken)}" target="_blank" rel="noopener">ダウンロード確認</a>
-      <button type="button" class="btn danger btn-small" id="delete-distribution-file-button">配布ファイルを削除</button>
-    </div>
-  `;
+  root.innerHTML = files.map((file, index) => {
+    const params = new URLSearchParams({ form_id: String(form.id) });
+    if (file.id) params.set('file_id', file.id);
+    params.set('csrf_token', csrfToken);
+    const meta = [formatFileSize(file.size_bytes), file.uploaded_at].filter(Boolean).join(' / ');
+    return `
+      <div class="distribution-admin-file-item">
+        <span class="list-item__icon">${icon('file-text')}</span>
+        <div class="file-ready-main">
+          <strong>${escapeHtml(file.original_name || `配布ファイル${index + 1}`)}</strong>
+          ${meta ? `<span class="small-note">${escapeHtml(meta)}</span>` : ''}
+        </div>
+        <a class="btn btn--ghost btn--icon btn--sm" href="api/admin_download_form_asset.php?${params.toString()}" target="_blank" rel="noopener" aria-label="ダウンロードして確認" title="ダウンロードして確認">${icon('download')}</a>
+        <button type="button" class="btn btn--danger-ghost btn--icon btn--sm" data-delete-distribution-file="${escapeHtml(file.id)}" aria-label="削除" title="削除">${icon('trash')}</button>
+      </div>
+    `;
+  }).join('');
 }
 
 function mergeUpdatedForm(result = {}) {
@@ -347,7 +379,32 @@ function fieldRowDataToHtml(field = {}) {
   root.querySelector('[data-field="default_value"]').value = field.default_value || '';
   root.querySelector('[data-field="is_required"]').checked = Boolean(field.is_required);
   root.querySelector('[data-field="is_enabled"]').checked = field.is_enabled !== false;
+  syncFieldCard(root);
   return fragment;
+}
+
+const FIELD_TYPE_LABELS = {
+  text: '1行テキスト',
+  textarea: '複数行テキスト',
+  date: '日付',
+  number: '数値',
+  select: '選択',
+  checkbox: 'チェック',
+};
+
+// 追加項目カードの見出し・種類バッジ・選択肢欄の表示を入力内容に合わせる
+function syncFieldCard(card) {
+  if (!card) return;
+  const label = card.querySelector('[data-field="field_label"]')?.value.trim();
+  const type = card.querySelector('[data-field="field_type"]')?.value || 'text';
+  const enabled = card.querySelector('[data-field="is_enabled"]')?.checked !== false;
+  const title = card.querySelector('[data-field-title]');
+  const badge = card.querySelector('[data-field-type-badge]');
+  const optionsWrap = card.querySelector('[data-field-options-wrap]');
+  if (title) title.textContent = label || '新しい項目';
+  if (badge) badge.textContent = FIELD_TYPE_LABELS[type] || type;
+  if (optionsWrap) optionsWrap.hidden = type !== 'select';
+  card.classList.toggle('is-disabled', !enabled);
 }
 
 function collectFields() {
@@ -372,9 +429,13 @@ function renderOverallStats() {
   const total = adminState.forms.length;
   const active = adminState.forms.filter((form) => Boolean(form.is_active)).length;
   const inactive = total - active;
-  document.getElementById('overall-form-count').textContent = String(total);
-  document.getElementById('overall-active-form-count').textContent = String(active);
-  document.getElementById('overall-inactive-form-count').textContent = String(inactive);
+  const setCount = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(value);
+  };
+  setCount('overall-form-count', total);
+  setCount('overall-active-form-count', active);
+  setCount('overall-inactive-form-count', inactive);
 }
 
 function formHoverDetailsHtml(form) {
@@ -671,12 +732,12 @@ function formContextMenuMainHtml(form) {
     </button>
     <div class="form-context-menu-separator" role="separator"></div>
     <button type="button" class="form-context-menu-item form-context-menu-item-detail" role="menuitem" data-context-view="folders"${busy}>
-      <span class="form-context-menu-icon" aria-hidden="true">▣</span>
+      <span class="form-context-menu-icon" aria-hidden="true">${icon('folder', 'ico--sm')}</span>
       <span><strong>フォルダーへ移動</strong><small>${escapeHtml(getFolderPath(form.folder_id))}</small></span>
-      <span class="form-context-menu-chevron" aria-hidden="true">›</span>
+      <span class="form-context-menu-chevron" aria-hidden="true">${icon('chevron-right', 'ico--sm')}</span>
     </button>
     <button type="button" class="form-context-menu-item" role="menuitem" data-context-view="rename"${busy}>
-      <span class="form-context-menu-icon" aria-hidden="true">✎</span>
+      <span class="form-context-menu-icon" aria-hidden="true">${icon('pen', 'ico--sm')}</span>
       <span>名前を変更</span><span></span>
     </button>
     ${formContextMenuState.busy ? '<div class="form-context-menu-progress" role="status">保存しています…</div>' : ''}
@@ -1009,7 +1070,7 @@ function renderFormList() {
   const renderFormButton = (form, depth) => {
     const isSelected = form.id === adminState.activeFormId;
     return `
-      <button type="button" class="directory-form-button ${isSelected ? 'active' : ''}"
+      <button type="button" class="directory-form-button ${isSelected ? 'active' : ''} ${form.is_active ? 'is-public' : ''}"
         style="--tree-indent:${depth * 14}px" data-select-form="${form.id}" data-form-tooltip="${form.id}"
         aria-label="${escapeHtml(form.name)}を選択。右クリックで簡易操作" aria-current="${isSelected ? 'true' : 'false'}"
         aria-haspopup="menu" aria-expanded="false" aria-controls="form-context-menu">
@@ -1039,7 +1100,7 @@ function renderFormList() {
             <span class="directory-folder-name">${escapeHtml(folder.name)}</span>
             <span class="directory-folder-count">${countFolderForms(folder.id)}</span>
           </button>
-          <button type="button" class="directory-folder-edit" data-edit-folder="${folder.id}" aria-label="${escapeHtml(folder.name)}を編集" title="フォルダー設定">•••</button>
+          <button type="button" class="directory-folder-edit" data-edit-folder="${folder.id}" aria-label="${escapeHtml(folder.name)}を編集" title="フォルダー設定">${icon('more', 'ico--sm')}</button>
         </div>
         <div class="directory-folder-children"${expanded ? '' : ' hidden'}>${childHtml}${formHtml}</div>
       </div>
@@ -1073,7 +1134,7 @@ function renderFormList() {
   root.innerHTML = (folderHtml || unfiledHtml)
     ? `${folderHtml}${unfiledHtml}`
     : organizationSearchPending
-      ? '<div class="directory-empty-state">提出団体名からフォームを検索しています…</div>'
+      ? '<div class="directory-empty-state"><span class="spinner"></span><br>提出団体名からフォームを検索しています…</div>'
       : '<div class="directory-empty-state">条件に一致するフォームはありません。</div>';
 
   renderFormSearchStatus(
@@ -1088,7 +1149,10 @@ function renderFormList() {
   if (expandButton) {
     const allFolderIds = [0, ...adminState.folders.map((folder) => folder.id)];
     const allExpanded = allFolderIds.length > 0 && allFolderIds.every((id) => adminState.expandedFolderIds.has(id));
-    expandButton.textContent = allExpanded ? 'すべて折りたたむ' : 'すべて展開';
+    const label = allExpanded ? 'すべて折りたたむ' : 'すべて展開';
+    expandButton.setAttribute('aria-label', label);
+    expandButton.title = label;
+    expandButton.setAttribute('aria-pressed', allExpanded ? 'true' : 'false');
   }
 }
 
@@ -1098,7 +1162,7 @@ function renderFormSearchStatus(matchCount = 0, organizationMatchCount = 0) {
 
   root.classList.remove('is-searching', 'is-error');
   if (adminState.formSearch.trim() === '') {
-    root.textContent = 'フォーム名・説明・フォルダー名・提出団体名から検索できます。';
+    root.textContent = '';
     return;
   }
 
@@ -1135,7 +1199,7 @@ function renderRecentForms() {
     return;
   }
   root.innerHTML = recentForms.map((form) => `
-    <button type="button" class="recent-form-button ${form.id === adminState.activeFormId ? 'active' : ''}"
+    <button type="button" class="recent-form-button ${form.id === adminState.activeFormId ? 'active' : ''} ${form.is_active ? 'is-public' : ''}"
       data-select-form="${form.id}" data-form-tooltip="${form.id}" aria-label="${escapeHtml(form.name)}を選択。右クリックで簡易操作"
       aria-haspopup="menu" aria-expanded="false" aria-controls="form-context-menu">
       <strong>${escapeHtml(form.name)}</strong>
@@ -1149,27 +1213,24 @@ function renderWorkspaceHeader(form) {
   const meta = document.getElementById('workspace-meta');
 
   if (!form) {
-    name.textContent = '新しいフォームを作成します';
-    description.textContent = '左の「新しいフォーム」から作成を始めるか、既存フォームを選択してください。';
-    meta.innerHTML = '<span class="pill">未保存</span>';
+    name.textContent = '新しいフォーム';
+    description.textContent = '基本設定を入力して「設定を保存」で作成します';
+    meta.innerHTML = '<span class="badge badge--warning">未保存</span>';
     return;
   }
 
   name.textContent = form.name;
-  description.textContent = form.description || 'フォームの説明は未設定です。';
+  description.textContent = `${getFolderPath(form.folder_id)} ・ ID ${form.id}${form.slug ? ` ・ ${form.slug}` : ''}`;
   meta.innerHTML = `
-    <span class="pill">ID: ${escapeHtml(String(form.id))}</span>
-    <span class="pill">${escapeHtml(getFolderPath(form.folder_id))}</span>
-    <span class="pill">slug: ${escapeHtml(form.slug)}</span>
-    ${createStatusBadge(form.is_active ? 'resolved' : 'on_hold', form.is_active ? '公開中' : '非公開')}
     ${availabilityBadge(form.availability, form.is_active)}
-    <span class="pill">追加項目 ${escapeHtml(String((form.fields || []).length))}件</span>
+    <a class="btn btn--ghost btn--icon btn--sm" href="index.php#${encodeURIComponent(form.slug || `form-${form.id}`)}" target="_blank" rel="noopener" aria-label="利用者画面で開く" title="利用者画面で開く">${icon('external')}</a>
   `;
 }
 
 function renderSelectedFormSidebar(form) {
   const pill = document.getElementById('selected-form-status-pill');
   const body = document.getElementById('selected-form-sidebar-body');
+  if (!pill || !body) return;
 
   if (!form) {
     pill.className = 'status-badge status-new';
@@ -1217,25 +1278,31 @@ function renderOverview(form) {
   document.getElementById('overview-kpi-fields').textContent = String(fieldCount);
   document.getElementById('overview-kpi-entries').textContent = String(summary.total_count || 0);
   document.getElementById('overview-kpi-new').textContent = String(newCount);
+  const tabCount = document.getElementById('responses-tab-count');
+  if (tabCount) {
+    tabCount.textContent = String(newCount);
+    tabCount.hidden = !form || !newCount;
+    tabCount.title = `未確認 ${newCount}件`;
+  }
 
   const infoRoot = document.getElementById('overview-form-info');
   if (!form) {
-    infoRoot.innerHTML = '<div class="empty-state">フォームを選択すると基本情報を表示します。</div>';
+    infoRoot.innerHTML = '<div class="empty"><span>フォームを選択すると基本情報を表示します。</span></div>';
   } else {
     const infoItems = [
-      ['フォーム名', form.name],
-      ['保存先', getFolderPath(form.folder_id)],
-      ['slug', form.slug],
-      ['公開状態', form.is_active ? '公開中' : '非公開'],
-      ['公開期間', formatAvailabilityWindow(availability, settings)],
-      ['現在の受付状態', availability.label || (form.is_active ? '公開中' : '非公開')],
-      ['表示順', String(form.sort_order ?? 0)],
-      ['追加項目数', `${fieldCount}件（必須 ${requiredFieldCount}件）`],
+      ['フォーム名', escapeHtml(form.name)],
+      ['公開状態', availabilityBadge(availability, form.is_active)],
+      ['公開期間', escapeHtml(formatAvailabilityWindow(availability, settings))],
+      ['保存先', `${icon('folder', 'ico--sm')} ${escapeHtml(getFolderPath(form.folder_id))}`],
+      ['スラッグ', `<code>${escapeHtml(form.slug)}</code>`],
+      ['表示順', escapeHtml(String(form.sort_order ?? 0))],
+      ['追加項目', `${fieldCount}件 <span class="text-subtle">（必須 ${requiredFieldCount}件）</span>`],
+      ['説明', form.description ? `<span class="pre-line allow-select">${escapeHtml(form.description)}</span>` : '<span class="text-subtle">未設定</span>'],
     ];
     infoRoot.innerHTML = infoItems.map(([label, value]) => `
-      <div class="info-grid-item">
+      <div>
         <dt>${escapeHtml(label)}</dt>
-        <dd>${escapeHtml(value)}</dd>
+        <dd>${value}</dd>
       </div>
     `).join('');
   }
@@ -1244,19 +1311,14 @@ function renderOverview(form) {
   if (!form) {
     settingPills.innerHTML = '';
   } else {
-    const pills = [
-      settings.enable_date_field ? '日付入力あり' : '日付入力なし',
-      settings.date_required ? '日付必須' : '日付任意',
-      settings.allow_file_upload ? '添付あり' : '添付なし',
-      settings.file_required ? '添付必須' : '添付任意',
-      settings.distribution_enabled ? '配布資料表示あり' : '配布資料表示なし',
-      settings.distribution_file_relative_path ? '配布ファイル登録済み' : '配布ファイル未設定',
-      (settings.public_start_date || settings.public_end_date || settings.public_start_time || settings.public_end_time)
-        ? `公開期間: ${formatAvailabilityWindow(availability, settings)}`
-        : '公開期間制限なし',
-      `送信ボタン: ${settings.submit_button_label || '送信する'}`,
-    ];
-    settingPills.innerHTML = pills.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join('');
+    const hasDistributionFile = distributionFiles(settings).length > 0;
+    const chip = (on, iconName, label) => `<span class="chip${on ? '' : ' is-off'}">${icon(iconName)}${escapeHtml(label)}</span>`;
+    settingPills.innerHTML = [
+      chip(settings.enable_date_field, 'calendar', settings.enable_date_field ? `日付入力（${settings.date_required ? '必須' : '任意'}）` : '日付入力なし'),
+      chip(settings.allow_file_upload, 'paperclip', settings.allow_file_upload ? `添付（${settings.file_required ? '必須' : '任意'}・${settings.max_upload_files || 1}個まで）` : '添付なし'),
+      chip(settings.distribution_enabled, 'download', settings.distribution_enabled ? `配布資料あり${hasDistributionFile ? '' : '（ファイル未登録）'}` : '配布資料なし'),
+      chip(true, 'send', `ボタン「${settings.submit_button_label || '送信する'}」`),
+    ].join('');
   }
 
   const periodNote = document.getElementById('overview-period-note');
@@ -1266,27 +1328,27 @@ function renderOverview(form) {
 
   const statusRoot = document.getElementById('overview-status-summary');
   if (!form) {
-    statusRoot.innerHTML = '<div class="empty-state">回答状況はここに表示されます。</div>';
+    statusRoot.innerHTML = '<p class="small-note">回答状況はここに表示されます。</p>';
   } else {
     renderStatusSummary(statusRoot, summary.status_counts || []);
   }
 
   const fieldRoot = document.getElementById('overview-field-preview');
   if (!form || !fieldCount) {
-    fieldRoot.innerHTML = '<div class="empty-state">追加項目はまだ設定されていません。</div>';
+    fieldRoot.innerHTML = `<div class="empty"><span class="empty__icon">${icon('list-checks')}</span><span>追加項目はまだありません。</span></div>`;
   } else {
     fieldRoot.innerHTML = form.fields.map((field) => `
-      <article class="mini-info-card">
-        <div class="list-item-header compact-row">
-          <strong>${escapeHtml(field.field_label)}</strong>
-          <span class="pill">${escapeHtml(field.field_type)}</span>
+      <div class="list-item">
+        <span class="list-item__icon">${icon(field.field_type === 'date' ? 'calendar' : field.field_type === 'select' ? 'list' : field.field_type === 'checkbox' ? 'check-circle' : field.field_type === 'number' ? 'hash' : 'pen', 'ico--sm')}</span>
+        <div class="list-item__main">
+          <span class="list-item__title">${escapeHtml(field.field_label)}</span>
+          <span class="list-item__meta">${escapeHtml(FIELD_TYPE_LABELS[field.field_type] || field.field_type)}${field.help_text ? ` ・ ${escapeHtml(field.help_text)}` : ''}</span>
         </div>
-        <div class="meta-line">
-          ${field.is_required ? '<span class="pill">必須</span>' : '<span class="pill">任意</span>'}
-          ${field.is_enabled ? '<span class="pill">有効</span>' : '<span class="pill">無効</span>'}
+        <div class="list-item__side">
+          ${field.is_required ? '<span class="badge badge--danger">必須</span>' : ''}
+          ${field.is_enabled ? '' : '<span class="badge">無効</span>'}
         </div>
-        ${field.help_text ? `<div class="small-note">${escapeHtml(field.help_text)}</div>` : ''}
-      </article>
+      </div>
     `).join('');
   }
 }
@@ -1343,11 +1405,13 @@ function renderStatusSummary(root, statusCounts = []) {
     .filter(([status]) => status !== 'all')
     .map(([status, meta]) => ({ status, label: meta.label, count: 0, class: meta.className }));
 
+  const currentFilter = document.getElementById('entry-status-filter')?.value || 'all';
   root.innerHTML = normalized.map((item) => `
-    <article class="status-summary-card ${escapeHtml(item.class || getStatusMeta(item.status).className)}">
-      <span class="small-note">${escapeHtml(item.label || getStatusMeta(item.status).label)}</span>
+    <button type="button" class="status-summary-card ${escapeHtml(item.class || getStatusMeta(item.status).className)}${currentFilter === item.status ? ' is-active' : ''}"
+      data-status-filter="${escapeHtml(item.status)}" title="「${escapeHtml(item.label || getStatusMeta(item.status).label)}」で絞り込む">
+      <span>${escapeHtml(item.label || getStatusMeta(item.status).label)}</span>
       <strong>${escapeHtml(String(item.count || 0))}</strong>
-    </article>
+    </button>
   `).join('');
 }
 
@@ -1356,37 +1420,32 @@ function renderEntryList(entries = []) {
   if (!root) return;
 
   if (!entries.length) {
-    root.innerHTML = '<div class="empty-state">条件に一致する回答はありません。</div>';
+    root.innerHTML = `<div class="card"><div class="empty"><span class="empty__icon">${icon('inbox')}</span><span>条件に一致する回答はありません。</span></div></div>`;
     renderEntryDetail(null);
     return;
   }
 
   root.innerHTML = entries.map((entry) => {
     const isSelected = entry.id === adminState.activeEntryId;
+    const preview = (entry.payload_preview || []).slice(0, 3)
+      .map((item) => `${item.label}: ${item.value || '—'}`)
+      .join(' ／ ');
+    const hasFile = (entry.uploaded_file_count || 0) > 0 || entry.uploaded_original_name;
     return `
       <article class="response-card ${isSelected ? 'selected' : ''}" data-entry-card="${entry.id}">
-        <button type="button" class="response-card-button" data-select-entry="${entry.id}">
-          <div class="list-item-header">
-            <div>
-              <strong>${escapeHtml(entry.organization_name)}</strong>
-              <div class="meta-line">
-                ${createStatusBadge(entry.status, entry.status_label)}
-                <span class="pill">${escapeHtml(entry.submitter_email)}</span>
-                ${entry.submitted_date ? `<span class="pill">日付: ${escapeHtml(entry.submitted_date)}</span>` : ''}
-              </div>
-            </div>
-            <span class="small-note">更新 ${escapeHtml(entry.updated_at)}</span>
-          </div>
-          <div class="response-preview-grid">
-            ${(entry.payload_preview || []).slice(0, 4).map((item) => `
-              <div class="preview-item"><strong>${escapeHtml(item.label)}:</strong> ${escapeHtml(item.value || '—')}</div>
-            `).join('')}
-          </div>
-          <div class="meta-line response-footer-line">
-            <span class="pill">履歴 ${escapeHtml(String(entry.revision_count))}件</span>
-            ${(entry.uploaded_file_count || 0) > 0 ? `<span class="pill">添付 ${escapeHtml(String(entry.uploaded_file_count))}件</span>` : (entry.uploaded_original_name ? `<span class="pill">添付あり</span>` : '')}
-            ${entry.admin_note ? '<span class="pill">管理メモあり</span>' : ''}
-          </div>
+        <button type="button" class="response-card-button" data-select-entry="${entry.id}" aria-pressed="${isSelected ? 'true' : 'false'}">
+          <span class="response-card__top">
+            <strong>${escapeHtml(entry.organization_name)}</strong>
+            ${createStatusBadge(entry.status, entry.status_label)}
+          </span>
+          <span class="response-card__meta">${escapeHtml(entry.submitter_email)} ・ ${escapeHtml(entry.updated_at)}</span>
+          ${preview ? `<span class="response-card__preview">${escapeHtml(preview)}</span>` : ''}
+          <span class="response-card__chips">
+            ${Number(entry.revision_count) > 1 ? `<span class="chip">${icon('history')}${escapeHtml(String(entry.revision_count))}回提出</span>` : ''}
+            ${hasFile ? `<span class="chip">${icon('paperclip')}${(entry.uploaded_file_count || 0) > 0 ? `${escapeHtml(String(entry.uploaded_file_count))}件` : 'あり'}</span>` : ''}
+            ${entry.submitted_date ? `<span class="chip">${icon('calendar')}${escapeHtml(entry.submitted_date)}</span>` : ''}
+            ${entry.admin_note ? `<span class="chip">${icon('message')}メモ</span>` : ''}
+          </span>
         </button>
       </article>
     `;
@@ -1399,7 +1458,7 @@ function renderEntrySummaryBlock(summary) {
   const message = document.getElementById('entry-summary');
   const total = summary?.total_count || 0;
   const filtered = summary?.filtered_count || 0;
-  message.textContent = `最新回答 ${total}件 / 現在の絞り込み結果 ${filtered}件`;
+  if (message) message.textContent = total === filtered ? `全 ${total}件` : `全 ${total}件中 ${filtered}件を表示`;
 }
 
 function renderHistoryBlocks(history = { revisions: [], status_logs: [] }) {
@@ -1409,45 +1468,39 @@ function renderHistoryBlocks(history = { revisions: [], status_logs: [] }) {
   const revisionHtml = revisions.length ? revisions.map((item) => `
     <article class="timeline-item">
       <div class="timeline-item-header">
-        <strong>Revision ${escapeHtml(String(item.revision_number))}</strong>
+        <strong>第${escapeHtml(String(item.revision_number))}版</strong>
         <span class="small-note">${escapeHtml(item.created_at)}</span>
       </div>
-      <div class="meta-line">
-        <span class="pill">${escapeHtml(item.organization_name)}</span>
-        <span class="pill">${escapeHtml(item.submitter_email)}</span>
-        ${item.submitted_date ? `<span class="pill">日付: ${escapeHtml(item.submitted_date)}</span>` : ''}
+      <div class="small-note">${escapeHtml(item.organization_name)} ・ ${escapeHtml(item.submitter_email)}${item.submitted_date ? ` ・ ${escapeHtml(item.submitted_date)}` : ''}</div>
+      <div class="preview-list allow-select">
+        ${(item.payload_preview || []).map((payload) => `<div class="preview-item"><strong>${escapeHtml(payload.label)}：</strong>${escapeHtml(payload.value || '—')}</div>`).join('')}
       </div>
-      <div class="preview-list dense">
-        ${(item.payload_preview || []).map((payload) => `<div class="preview-item"><strong>${escapeHtml(payload.label)}:</strong> ${escapeHtml(payload.value || '—')}</div>`).join('')}
-      </div>
-      ${item.uploaded_original_name ? `<div class="inline-actions"><a class="btn" href="api/download_revision.php?revision_id=${item.id}&csrf_token=${encodeURIComponent(csrfToken)}">添付を取得</a></div>` : ''}
+      ${item.uploaded_original_name ? `<a class="btn btn--sm mt-2" href="api/download_revision.php?revision_id=${item.id}&csrf_token=${encodeURIComponent(csrfToken)}">${icon('download')}この版の添付</a>` : ''}
     </article>
-  `).join('') : '<div class="empty-state">更新履歴はまだありません。</div>';
+  `).join('') : '<p class="small-note">更新履歴はまだありません。</p>';
 
   const statusHtml = statusLogs.length ? statusLogs.map((item) => `
     <article class="timeline-item">
       <div class="timeline-item-header">
-        <div class="meta-line">
-          ${item.previous_status_label ? `<span class="pill">${escapeHtml(item.previous_status_label)}</span>` : '<span class="pill">初回設定</span>'}
-          <span class="small-note">→</span>
+        <span class="cluster gap-1">
+          ${item.previous_status_label ? `<span class="badge">${escapeHtml(item.previous_status_label)}</span>` : '<span class="badge">初回</span>'}
+          ${icon('arrow-right', 'ico--sm')}
           ${createStatusBadge(item.next_status, item.next_status_label)}
-        </div>
+        </span>
         <span class="small-note">${escapeHtml(item.created_at)}</span>
       </div>
-      <div class="small-note">変更者: ${escapeHtml(item.changed_by_name || '不明')}</div>
-      ${item.note ? `<div class="timeline-note">${escapeHtml(item.note)}</div>` : ''}
+      <div class="small-note">変更者：${escapeHtml(item.changed_by_name || '不明')}</div>
+      ${item.note ? `<div class="timeline-note allow-select">${escapeHtml(item.note)}</div>` : ''}
     </article>
-  `).join('') : '<div class="empty-state">状態変更履歴はまだありません。</div>';
+  `).join('') : '<p class="small-note">状態の変更履歴はまだありません。</p>';
 
   return `
-    <section class="subcard">
-      <h4>更新履歴</h4>
-      <div class="timeline-list">${revisionHtml}</div>
-    </section>
-    <section class="subcard">
-      <h4>状態変更履歴</h4>
-      <div class="timeline-list">${statusHtml}</div>
-    </section>
+    <div class="segmented" role="tablist" aria-label="履歴の種類">
+      <button type="button" class="is-active" data-history-tab="revisions" role="tab" aria-selected="true">${icon('history')}提出履歴 ${revisions.length}</button>
+      <button type="button" data-history-tab="status" role="tab" aria-selected="false">${icon('activity')}状態変更 ${statusLogs.length}</button>
+    </div>
+    <div class="timeline-list tab-panel" data-history-panel="revisions">${revisionHtml}</div>
+    <div class="timeline-list tab-panel hidden" data-history-panel="status">${statusHtml}</div>
   `;
 }
 
@@ -1466,72 +1519,76 @@ function renderEntryDetail(entry, history = null) {
   empty.classList.add('hidden');
   root.classList.remove('hidden');
 
-  const statusOptions = Object.entries(STATUS_DEFINITIONS)
+  const statusChoices = Object.entries(STATUS_DEFINITIONS)
     .filter(([status]) => status !== 'all')
-    .map(([status, meta]) => `<option value="${escapeHtml(status)}" ${status === entry.status ? 'selected' : ''}>${escapeHtml(meta.label)}</option>`)
+    .map(([status, meta]) => `
+      <label>
+        <input type="radio" name="entry-detail-status" value="${escapeHtml(status)}" ${status === entry.status ? 'checked' : ''}>
+        <span class="status-badge ${escapeHtml(meta.className)}">${escapeHtml(meta.label)}</span>
+      </label>`)
     .join('');
 
   const payloadHtml = (entry.payload_preview || []).length ? (entry.payload_preview || []).map((item) => `
-    <div class="detail-data-row">
+    <div>
       <dt>${escapeHtml(item.label)}</dt>
-      <dd>${escapeHtml(item.value || '—')}</dd>
+      <dd class="allow-select pre-line">${escapeHtml(item.value || '—')}</dd>
     </div>
-  `).join('') : '<div class="empty-state">追加項目データはありません。</div>';
+  `).join('') : '<p class="small-note">追加項目のデータはありません。</p>';
 
   const historyHtml = history
     ? renderHistoryBlocks(history)
-    : '<div class="empty-state">履歴を読み込み中です...</div>';
+    : '<div class="stack stack--sm"><span class="skeleton" style="height:16px;width:50%"></span><span class="skeleton" style="height:60px"></span></div>';
+
+  const hasFile = (entry.uploaded_file_count || 0) > 0 || entry.uploaded_original_name;
 
   root.innerHTML = `
-    <div class="detail-header">
-      <div>
+    <div class="fa-detail-head">
+      <div class="stack stack--sm">
         <h3>${escapeHtml(entry.organization_name)}</h3>
-        <div class="meta-line">
+        <div class="cluster">
           ${createStatusBadge(entry.status, entry.status_label)}
-          <span class="pill">${escapeHtml(entry.submitter_email)}</span>
-          ${entry.submitted_date ? `<span class="pill">日付: ${escapeHtml(entry.submitted_date)}</span>` : ''}
+          <span class="chip allow-select">${icon('mail')}${escapeHtml(entry.submitter_email)}</span>
+          ${entry.submitted_date ? `<span class="chip">${icon('calendar')}${escapeHtml(entry.submitted_date)}</span>` : ''}
         </div>
       </div>
-      <div class="inline-actions">
-        ${((entry.uploaded_file_count || 0) > 0 || entry.uploaded_original_name) && entry.latest_revision_id ? `<a class="btn" href="api/download_revision.php?revision_id=${entry.latest_revision_id}&csrf_token=${encodeURIComponent(csrfToken)}">最新添付を取得</a>` : ''}
-        ${((entry.uploaded_file_count || 0) > 0 || entry.uploaded_original_name) ? `<button type="button" class="btn danger" id="delete-entry-file-button" data-entry-id="${entry.id}">提出ファイルを削除</button>` : ''}
-        <button type="button" class="btn danger" id="delete-entry-button" data-entry-id="${entry.id}">回答を削除</button>
+      <div class="cluster">
+        ${hasFile && entry.latest_revision_id ? `<a class="btn btn--sm" href="api/download_revision.php?revision_id=${entry.latest_revision_id}&csrf_token=${encodeURIComponent(csrfToken)}">${icon('download')}最新の添付</a>` : ''}
+        <span class="menu-anchor">
+          <button type="button" class="btn btn--ghost btn--icon btn--sm" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="その他の操作">${icon('more')}</button>
+          <div class="menu" role="menu">
+            <button type="button" class="menu__item" id="reload-entry-history-button" data-entry-id="${entry.id}" role="menuitem">${icon('refresh')}履歴を再読込</button>
+            ${hasFile ? `<button type="button" class="menu__item menu__item--danger" id="delete-entry-file-button" data-entry-id="${entry.id}" role="menuitem">${icon('paperclip')}提出ファイルを削除</button>` : ''}
+            <div class="menu__sep"></div>
+            <button type="button" class="menu__item menu__item--danger" id="delete-entry-button" data-entry-id="${entry.id}" role="menuitem">${icon('trash')}回答を削除</button>
+          </div>
+        </span>
       </div>
     </div>
 
-    <section class="subcard">
-      <h4>状態管理</h4>
-      <div class="two-col">
-        <label>
-          <span>状態</span>
-          <select id="entry-detail-status">${statusOptions}</select>
+    <section class="card card--soft">
+      <div class="card__body stack">
+        <div class="field">
+          <span>対応状況</span>
+          <div class="fa-status-pick" role="radiogroup" aria-label="対応状況">${statusChoices}</div>
+        </div>
+        <label class="field">
+          <span>管理メモ <span class="opt">管理者のみ表示</span></span>
+          <textarea id="entry-detail-note" rows="3" placeholder="対応内容などを記録">${escapeHtml(entry.admin_note || '')}</textarea>
         </label>
-        <label>
-          <span>最終更新</span>
-          <input type="text" value="${escapeHtml(entry.status_updated_at || '未更新')}" readonly>
-        </label>
-      </div>
-      <label>
-        <span>管理メモ</span>
-        <textarea id="entry-detail-note" rows="4" placeholder="内部メモや対応内容を記録">${escapeHtml(entry.admin_note || '')}</textarea>
-      </label>
-      <div class="meta-line">
-        <span class="pill">作成 ${escapeHtml(entry.created_at)}</span>
-        <span class="pill">更新 ${escapeHtml(entry.updated_at)}</span>
-        ${entry.status_updated_by_name ? `<span class="pill">更新者 ${escapeHtml(entry.status_updated_by_name)}</span>` : ''}
-      </div>
-      <div class="inline-actions">
-        <button type="button" class="btn primary" id="save-entry-status-button" data-entry-id="${entry.id}">状態を保存</button>
-        <button type="button" class="btn" id="reload-entry-history-button" data-entry-id="${entry.id}">履歴を再読込</button>
+        <div class="cluster cluster--between">
+          <span class="small-note">提出 ${escapeHtml(entry.created_at)} ・ 更新 ${escapeHtml(entry.updated_at)}${entry.status_updated_by_name ? ` ・ 状態更新 ${escapeHtml(entry.status_updated_by_name)}` : ''}</span>
+          <button type="button" class="btn btn--primary btn--sm" id="save-entry-status-button" data-entry-id="${entry.id}">${icon('save')}保存</button>
+        </div>
       </div>
     </section>
 
-    <section class="subcard">
-      <h4>回答内容</h4>
-      <dl class="detail-data-grid">${payloadHtml}</dl>
+    <section class="stack stack--sm">
+      <h4 class="section-title">回答内容</h4>
+      <dl class="dl">${payloadHtml}</dl>
     </section>
 
-    <section class="detail-history-stack">
+    <section class="stack stack--sm">
+      <h4 class="section-title">履歴</h4>
       ${historyHtml}
     </section>
   `;
@@ -1717,21 +1774,32 @@ async function selectEntry(entryId, scrollIntoView = true) {
 }
 
 async function saveCurrentEntryStatus(entryId) {
-  const statusSelect = document.getElementById('entry-detail-status');
+  const statusInput = document.querySelector('input[name="entry-detail-status"]:checked');
   const noteInput = document.getElementById('entry-detail-note');
-  if (!statusSelect || !noteInput) return;
+  if (!statusInput || !noteInput) return;
+  const button = document.getElementById('save-entry-status-button');
+  button?.classList.add('is-loading');
 
-  const result = await apiPost('api/admin_entry_status.php', {
-    submission_id: Number(entryId),
-    status: statusSelect.value,
-    admin_note: noteInput.value,
-  });
+  let result;
+  try {
+    result = await apiPost('api/admin_entry_status.php', {
+      submission_id: Number(entryId),
+      status: statusInput.value,
+      admin_note: noteInput.value,
+    });
+  } catch (error) {
+    button?.classList.remove('is-loading');
+    showFlashMessage(describeApiError(error).message, 'error', { title: '保存できませんでした', duration: 5200 });
+    return;
+  }
 
   if (!result.ok) {
+    button?.classList.remove('is-loading');
     showFlashMessage(result.message || '状態更新に失敗しました。', 'error', { title: '保存できませんでした', duration: 5200 });
     return;
   }
 
+  showFlashMessage(result.message || '対応状況を保存しました。', 'success', { title: '保存しました', duration: 2600 });
   await loadEntries(adminState.activeFormId, getEntryFilterValues(), true);
   await selectEntry(Number(entryId), false);
 }
@@ -1750,7 +1818,12 @@ async function deleteCurrentEntryFile(entryId) {
     return;
   }
 
-  const confirmed = window.confirm(`提出ファイル「${entry.uploaded_original_name}」を削除します。\n回答内容は残りますが、ファイルは元に戻せません。`);
+  const confirmed = await UI.confirm({
+    title: '提出ファイルを削除しますか？',
+    message: `「${entry.uploaded_original_name}」を削除します。\n回答内容は残りますが、ファイルは元に戻せません。`,
+    okText: '削除する',
+    tone: 'danger',
+  });
   if (!confirmed) return;
 
   const result = await apiPost('api/admin_submission_delete.php', {
@@ -1784,9 +1857,12 @@ async function deleteCurrentEntry(entryId) {
     return;
   }
 
-  const confirmed = window.confirm(
-    `回答を削除します。\n\n団体名: ${entry.organization_name}\nメール: ${entry.submitter_email}\n\n回答内容、更新履歴、状態ログ、紐づく提出ファイルを削除します。この操作は元に戻せません。`
-  );
+  const confirmed = await UI.confirm({
+    title: 'この回答を削除しますか？',
+    message: `${entry.organization_name}（${entry.submitter_email}）\n回答内容・更新履歴・状態ログ・提出ファイルを削除します。この操作は元に戻せません。`,
+    okText: '削除する',
+    tone: 'danger',
+  });
   if (!confirmed) return;
 
   const result = await apiPost('api/admin_submission_delete.php', {
@@ -1833,24 +1909,13 @@ function startNewFormMode(seed = {}) {
   editor?.elements?.name?.focus();
 }
 
+// ダイアログは共通 UI のモーション付きモーダルで開閉する
 function openAdminDialog(dialogId) {
-  const dialog = document.getElementById(dialogId);
-  if (!dialog) return;
-  if (typeof dialog.showModal === 'function') {
-    if (!dialog.open) dialog.showModal();
-  } else {
-    dialog.setAttribute('open', '');
-  }
+  return UI.openModal(dialogId, { focus: '[data-autofocus]' });
 }
 
 function closeAdminDialog(dialogId) {
-  const dialog = document.getElementById(dialogId);
-  if (!dialog) return;
-  if (typeof dialog.close === 'function' && dialog.open) {
-    dialog.close();
-  } else {
-    dialog.removeAttribute('open');
-  }
+  return UI.closeModal(dialogId);
 }
 
 function syncNewFormCreationMode() {
@@ -2002,7 +2067,13 @@ async function deleteFolderFromDialog() {
   const folderId = Number(form?.elements?.id?.value || 0);
   const folder = getFolder(folderId);
   if (!folder) return;
-  if (!window.confirm(`空のフォルダー「${folder.name}」を削除します。よろしいですか。`)) return;
+  const ok = await UI.confirm({
+    title: 'フォルダーを削除しますか？',
+    message: `空のフォルダー「${folder.name}」を削除します。`,
+    okText: '削除する',
+    tone: 'danger',
+  });
+  if (!ok) return;
 
   const message = document.getElementById('folder-dialog-message');
   setMessage(message, '削除しています...', 'info');
@@ -2046,9 +2117,9 @@ function buildLatestAttachmentsUrl() {
   return `api/download_latest_attachments.php?${params.toString()}`;
 }
 
+// 配布ファイルのアップロード（複数可）
 async function uploadDistributionFile() {
   const activeForm = getActiveForm();
-  const message = document.getElementById('admin-message');
   const fileInput = document.getElementById('distribution-file-input');
   if (!activeForm?.id) {
     showFlashMessage('先にフォームを保存してから配布ファイルを登録してください。', 'info', { title: 'フォーム未保存' });
@@ -2059,76 +2130,51 @@ async function uploadDistributionFile() {
     return;
   }
 
-  const button = document.getElementById('upload-distribution-file-button');
-  const editor = document.getElementById('form-editor');
-  const distributionEnabled = editor?.elements?.distribution_enabled;
-
-  // 配布ファイル保存時は、表示設定・案内文・ボタン文言も同時に保存する。
-  // 未チェックのままアップロードした場合は、利用者画面で見えるように自動で有効化する。
-  if (distributionEnabled && !distributionEnabled.checked) {
-    distributionEnabled.checked = true;
-  }
-
+  const button = document.getElementById('upload-distribution-files-button');
   const formData = new FormData();
-  formData.set('action', 'upload');
   formData.set('form_id', String(activeForm.id));
-  formData.set('distribution_enabled', distributionEnabled?.checked ? '1' : '0');
-  formData.set('distribution_title', editor?.elements?.distribution_title?.value || '');
-  formData.set('distribution_body', editor?.elements?.distribution_body?.value || '');
-  formData.set('distribution_download_label', editor?.elements?.distribution_download_label?.value || '資料をダウンロード');
-  formData.set('distribution_file', fileInput.files[0]);
-  button && (button.disabled = true);
-  setMessage(message, '配布ファイルを保存中です...', 'info');
+  Array.from(fileInput.files).forEach((file) => formData.append('distribution_files[]', file));
+  if (button) { button.disabled = true; button.classList.add('is-loading'); }
   try {
-    const result = await apiPostForm('api/admin_form_asset.php', formData);
+    const result = await apiPostForm('api/admin_upload_distribution_files.php', formData, { timeoutMs: 180000 });
     if (!result.ok) {
-      setMessage(message, result.message || '配布ファイルの保存に失敗しました。', 'error');
       showFlashMessage(result.message || '配布ファイルの保存に失敗しました。', 'error', { title: '保存できませんでした' });
       return;
     }
     fileInput.value = '';
-    setMessage(message, result.message || '配布ファイルを保存しました。', 'success');
     showFlashMessage(result.message || '配布ファイルを保存しました。', 'success', { title: '配布ファイルを更新しました' });
     mergeUpdatedForm(result);
   } catch (error) {
-    const errorMessage = error?.message || '通信に失敗しました。';
-    setMessage(message, errorMessage, 'error');
-    showFlashMessage(errorMessage, 'error', { title: '通信エラー' });
+    showFlashMessage(describeApiError(error).message, 'error', { title: '通信エラー' });
   } finally {
-    button && (button.disabled = false);
+    if (button) { button.disabled = false; button.classList.remove('is-loading'); }
   }
 }
 
-async function deleteDistributionFile() {
+async function deleteDistributionFile(fileId) {
   const activeForm = getActiveForm();
-  const message = document.getElementById('admin-message');
-  if (!activeForm?.id) return;
-  if (!window.confirm('このフォームの配布ファイルを削除します。よろしいですか。')) {
-    return;
-  }
+  if (!activeForm?.id || !fileId) return;
+  const ok = await UI.confirm({
+    title: '配布ファイルを削除しますか？',
+    message: '利用者画面からもダウンロードできなくなります。',
+    okText: '削除する',
+    tone: 'danger',
+  });
+  if (!ok) return;
 
-  const button = document.getElementById('delete-distribution-file-button');
   const formData = new FormData();
-  formData.set('action', 'delete');
   formData.set('form_id', String(activeForm.id));
-  button && (button.disabled = true);
-  setMessage(message, '配布ファイルを削除中です...', 'info');
+  formData.set('file_id', String(fileId));
   try {
-    const result = await apiPostForm('api/admin_form_asset.php', formData);
+    const result = await apiPostForm('api/admin_delete_distribution_file.php', formData);
     if (!result.ok) {
-      setMessage(message, result.message || '配布ファイルの削除に失敗しました。', 'error');
       showFlashMessage(result.message || '配布ファイルの削除に失敗しました。', 'error', { title: '削除できませんでした' });
       return;
     }
-    setMessage(message, result.message || '配布ファイルを削除しました。', 'success');
     showFlashMessage(result.message || '配布ファイルを削除しました。', 'success', { title: '配布ファイルを削除しました' });
     mergeUpdatedForm(result);
   } catch (error) {
-    const errorMessage = error?.message || '通信に失敗しました。';
-    setMessage(message, errorMessage, 'error');
-    showFlashMessage(errorMessage, 'error', { title: '通信エラー' });
-  } finally {
-    button && (button.disabled = false);
+    showFlashMessage(describeApiError(error).message, 'error', { title: '通信エラー' });
   }
 }
 
@@ -2167,11 +2213,6 @@ function bindEvents() {
   document.querySelectorAll('[data-close-dialog]').forEach((button) => {
     button.addEventListener('click', () => closeAdminDialog(button.dataset.closeDialog));
   });
-  document.querySelectorAll('.admin-dialog').forEach((dialog) => {
-    dialog.addEventListener('click', (event) => {
-      if (event.target === dialog) closeAdminDialog(dialog.id);
-    });
-  });
   document.getElementById('new-form-dialog-form')?.addEventListener('change', (event) => {
     if (event.target.name === 'creation_mode') syncNewFormCreationMode();
   });
@@ -2186,17 +2227,24 @@ function bindEvents() {
       showFlashMessage('削除するフォームを選択してください。', 'info', { title: 'フォーム未選択' });
       return;
     }
-    const confirmed = window.confirm(`フォーム「${form.name}」を削除します。回答一覧、履歴、状態ログも削除されます。
-この操作は元に戻せません。`);
+    const confirmed = await UI.confirm({
+      title: 'フォームを削除しますか？',
+      message: `「${form.name}」と、その回答一覧・履歴・状態ログを削除します。この操作は元に戻せません。`,
+      okText: '削除する',
+      tone: 'danger',
+    });
     if (!confirmed) return;
 
-    setMessage(message, '削除中です...', 'info');
+    clearMessage(message);
+    const deleteButton = document.getElementById('delete-form-button');
+    deleteButton?.classList.add('is-loading');
     const result = await apiPost('api/admin_forms.php', {
       action: 'delete',
       form_id: form.id,
-    });
+    }).catch((error) => ({ ok: false, message: describeApiError(error).message }));
+    deleteButton?.classList.remove('is-loading');
     if (!result.ok) {
-      setMessage(message, result.message || '削除に失敗しました。', 'error');
+      showFlashMessage(result.message || '削除に失敗しました。', 'error', { title: '削除できませんでした' });
       return;
     }
 
@@ -2214,19 +2262,48 @@ function bindEvents() {
       startNewFormMode();
     }
 
-    setMessage(message, result.message || 'フォームを削除しました。', 'success');
     showFlashMessage(result.message || 'フォームを削除しました。', 'success', { title: 'フォームを削除しました', duration: 3600 });
   });
 
   document.getElementById('add-field-button')?.addEventListener('click', () => {
-    document.getElementById('field-builder-list').appendChild(fieldRowDataToHtml());
+    const list = document.getElementById('field-builder-list');
+    list.appendChild(fieldRowDataToHtml());
+    const added = list.lastElementChild;
+    added?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(() => added?.querySelector('[data-field="field_label"]')?.focus({ preventScroll: true }), 260);
   });
 
-  document.getElementById('field-builder-list')?.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-remove-field]');
-    if (!button) return;
-    button.closest('[data-field-row]')?.remove();
+  const fieldList = document.getElementById('field-builder-list');
+  fieldList?.addEventListener('click', async (event) => {
+    const removeButton = event.target.closest('[data-remove-field]');
+    if (removeButton) {
+      const card = removeButton.closest('[data-field-row]');
+      const label = card?.querySelector('[data-field="field_label"]')?.value.trim();
+      const ok = await UI.confirm({
+        title: 'この項目を削除しますか？',
+        message: `「${label || '新しい項目'}」を一覧から外します。「項目を保存」を押すまで確定しません。`,
+        okText: '削除する',
+        tone: 'danger',
+      });
+      if (!ok || !card) return;
+      card.classList.add('is-removing');
+      window.setTimeout(() => card.remove(), 260);
+      return;
+    }
+    const moveButton = event.target.closest('[data-move-field]');
+    if (moveButton) {
+      const card = moveButton.closest('[data-field-row]');
+      if (!card) return;
+      const up = moveButton.dataset.moveField === 'up';
+      const sibling = up ? card.previousElementSibling : card.nextElementSibling;
+      if (!sibling) return;
+      if (up) sibling.before(card); else sibling.after(card);
+      card.animate?.([{ transform: 'scale(.98)', opacity: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 260, easing: 'cubic-bezier(.16,1,.3,1)' });
+      moveButton.focus();
+    }
   });
+  fieldList?.addEventListener('input', (event) => syncFieldCard(event.target.closest('[data-field-row]')));
+  fieldList?.addEventListener('change', (event) => syncFieldCard(event.target.closest('[data-field-row]')));
 
   document.getElementById('form-list')?.addEventListener('click', async (event) => {
     const editButton = event.target.closest('[data-edit-folder]');
@@ -2307,6 +2384,20 @@ function bindEvents() {
     }
   });
 
+  const applyStatusFilter = async (status) => {
+    const select = document.getElementById('entry-status-filter');
+    if (!select || !adminState.activeFormId) return;
+    select.value = select.value === status ? 'all' : status;
+    switchWorkspaceTab('responses');
+    await loadEntries(adminState.activeFormId, getEntryFilterValues(), false);
+  };
+  ['entry-status-summary', 'overview-status-summary'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('click', (event) => {
+      const card = event.target.closest('[data-status-filter]');
+      if (card) applyStatusFilter(card.dataset.statusFilter);
+    });
+  });
+
   document.getElementById('entry-list')?.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-select-entry]');
     if (!button) return;
@@ -2314,6 +2405,19 @@ function bindEvents() {
   });
 
   document.getElementById('entry-detail')?.addEventListener('click', async (event) => {
+    const historyTab = event.target.closest('[data-history-tab]');
+    if (historyTab) {
+      const detailRoot = document.getElementById('entry-detail');
+      detailRoot.querySelectorAll('[data-history-tab]').forEach((b) => {
+        const on = b === historyTab;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      detailRoot.querySelectorAll('[data-history-panel]').forEach((panel) => {
+        panel.classList.toggle('hidden', panel.dataset.historyPanel !== historyTab.dataset.historyTab);
+      });
+      return;
+    }
     const saveButton = event.target.closest('#save-entry-status-button');
     if (saveButton) {
       await saveCurrentEntryStatus(Number(saveButton.dataset.entryId));
@@ -2336,11 +2440,24 @@ function bindEvents() {
     }
   });
 
-  document.getElementById('upload-distribution-file-button')?.addEventListener('click', uploadDistributionFile);
+  document.getElementById('upload-distribution-files-button')?.addEventListener('click', uploadDistributionFile);
   document.getElementById('distribution-file-status')?.addEventListener('click', async (event) => {
-    if (event.target.closest('#delete-distribution-file-button')) {
-      await deleteDistributionFile();
-    }
+    const button = event.target.closest('[data-delete-distribution-file]');
+    if (button) await deleteDistributionFile(button.dataset.deleteDistributionFile || '');
+  });
+
+  // Ctrl+K / "/" でフォーム検索を開く
+  document.addEventListener('keydown', (event) => {
+    const active = document.activeElement;
+    const typing = active && (['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) || active.isContentEditable);
+    const isShortcut = ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') || (event.key === '/' && !typing);
+    if (!isShortcut) return;
+    event.preventDefault();
+    const shell = document.querySelector('.app-shell');
+    if (window.matchMedia('(max-width: 1023px)').matches) shell?.classList.add('is-nav-open');
+    const wrap = document.getElementById('form-search-toggle');
+    if (wrap && typeof wrap.__open === 'function') wrap.__open(true);
+    else document.getElementById('form-search')?.focus();
   });
 
   document.getElementById('form-editor')?.addEventListener('submit', async (event) => {
@@ -2380,14 +2497,26 @@ function bindEvents() {
       fields: collectFields(),
     };
 
-    setMessage(message, '保存中です...', 'info');
-    const result = await apiPost('api/admin_forms.php', payload);
+    const submitButtons = Array.from(form.querySelectorAll('button[type="submit"]'));
+    const submitter = event.submitter || submitButtons[0];
+    submitter?.classList.add('is-loading');
+    submitButtons.forEach((b) => { b.disabled = true; });
+    clearMessage(message);
+    let result;
+    try {
+      result = await apiPost('api/admin_forms.php', payload);
+    } catch (error) {
+      result = { ok: false, message: describeApiError(error).message };
+    } finally {
+      submitter?.classList.remove('is-loading');
+      submitButtons.forEach((b) => { b.disabled = false; });
+    }
     if (!result.ok) {
       setMessage(message, result.message || '保存に失敗しました。', 'error');
+      showFlashMessage(result.message || '保存に失敗しました。', 'error', { title: '保存できませんでした' });
       return;
     }
 
-    setMessage(message, result.message || '保存しました。', 'success');
     showFlashMessage(result.message || '保存しました。', 'success', { title: 'フォーム設定を更新しました', duration: 3200 });
     adminState.forms = result.forms || [];
     adminState.folders = result.folders || adminState.folders;

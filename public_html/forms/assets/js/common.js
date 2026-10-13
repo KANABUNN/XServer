@@ -170,10 +170,20 @@ async function apiPostForm(url, formData, opts = {}) {
   return readApiJson(response, requestId);
 }
 
+const ALERT_TONES = {
+  info: ['info', 'info'],
+  success: ['success', 'check-circle'],
+  error: ['danger', 'x-circle'],
+  danger: ['danger', 'x-circle'],
+  warning: ['warning', 'alert-triangle'],
+};
+
 function setMessage(element, message, type = 'info') {
   if (!element) return;
-  element.className = `alert ${type}`;
-  element.textContent = message;
+  const [tone, iconName] = ALERT_TONES[type] || ALERT_TONES.info;
+  element.className = `alert alert--${tone}`;
+  element.innerHTML = `${window.UI ? UI.icon(iconName) : ''}<div class="alert__body"></div>`;
+  element.querySelector('.alert__body').textContent = message;
   element.classList.remove('hidden');
 }
 
@@ -192,67 +202,19 @@ function escapeHtml(value = '') {
     .replaceAll("'", '&#039;');
 }
 
-function ensureFlashStack() {
-  let stack = document.getElementById('flash-message-stack');
-  if (stack) return stack;
-  stack = document.createElement('div');
-  stack.id = 'flash-message-stack';
-  stack.className = 'flash-message-stack';
-  document.body.appendChild(stack);
-  return stack;
-}
-
-function dismissFlashMessage(element) {
-  if (!element) return;
-  element.classList.remove('visible');
-  element.classList.add('leaving');
-  window.setTimeout(() => {
-    element.remove();
-  }, 240);
-}
-
+// 共通 UI（assets/ui/ui.js）のトーストで表示する。
 function showFlashMessage(message, type = 'info', options = {}) {
   if (!message) return null;
-  const duration = Number.isFinite(options.duration) ? options.duration : 4200;
-  const stack = ensureFlashStack();
-  const item = document.createElement('div');
-  item.className = `flash-message ${type}`;
-
-  const body = document.createElement('div');
-  body.className = 'flash-message__body';
-
-  const title = document.createElement('strong');
-  title.className = 'flash-message__title';
-  title.textContent = options.title || (type === 'success' ? '完了' : type === 'error' ? 'エラー' : 'お知らせ');
-
-  const text = document.createElement('div');
-  text.className = 'flash-message__text';
-  text.textContent = message;
-
-  const close = document.createElement('button');
-  close.type = 'button';
-  close.className = 'flash-message__close';
-  close.setAttribute('aria-label', '閉じる');
-  close.textContent = '×';
-  close.addEventListener('click', () => dismissFlashMessage(item));
-
-  body.appendChild(title);
-  body.appendChild(text);
-  if (options.detail) {
-    const detail = document.createElement('small');
-    detail.className = 'flash-message__detail';
-    detail.textContent = options.detail;
-    body.appendChild(detail);
+  if (!window.UI || typeof UI.toast !== 'function') {
+    window.alert(message);
+    return null;
   }
-  item.appendChild(body);
-  item.appendChild(close);
-  stack.appendChild(item);
-
-  requestAnimationFrame(() => item.classList.add('visible'));
-  if (duration > 0) {
-    window.setTimeout(() => dismissFlashMessage(item), duration);
-  }
-  return item;
+  return UI.toast(message, {
+    type,
+    title: options.title,
+    detail: options.detail,
+    duration: Number.isFinite(options.duration) ? options.duration : undefined,
+  });
 }
 
 function parseDownloadFilename(response, fallbackName = 'download') {
@@ -308,15 +270,25 @@ async function downloadBinaryFile(url, fallbackName = 'download') {
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    setMessage(message, 'ログイン中です...', 'info');
+    const button = form.querySelector('[type="submit"]');
+    button?.classList.add('is-loading');
+    if (button) button.disabled = true;
+    clearMessage(message);
     const data = Object.fromEntries(new FormData(form).entries());
-    const result = await apiPost('api/login.php', data);
-    if (!result.ok) {
-      setMessage(message, result.message || 'ログインに失敗しました。', 'error');
-      return;
+    try {
+      const result = await apiPost('api/login.php', data);
+      if (!result.ok) {
+        setMessage(message, result.message || 'ログインに失敗しました。', 'error');
+        return;
+      }
+      setMessage(message, result.message || 'ログインしました。', 'success');
+      window.location.href = result.redirect || 'admin.php';
+    } catch (error) {
+      setMessage(message, describeApiError(error).message, 'error');
+    } finally {
+      button?.classList.remove('is-loading');
+      if (button) button.disabled = false;
     }
-    setMessage(message, result.message || 'ログインしました。', 'success');
-    window.location.href = result.redirect || 'admin.php';
   });
 })();
 

@@ -1,0 +1,137 @@
+/* =====================================================================
+   kintone管理 — FIT-SC UI v7 の上に重ねる
+   ===================================================================== */
+
+.kt-narrow { width: 100%; max-width: 760px; margin-inline: auto; }
+
+/* カード内のテーブルは枠なしで敷き詰める */
+.kt-table-flat { border: 0; border-radius: 0 0 var(--r-lg) var(--r-lg); background: transparent; }
+@media (max-width: 760px) { .kt-table-flat.is-stacked { padding: 12px; } }
+.table tbody tr.is-muted td { opacity: .55; }
+.kt-row-link { cursor: pointer; }
+.kt-col-check { width: 44px; text-align: center; }
+.kt-col-check input { margin: 0; }
+.kt-check-all { display: inline-flex; }
+
+/* ---- ダッシュボード ---- */
+.kt-stat-link { color: inherit; text-decoration: none; transition: border-color var(--dur-2), transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2); }
+.kt-stat-link:hover { color: inherit; text-decoration: none; border-color: var(--accent-line); transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+
+.kt-flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; counter-reset: flow; list-style: none; margin: 0; padding: 0; }
+.kt-flow li { position: relative; counter-increment: flow; }
+.kt-flow li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -9px;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid var(--text-subtle);
+  border-right: 2px solid var(--text-subtle);
+  transform: translateY(-50%) rotate(45deg);
+  opacity: .6;
+}
+.kt-flow a {
+  display: grid;
+  gap: 4px;
+  height: 100%;
+  padding: 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color var(--dur-2), background-color var(--dur-2), transform var(--dur-2) var(--ease-out);
+}
+.kt-flow a:hover { border-color: var(--accent-line); background: var(--accent-soft); transform: translateY(-2px); text-decoration: none; color: var(--text); }
+.kt-flow a::before { content: counter(flow); position: absolute; top: 10px; right: 12px; font-size: var(--fs-xs); font-weight: 800; color: var(--text-subtle); }
+.kt-flow__icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--accent-soft); color: var(--accent); margin-bottom: 4px; }
+.kt-flow strong { font-size: var(--fs-sm); }
+.kt-flow small { font-size: var(--fs-xs); color: var(--text-subtle); }
+@media (max-width: 1100px) { .kt-flow { grid-template-columns: repeat(3, minmax(0, 1fr)); } .kt-flow li::after { display: none; } }
+@media (max-width: 600px) {
+  .kt-flow { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .kt-flow a { grid-template-columns: 34px minmax(0, 1fr); column-gap: 12px; row-gap: 0; align-items: center; padding: 10px 14px; }
+  .kt-flow__icon { grid-row: span 2; margin: 0; }
+  .kt-flow a::before { top: 50%; transform: translateY(-50%); }
+}
+
+.kt-sync-summary { display: grid; gap: 14px; }
+.kt-sync-summary__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-weight: 700; }
+.kt-sync-summary__nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.kt-sync-summary__nums > div { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); }
+.kt-sync-summary__nums dt { font-size: var(--fs-xs); color: var(--text-subtle); font-weight: 700; }
+.kt-sync-summary__nums dd { margin: 2px 0 0; font-size: var(--fs-lg); font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text-strong); }
+.kt-sync-summary__nums dd.text-sm { font-size: var(--fs-sm); font-weight: 600; }
+.kt-sync-summary__nums dd.text-success { color: var(--success); }
+.kt-sync-summary__nums dd.text-danger { color: var(--danger); }
+
+/* ---- 差分・確認 ---- */
+.kt-risk-summary { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; }
+@media (max-width: 760px) { .kt-risk-summary { grid-template-columns: 1fr 1fr; } .kt-risk-summary__item--high { grid-column: 1 / -1; } }
+.kt-risk-summary__item {
+  --tone: var(--neutral);
+  --tone-soft: var(--surface-2);
+  display: grid;
+  gap: 2px;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: linear-gradient(135deg, var(--tone-soft), transparent 70%), var(--surface);
+  box-shadow: inset 3px 0 0 var(--tone);
+}
+.kt-risk-summary__item--high { --tone: var(--danger); --tone-soft: var(--danger-soft); }
+.kt-risk-summary__item--medium { --tone: var(--warning); --tone-soft: var(--warning-soft); }
+.kt-risk-summary__item--low { --tone: var(--success); --tone-soft: var(--success-soft); }
+.kt-risk-summary__label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 700; color: var(--tone); }
+.kt-risk-summary__item strong { font-size: var(--fs-2xl); font-weight: 800; color: var(--text-strong); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.kt-risk-summary__item small { font-size: var(--fs-xs); color: var(--text-subtle); }
+
+.kt-risk { min-width: 2.2em; justify-content: center; font-weight: 800; }
+.kt-badges { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.kt-old { color: var(--text-muted); }
+.kt-old > span:not(.badge) { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--danger) 60%, transparent); }
+.kt-new { font-weight: 700; color: var(--text-strong); }
+.kt-arrow { width: 20px; padding-inline: 0 !important; color: var(--text-subtle); }
+@media (max-width: 760px) { .is-stacked .kt-arrow { display: none !important; } }
+
+.kt-diff-actions { justify-content: flex-end; }
+.kt-diff-actions__note { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; }
+@media (max-width: 760px) {
+  .kt-diff-actions { position: sticky; bottom: 0; z-index: 2; backdrop-filter: blur(12px); }
+  .kt-diff-actions .btn { flex: 1 1 auto; }
+}
+.kt-confirm-footer { justify-content: space-between; }
+.kt-high-confirm { padding: 8px 12px; border-radius: var(--r-md); border: 1px solid var(--danger-line, var(--border)); background: var(--danger-soft); font-weight: 700; color: var(--text-strong); }
+
+/* ---- レビュー ---- */
+.kt-filter-chip { text-decoration: none; }
+.kt-filter-chip:hover { text-decoration: none; background: var(--surface-3); }
+.kt-resolve-cell { min-width: 180px; }
+.kt-resolve-cell input, .kt-resolve-cell select { min-height: 34px; padding-block: 4px; font-size: var(--fs-sm); }
+.kt-row-actions { display: inline-flex; gap: 4px; justify-content: flex-end; }
+.kt-row-actions form { margin: 0; }
+
+/* ---- ログ・同期 ---- */
+.card__header--tabs { padding-block: 0; padding-inline: 12px; }
+.card__header--tabs .tabs { border-bottom: 0; flex: 1 1 auto; }
+.kt-detail-cell { max-width: 420px; }
+.kt-detail-cell code { display: block; white-space: pre-wrap; word-break: break-all; font-size: var(--fs-2xs, 11px); color: var(--text-muted); background: none; padding: 0; }
+.kt-error-cell { max-width: 360px; word-break: break-word; }
+.kt-cell-error { max-width: 220px; }
+
+.kt-app-picker { display: flex; align-items: center; gap: 10px; flex: 1 1 320px; min-width: 0; }
+.kt-app-picker__icon { width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 12px; background: var(--accent-soft); color: var(--accent); }
+.kt-app-picker select { max-width: 420px; font-weight: 700; }
+.kt-facts { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+@media (max-width: 600px) { .kt-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .kt-facts > div { padding: 10px 12px; } }
+.kt-facts dd { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.kt-facts > .kt-facts__wide { grid-column: span 2; }
+.kt-retry select { width: auto; max-width: 280px; }
+
+.kt-disclosure > summary small { margin-left: 8px; font-weight: 500; }
+.kt-disclosure form { border-top: 1px solid var(--divider); }
+.kt-disclosure__foot { padding: 12px 16px; border-top: 1px solid var(--divider); }
+.kt-disclosure__body { padding: 4px 16px 16px; }
+.kt-scroll-table { max-height: 420px; }
+@media (max-width: 600px) { .kt-disclosure > summary small { display: none; } }

@@ -1,0 +1,24 @@
+/* =====================================================================
+   account（共通アカウント管理）— FIT-SC UI v7 の上に重ねる
+   ===================================================================== */
+.ac-user { padding: 0 8px 0 4px; gap: 8px; }
+.ac-user .avatar { width: 28px; height: 28px; }
+.ac-person { display: flex; align-items: center; gap: 10px; }
+.ac-person .avatar { width: 34px; height: 34px; }
+.ac-person > span:last-child { display: grid; min-width: 0; }
+.ac-roles { display: flex; flex-wrap: wrap; gap: 4px; max-width: 420px; }
+
+.ac-role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.ac-role-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  transition: border-color var(--dur-1), background-color var(--dur-1);
+}
+.ac-role-card:has(input:checked) { border-color: var(--accent-line); background: var(--accent-soft); }
+.ac-role-card legend { float: left; width: 100%; padding: 0; margin-bottom: 2px; font-size: var(--fs-sm); font-weight: 700; color: var(--text-strong); }
+.ac-role-card legend + * { clear: both; }
+.ac-danger { flex: 0 0 auto !important; padding-top: 0; }

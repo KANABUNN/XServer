@@ -32,50 +32,73 @@ try {
     exit;
 }
 
-kintone_page_header('反映前の最終確認', $user);
+kintone_page_header('反映前の最終確認', $user, ['subtitle' => '団体マスタへ反映する内容を確認してください']);
 kintone_render_flash();
+$hasHigh = (int)$summary['high'] > 0;
 ?>
-<section class="card">
-  <h2>変更サマリ</h2>
-  <ul>
-    <li>🔴 高リスク変更 <?= (int)$summary['high'] ?>件（代表メール変更 <?= (int)$summary['email_changes'] ?>件 / active→inactive <?= (int)$summary['active_to_inactive'] ?>件）</li>
-    <li>🟡 中リスク変更 <?= (int)$summary['medium'] ?>件</li>
-    <li>🟢 低リスク変更 <?= (int)$summary['low'] ?>件</li>
-  </ul>
-  <p class="muted">この画面はサーバ側PHPで生成されます。高リスク変更を含む場合、画面上のチェックに加えて apply_import.php 側でも確認フラグを検証します。</p>
-</section>
-<section class="card">
-  <h2>反映予定の差分</h2>
-  <table>
-    <thead><tr><th>リスク</th><th>団体ID</th><th>項目</th><th>現在値</th><th>反映後</th></tr></thead>
-    <tbody>
-      <?php foreach ($changes as $c): ?>
-      <tr>
-        <td><?= kintone_h($c['risk_level']) ?></td>
-        <td><?= kintone_h($c['organization_code']) ?></td>
-        <td><?= kintone_h($c['field_name']) ?></td>
-        <td><?= kintone_h($c['old_value'] ?? '') ?></td>
-        <td><?= kintone_h($c['new_value'] ?? '') ?></td>
-      </tr>
-      <?php endforeach; ?>
-    </tbody>
-  </table>
-</section>
-<section class="card">
-  <form method="post" action="api/apply_import.php">
-    <?= kintone_auth_csrf_field() ?>
-    <input type="hidden" name="confirm_stage" value="1">
-    <input type="hidden" name="batch_id" value="<?= (int)$batchId ?>">
-    <?php foreach ($changes as $c): ?><input type="hidden" name="change_ids[]" value="<?= (int)$c['id'] ?>"><?php endforeach; ?>
-    <?php if ((int)$summary['high'] > 0): ?>
-      <label><input type="checkbox" name="high_risk_confirm" value="1" required> 高リスク変更を含みます。内容を確認しました。</label>
-    <?php else: ?>
-      <input type="hidden" name="high_risk_confirm" value="0">
-    <?php endif; ?>
-    <div class="form-actions">
-      <button class="primary" type="submit">反映する</button>
-      <a class="secondary" href="diff.php?batch_id=<?= (int)$batchId ?>">戻る</a>
+<div class="steps" aria-label="反映までの手順">
+  <div class="step is-done"><span class="step__label">1. アップロード</span></div>
+  <div class="step is-done"><span class="step__label">2. 差分の確認</span></div>
+  <div class="step is-active"><span class="step__label">3. 最終確認・反映</span></div>
+</div>
+
+<div class="kt-risk-summary">
+  <div class="kt-risk-summary__item kt-risk-summary__item--high">
+    <span class="kt-risk-summary__label"><?= fitsc_icon('alert-triangle', 'ico--sm') ?>高リスク</span>
+    <strong><?= (int)$summary['high'] ?></strong>
+    <small>代表メール変更 <?= (int)$summary['email_changes'] ?> ・ 活動中→活動不可 <?= (int)$summary['active_to_inactive'] ?></small>
+  </div>
+  <div class="kt-risk-summary__item kt-risk-summary__item--medium">
+    <span class="kt-risk-summary__label"><?= fitsc_icon('alert-circle', 'ico--sm') ?>中リスク</span>
+    <strong><?= (int)$summary['medium'] ?></strong>
+  </div>
+  <div class="kt-risk-summary__item kt-risk-summary__item--low">
+    <span class="kt-risk-summary__label"><?= fitsc_icon('check-circle', 'ico--sm') ?>低リスク</span>
+    <strong><?= (int)$summary['low'] ?></strong>
+  </div>
+</div>
+
+<form method="post" action="api/apply_import.php" data-busy>
+  <?= kintone_auth_csrf_field() ?>
+  <input type="hidden" name="confirm_stage" value="1">
+  <input type="hidden" name="batch_id" value="<?= (int)$batchId ?>">
+  <?php foreach ($changes as $c): ?><input type="hidden" name="change_ids[]" value="<?= (int)$c['id'] ?>"><?php endforeach; ?>
+  <section class="card">
+    <div class="card__header">
+      <div class="card__title"><?= fitsc_icon('list-checks') ?>反映する変更 <small><?= count($changes) ?>件</small></div>
     </div>
-  </form>
-</section>
+    <div class="table-wrap is-stacked kt-table-flat">
+      <table class="table">
+        <thead><tr><th>リスク</th><th>団体ID</th><th>項目</th><th>現在値</th><th></th><th>反映後</th></tr></thead>
+        <tbody>
+        <?php foreach ($changes as $c): $field = (string)$c['field_name']; ?>
+          <tr>
+            <td><?= kintone_risk_badge((string)$c['risk_level']) ?></td>
+            <td class="mono allow-select"><?= kintone_h($c['organization_code']) ?></td>
+            <td><span class="cell-main"><?= kintone_h(kintone_field_label($field)) ?></span><?php if (kintone_field_label($field) !== $field): ?><span class="cell-sub mono"><?= kintone_h($field) ?></span><?php endif; ?></td>
+            <td class="kt-old"><?= kintone_change_value($field, $c['old_value'] ?? null) ?></td>
+            <td class="kt-arrow" aria-hidden="true"><?= fitsc_icon('arrow-right', 'ico--sm') ?></td>
+            <td class="kt-new"><?= kintone_change_value($field, $c['new_value'] ?? null) ?></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <div class="card__footer form-actions--between kt-confirm-footer">
+      <?php if ($hasHigh): ?>
+        <label class="check kt-high-confirm">
+          <input type="checkbox" name="high_risk_confirm" value="1" required>
+          <span>高リスクの変更を含むことを確認しました</span>
+        </label>
+      <?php else: ?>
+        <input type="hidden" name="high_risk_confirm" value="0">
+        <span></span>
+      <?php endif; ?>
+      <div class="cluster">
+        <a class="btn btn--ghost" href="diff.php?batch_id=<?= (int)$batchId ?>"><?= fitsc_icon('arrow-left') ?>戻る</a>
+        <button class="btn btn--primary" type="submit"><?= fitsc_icon('check') ?>団体マスタへ反映</button>
+      </div>
+    </div>
+  </section>
+</form>
 <?php kintone_page_footer(); ?>

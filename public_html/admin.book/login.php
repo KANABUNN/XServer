@@ -70,60 +70,49 @@ if (isset($_GET['created']) && $_GET['created'] === '1' && $errorMessage === '')
     $infoMessage = '初回管理者を作成しました。ログインしてください。';
 }
 ?>
+<?php require_once __DIR__ . '/../../apps/ui_kit.php'; ?>
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>管理画面ログイン</title>
-  <link rel="stylesheet" href="./assets/common/tokens.css?v=20260716a">
-  <link rel="stylesheet" href="./css/admin-auth.css?v=20260715a">
-  <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260716a">
-  <script src="./assets/common/context-menu-guard.js?v=20260713" defer></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>ログイン | 貸し部屋予約 管理</title>
+  <?php echo fitsc_ui_head(['css' => ['./css/app.css'], 'guard' => './assets/common/context-menu-guard.js']); ?>
 </head>
 <body>
-  <main class="auth-shell">
-    <section class="auth-card">
-      <div class="auth-card-head">
-        <p class="auth-kicker">admin.book</p>
-        <h1>管理画面ログイン</h1>
-        <p class="auth-lead">アプリ内ログインで個人単位の識別を行います。Basic 認証は別途 .htaccess で前段に置いてください。</p>
+  <main class="auth">
+    <div class="auth__corner"><?php echo fitsc_theme_toggle(); ?></div>
+    <section class="auth__card">
+      <div class="auth__head">
+        <span class="brand-mark brand-mark--lg"><?php echo fitsc_icon('door'); ?></span>
+        <h1>貸し部屋予約 管理</h1>
+        <p>管理者アカウントでログインしてください</p>
       </div>
 
-      <?php if ($infoMessage !== ''): ?>
-        <div class="auth-message auth-message-info"><?php echo admin_auth_h($infoMessage); ?></div>
-      <?php endif; ?>
+      <div class="stack">
+        <?php if ($infoMessage !== ''): ?>
+          <?php echo fitsc_flash_html('success', $infoMessage); ?>
+        <?php endif; ?>
+        <?php if ($errorMessage !== ''): ?>
+          <div class="alert alert--danger" role="alert"><?php echo fitsc_icon('x-circle'); ?><div class="alert__body"><?php echo admin_auth_h($errorMessage); ?></div></div>
+        <?php endif; ?>
+        <?php if ($canSetup): ?>
+          <div class="alert alert--warning"><?php echo fitsc_icon('alert-triangle'); ?><div class="alert__body">管理者が未登録です。<a href="setup_admin.php">初回セットアップ</a>を行ってください。</div></div>
+        <?php endif; ?>
 
-      <?php if ($errorMessage !== ''): ?>
-        <div class="auth-message auth-message-error"><?php echo admin_auth_h($errorMessage); ?></div>
-      <?php endif; ?>
-
-      <?php if ($canSetup): ?>
-        <div class="auth-message auth-message-warn">
-          初期管理者が未作成です。先に <a href="setup_admin.php">初回セットアップ</a> を行ってください。
-        </div>
-      <?php endif; ?>
-
-      <form method="post" class="auth-form" autocomplete="on">
-        <?php echo admin_auth_csrf_field(); ?>
-        <input type="hidden" name="return_to" value="<?php echo admin_auth_h($returnTo); ?>">
-
-        <label class="auth-field">
-          <span>ログインID</span>
-          <input type="text" name="login_id" maxlength="100" autocomplete="username" required>
-        </label>
-
-        <label class="auth-field">
-          <span>パスワード</span>
-          <input type="password" name="password" autocomplete="current-password" required>
-        </label>
-
-        <button type="submit" class="auth-primary">ログイン</button>
-      </form>
-
-      <div class="auth-foot">
-        <p>権限ロール: 閲覧者 viewer / 編集者 user / 管理者 admin</p>
-        <p><a href="./">管理画面トップへ</a></p>
+        <form method="post" class="stack" autocomplete="on" data-busy>
+          <?php echo admin_auth_csrf_field(); ?>
+          <input type="hidden" name="return_to" value="<?php echo admin_auth_h($returnTo); ?>">
+          <label class="field">
+            <span>ログインID</span>
+            <span class="input-icon"><?php echo fitsc_icon('user'); ?><input type="text" name="login_id" maxlength="100" autocomplete="username" required autofocus></span>
+          </label>
+          <label class="field">
+            <span>パスワード</span>
+            <span class="input-icon"><?php echo fitsc_icon('lock'); ?><input type="password" name="password" autocomplete="current-password" required></span>
+          </label>
+          <button type="submit" class="btn btn--primary btn--lg btn--block"><span>ログイン</span><?php echo fitsc_icon('arrow-right'); ?></button>
+        </form>
       </div>
     </section>
   </main>

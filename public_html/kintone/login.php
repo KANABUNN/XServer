@@ -6,10 +6,11 @@ $projectRoot = dirname(__DIR__, 2);
 require_once $projectRoot . '/apps/kintone_core/auth.php';
 require_once $projectRoot . '/apps/kintone_core/audit.php';
 require_once $projectRoot . '/apps/response_limit.php';
+require_once $projectRoot . '/apps/ui_kit.php';
 
 kintone_auth_bootstrap();
 if (!headers_sent()) {
-    header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
+    header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
     header('X-Robots-Tag: noindex, nofollow, noarchive');
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 }
@@ -48,31 +49,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 $csrf = kintone_auth_csrf_token();
 ?><!doctype html>
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ログイン - kintone管理</title>
-<link rel="stylesheet" href="../assets/common/tokens.css?v=20260716a-style1">
-<link rel="stylesheet" href="../assets/common/fit-sc-skin.css?v=20260716a-style1">
-<link rel="stylesheet" href="../assets/common/fit-sc-responsive.css?v=20260713">
-<script src="../assets/common/context-menu-guard.js?v=20260713" defer></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ログイン | kintone管理</title>
+<?= fitsc_ui_head(['css' => ['assets/css/app.css']]) ?>
 </head>
 <body>
-<div class="login">
-  <form class="loginbox" method="post" action="login.php">
-    <h1>FIT-SC kintone管理</h1>
-    <p class="muted">団体マスタ管理サイトへログインします。</p>
-    <?php if ($error !== ''): ?><div class="error"><?= kintone_h($error) ?></div><?php endif; ?>
-    <input type="hidden" name="_csrf" value="<?= kintone_h($csrf) ?>">
-    <input type="hidden" name="return_to" value="<?= kintone_h($returnTo) ?>">
-    <label for="login_id">ログインID</label>
-    <input id="login_id" name="login_id" autocomplete="username" required>
-    <label for="password">パスワード</label>
-    <input id="password" name="password" type="password" autocomplete="current-password" required>
-    <button class="primary" type="submit">ログイン</button>
-    <p class="small">共通アカウントの kintone アプリ権限を使用します。viewer / operator / admin が必要です。</p>
-  </form>
-</div>
+<main class="auth">
+  <div class="auth__corner"><?= fitsc_theme_toggle() ?></div>
+  <section class="auth__card">
+    <div class="auth__head">
+      <span class="brand-mark brand-mark--lg"><?= fitsc_icon('cloud') ?></span>
+      <h1>kintone管理</h1>
+      <p>団体マスタ・名簿連携の管理サイト</p>
+    </div>
+    <div class="stack">
+      <?php if ($error !== ''): ?>
+        <div class="alert alert--danger" role="alert"><?= fitsc_icon('x-circle') ?><div class="alert__body"><?= kintone_h($error) ?></div></div>
+      <?php endif; ?>
+      <form method="post" action="login.php" class="stack" data-busy>
+        <input type="hidden" name="_csrf" value="<?= kintone_h($csrf) ?>">
+        <input type="hidden" name="return_to" value="<?= kintone_h($returnTo) ?>">
+        <label class="field">
+          <span>ログインID</span>
+          <span class="input-icon"><?= fitsc_icon('user') ?><input id="login_id" name="login_id" autocomplete="username" required autofocus></span>
+        </label>
+        <label class="field">
+          <span>パスワード</span>
+          <span class="input-icon"><?= fitsc_icon('lock') ?><input id="password" name="password" type="password" autocomplete="current-password" required></span>
+        </label>
+        <button class="btn btn--primary btn--lg btn--block" type="submit"><span>ログイン</span><?= fitsc_icon('arrow-right') ?></button>
+      </form>
+    </div>
+    <p class="auth__foot">共通アカウントでログインします（kintone管理の権限が必要です）</p>
+  </section>
+</main>
 </body>
 </html>

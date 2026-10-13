@@ -9,45 +9,71 @@ $id = max(0, (int)($_GET['id'] ?? 0));
 $job = $id > 0 ? $manager->getJob($id) : null;
 if (!$job) {
     http_response_code(404);
-    backup_web_header('見つかりません', $user);
-    echo '<section class="card"><h2>ジョブが見つかりません</h2><p><a href="history.php">履歴へ戻る</a></p></section>';
+    backup_web_header('見つかりません', $user, ['back' => 'history.php']);
+    echo '<section class="card">' . backup_web_empty('archive', 'このジョブは見つかりませんでした', '<a href="history.php">実行履歴へ戻る</a>') . '</section>';
     backup_web_footer();
     exit;
 }
 $items = $manager->listItems((int)$job['id']);
-backup_web_header('バックアップ詳細', $user);
+$tone = backup_web_status_tone((string)$job['status']);
+backup_web_header('バックアップ #' . (int)$job['id'], $user, [
+    'subtitle' => backup_web_job_type_label((string)$job['job_type']) . ' ・ ' . (string)$job['started_at'],
+    'back' => 'history.php',
+]);
 ?>
-<section class="grid">
-  <div class="card"><h2>ジョブ</h2><div class="metric">#<?= (int)$job['id'] ?></div><p class="mono"><?= backup_h((string)$job['job_key']) ?></p></div>
-  <div class="card"><h2>状態</h2><div class="metric"><?= backup_web_status_badge((string)$job['status']) ?></div><p class="muted"><?= backup_h((string)$job['message']) ?></p></div>
-  <div class="card"><h2>サイズ</h2><div class="metric"><?= backup_h(backup_format_bytes((int)$job['total_bytes'])) ?></div><p class="muted">manifest: <?= backup_h(substr((string)($job['manifest_sha256'] ?? ''), 0, 16)) ?></p></div>
+<div class="stat-grid">
+  <div class="stat<?= $tone !== '' ? ' stat--' . $tone : '' ?>">
+    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('activity') ?></span>状態</span>
+    <span class="stat__value"><?= backup_h(backup_status_label((string)$job['status'])) ?></span>
+    <span class="stat__meta bk-wrap"><?= backup_h((string)$job['message']) ?></span>
+  </div>
+  <div class="stat stat--info">
+    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('database') ?></span>サイズ</span>
+    <span class="stat__value"><?= backup_h(backup_format_bytes((int)$job['total_bytes'])) ?></span>
+    <span class="stat__meta">成功 <?= (int)($job['success_items'] ?? 0) ?> ・ 失敗 <?= (int)($job['failed_items'] ?? 0) ?></span>
+  </div>
+  <div class="stat stat--teal">
+    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('clock') ?></span>実行時間</span>
+    <span class="stat__value bk-stat-small"><?= backup_h(substr((string)$job['started_at'], 11, 5)) ?> → <?= backup_h(substr((string)($job['finished_at'] ?? ''), 11, 5) ?: '—') ?></span>
+    <span class="stat__meta"><?= backup_h(backup_web_trigger_label((string)($job['trigger_type'] ?? ''))) ?>実行</span>
+  </div>
+</div>
+
+<section class="card">
+  <div class="card__body">
+    <dl class="dl">
+      <div><dt>ジョブキー</dt><dd class="mono allow-select"><?= backup_h((string)$job['job_key']) ?></dd></div>
+      <div><dt>保存先</dt><dd class="mono allow-select"><?= backup_h(backup_mask_path((string)($job['backup_root'] ?? ''))) ?></dd></div>
+      <div><dt>manifest SHA256</dt><dd class="mono allow-select bk-hash"><?= backup_h((string)($job['manifest_sha256'] ?? '—')) ?></dd></div>
+    </dl>
+    <p class="small-note mt-2"><?= fitsc_icon('lock', 'ico--sm') ?> バックアップ本体は Web からダウンロードできません。復元時は SSH またはファイルマネージャーで非公開領域から取得してください。</p>
+  </div>
 </section>
 
-<section class="card" style="margin-top:16px">
-  <h2>保存先</h2>
-  <p class="mono"><?= backup_h(backup_mask_path((string)($job['backup_root'] ?? ''))) ?></p>
-  <p class="muted">この画面ではバックアップ本体のダウンロードは提供しません。復元時はSSHまたはXServerファイルマネージャーでWeb非公開領域から取得してください。</p>
-</section>
-
-<section class="card" style="margin-top:16px">
-  <h2>項目一覧</h2>
-  <table>
-    <thead><tr><th>ID</th><th>種別</th><th>対象</th><th>状態</th><th>件数</th><th>サイズ</th><th>SHA256</th><th>保存先</th></tr></thead>
-    <tbody>
-    <?php foreach ($items as $item): ?>
-      <tr>
-        <td><?= (int)$item['id'] ?></td>
-        <td><?= backup_h((string)$item['item_type']) ?></td>
-        <td><strong><?= backup_h((string)$item['target_label']) ?></strong><br><span class="small muted"><?= backup_h(backup_mask_path((string)($item['source_path'] ?? ''))) ?></span></td>
-        <td><?= backup_web_status_badge((string)$item['status']) ?><?php if (!empty($item['error_message'])): ?><br><span class="danger small"><?= backup_h((string)$item['error_message']) ?></span><?php endif; ?></td>
-        <td><?= $item['file_count'] !== null ? (int)$item['file_count'] : '-' ?></td>
-        <td><?= backup_h(backup_format_bytes((int)$item['total_bytes'])) ?></td>
-        <td class="mono"><?= backup_h((string)($item['sha256'] ?? '')) ?></td>
-        <td class="mono"><?= backup_h(backup_mask_path((string)($item['backup_path'] ?? ''))) ?></td>
-      </tr>
-    <?php endforeach; ?>
-    </tbody>
-  </table>
+<section class="card">
+  <div class="card__header">
+    <div class="card__title"><?= fitsc_icon('layers') ?>項目 <small><?= count($items) ?>件</small></div>
+  </div>
+  <?php if ($items === []): ?>
+    <?= backup_web_empty('layers', '項目がありません') ?>
+  <?php else: ?>
+    <div class="table-wrap is-stacked">
+      <table class="table">
+        <thead><tr><th>対象</th><th>状態</th><th class="text-right">件数</th><th class="text-right">サイズ</th><th>保存先・SHA256</th></tr></thead>
+        <tbody>
+        <?php foreach ($items as $item): ?>
+          <tr>
+            <td><span class="cell-main"><?= backup_h((string)$item['target_label']) ?></span><span class="cell-sub"><?= backup_h((string)$item['item_type']) ?> ・ <span class="mono"><?= backup_h(backup_mask_path((string)($item['source_path'] ?? ''))) ?></span></span></td>
+            <td><?= backup_web_status_badge((string)$item['status']) ?><?php if (!empty($item['error_message'])): ?><span class="cell-sub text-danger"><?= backup_h((string)$item['error_message']) ?></span><?php endif; ?></td>
+            <td class="text-right num"><?= $item['file_count'] !== null ? number_format((int)$item['file_count']) : '—' ?></td>
+            <td class="text-right num nowrap"><?= backup_h(backup_format_bytes((int)$item['total_bytes'])) ?></td>
+            <td><span class="mono text-xs allow-select"><?= backup_h(backup_mask_path((string)($item['backup_path'] ?? ''))) ?></span><span class="cell-sub mono bk-hash allow-select"><?= backup_h((string)($item['sha256'] ?? '')) ?></span></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
 </section>
 <?php
 backup_web_footer();

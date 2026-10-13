@@ -57,83 +57,188 @@ if ($canAdmin && $role === 'push' && $appKey === 'organizations') {
     $targets = $pdo->query('SELECT id, organization_code, organization_name, activity_status, last_synced_at FROM organizations WHERE is_active = 1 ORDER BY organization_code ASC LIMIT 200')->fetchAll() ?: [];
 }
 
-function kintone_sync_badge(string $status): string
-{
-    return match ($status) {
-        'success', 'connected' => '<span class="badge badge-success">' . kintone_h($status) . '</span>',
-        'partial', 'not_connected' => '<span class="badge badge-warn">' . kintone_h($status) . '</span>',
-        'failed', 'error' => '<span class="badge badge-danger">' . kintone_h($status) . '</span>',
-        'running' => '<span class="badge">running</span>',
-        default => '<span class="badge">' . kintone_h($status) . '</span>',
-    };
-}
-
+$directionLabel = $role === 'pull' ? 'kintone → XServer（キャッシュへ取得）' : ($role === 'push' ? 'XServer → kintone（正本を送信）' : '手動管理（自動同期なし）');
 kintone_page_header('kintone同期', $user);
 kintone_render_flash();
 ?>
+<?php if (!is_array($selected)): ?>
 <section class="card">
-  <h2>同期対象アプリ</h2>
-  <form method="get" class="form-actions">
-    <label for="app_key" class="sr-only">アプリ</label>
-    <select id="app_key" name="app_key" onchange="this.form.submit()">
-      <?php foreach ($apps as $app): ?>
-        <option value="<?= kintone_h($app['app_key']) ?>" <?= (string)$app['app_key'] === $appKey ? 'selected' : '' ?>><?= kintone_h($app['app_key'] . ' / ' . $app['display_name'] . ' / ' . $app['app_role']) ?></option>
-      <?php endforeach; ?>
-    </select>
-    <noscript><button class="secondary" type="submit">表示</button></noscript>
-    <a class="btn" href="settings.php<?= $appKey !== '' ? '?app_key=' . rawurlencode($appKey) : '' ?>">アプリ設定</a>
-  </form>
-  <?php if (!is_array($selected)): ?>
-    <p class="alert alert-warning">有効なkintoneアプリがありません。先にアプリレジストリへ登録してください。</p>
-  <?php else: ?>
-    <p>app_key: <code><?= kintone_h($appKey) ?></code> / ロール: <span class="badge"><?= kintone_h($role) ?></span> / アプリID: <?= kintone_h($selected['kintone_app_id']) ?> / 状態: <?= kintone_sync_badge((string)$selected['status']) ?> / トークン: <?= $hasToken ? '<span class="badge badge-success">登録済み</span>' : '<span class="badge badge-danger">未登録</span>' ?></p>
-    <p class="muted">最終同期: <?= kintone_h($selected['last_synced_at'] ?? '-') ?> / 最終エラー: <?= kintone_h($selected['last_error'] ?? '-') ?></p>
-  <?php endif; ?>
+  <div class="empty">
+    <span class="empty__icon"><?= fitsc_icon('cloud') ?></span>
+    <span class="empty__title">有効なkintoneアプリがありません</span>
+    <span>先にアプリ設定でアプリを登録してください。</span>
+    <?php if ($canAdmin): ?><a class="btn btn--primary btn--sm" href="settings.php?app_key="><?= fitsc_icon('plus') ?>アプリを追加</a><?php endif; ?>
+  </div>
 </section>
-
-<?php if (is_array($selected)): ?>
+<?php else: ?>
 <section class="card">
-  <h2><?= $role === 'pull' ? 'kintone → XServerキャッシュ' : ($role === 'push' ? 'XServer正本 → kintone' : '手動アプリ') ?></h2>
-  <?php if (!$canAdmin): ?>
-    <p class="alert alert-warning">同期実行はadminのみ可能です。viewer/operatorはログ閲覧のみです。</p>
-  <?php elseif (!$hasToken): ?>
-    <p class="alert alert-warning">先にこのアプリのAPIトークンを保存してください。</p>
-    <p><a class="primary" href="settings.php?app_key=<?= rawurlencode($appKey) ?>">アプリ設定へ</a></p>
-  <?php elseif ($role === 'manual'): ?>
-    <p class="muted">manualアプリは自動同期しません。設定・参照用の予約枠です。</p>
-  <?php else: ?>
-    <form method="post" action="api/sync_kintone.php" class="form-actions">
-      <?= kintone_auth_csrf_field() ?>
-      <input type="hidden" name="action" value="sync_app">
-      <input type="hidden" name="app_key" value="<?= kintone_h($appKey) ?>">
-      <button class="primary" type="submit" onclick="return confirm('<?= $role === 'pull' ? 'kintoneからキャッシュへ取り込みます。' : 'XServer正本をkintoneへ同期します。' ?>実行しますか？');"><?= $role === 'pull' ? 'pull同期を実行' : 'push同期を実行' ?></button>
-      <a class="secondary" href="settings.php?app_key=<?= rawurlencode($appKey) ?>">アプリ設定</a>
+  <div class="card__header">
+    <form method="get" class="kt-app-picker">
+      <span class="kt-app-picker__icon"><?= fitsc_icon($role === 'pull' ? 'download' : ($role === 'push' ? 'upload' : 'database')) ?></span>
+      <label class="sr-only" for="app_key">アプリ</label>
+      <select id="app_key" name="app_key" data-autosubmit>
+        <?php foreach ($apps as $app): ?>
+          <option value="<?= kintone_h($app['app_key']) ?>" <?= (string)$app['app_key'] === $appKey ? 'selected' : '' ?>><?= kintone_h($app['display_name'] . '（' . $app['app_key'] . '）') ?></option>
+        <?php endforeach; ?>
+      </select>
+      <noscript><button class="btn" type="submit">表示</button></noscript>
     </form>
+    <?php if ($canAdmin): ?><a class="btn btn--ghost btn--sm" href="settings.php?app_key=<?= rawurlencode($appKey) ?>"><?= fitsc_icon('settings') ?>アプリ設定</a><?php endif; ?>
+  </div>
+  <div class="card__body stack">
+    <dl class="dl dl--grid kt-facts">
+      <div class="kt-facts__wide"><dt>同期方向</dt><dd><?= kintone_role_badge($role) ?> <span class="text-sm text-muted"><?= kintone_h($directionLabel) ?></span></dd></div>
+      <div><dt>kintoneアプリID</dt><dd class="mono"><?= kintone_h($selected['kintone_app_id']) ?></dd></div>
+      <div><dt>接続</dt><dd><?= kintone_status_badge((string)$selected['status']) ?></dd></div>
+      <div><dt>APIトークン</dt><dd><?= $hasToken ? '<span class="badge badge--success badge--dot">登録済み</span>' : '<span class="badge badge--danger badge--dot">未登録</span>' ?></dd></div>
+      <div><dt>最終同期</dt><dd class="text-sm"><?= kintone_h($selected['last_synced_at'] ?? '—') ?></dd></div>
+    </dl>
+    <?php if (!empty($selected['last_error'])): ?>
+      <div class="alert alert--warning"><?= fitsc_icon('alert-triangle') ?><div class="alert__body"><strong class="alert__title">前回のエラー</strong><span class="allow-select"><?= kintone_h($selected['last_error']) ?></span></div></div>
+    <?php endif; ?>
+
+    <?php if (!$canAdmin): ?>
+      <div class="alert alert--neutral"><?= fitsc_icon('lock') ?><div class="alert__body">同期の実行は管理者のみ可能です。</div></div>
+    <?php elseif (!$hasToken): ?>
+      <div class="alert alert--warning"><?= fitsc_icon('key') ?><div class="alert__body">このアプリのAPIトークンが未登録です。<a href="settings.php?app_key=<?= rawurlencode($appKey) ?>">アプリ設定</a>で登録してください。</div></div>
+    <?php elseif ($role === 'manual'): ?>
+      <div class="alert alert--neutral"><?= fitsc_icon('info') ?><div class="alert__body">手動管理のアプリは自動同期しません。</div></div>
+    <?php endif; ?>
+  </div>
+  <?php if ($canAdmin && $hasToken && $role !== 'manual'): ?>
+    <div class="card__footer form-actions--between">
+      <?php if ($failedJobs !== []): ?>
+        <form method="post" action="api/sync_kintone.php" class="cluster kt-retry" data-busy>
+          <?= kintone_auth_csrf_field() ?>
+          <input type="hidden" name="action" value="retry_failed">
+          <label class="sr-only" for="source_job_id">再同期するジョブ</label>
+          <select id="source_job_id" name="source_job_id">
+            <?php foreach ($failedJobs as $job): ?><option value="<?= (int)$job['id'] ?>">#<?= (int)$job['id'] ?> 失敗 <?= (int)$job['failed_items'] ?>件 ・ <?= kintone_h($job['finished_at'] ?? '') ?></option><?php endforeach; ?>
+          </select>
+          <button class="btn" type="submit"><?= fitsc_icon('rotate-ccw') ?>失敗分を再同期</button>
+        </form>
+      <?php else: ?><span></span><?php endif; ?>
+      <form method="post" action="api/sync_kintone.php" data-busy data-confirm="<?= $role === 'pull' ? 'kintoneのレコードをXServerのキャッシュへ取り込みます。' : 'XServerの団体データをkintoneへ送信します。' ?>" data-confirm-title="同期を実行しますか？" data-confirm-ok="実行する" data-confirm-tone="default">
+        <?= kintone_auth_csrf_field() ?>
+        <input type="hidden" name="action" value="sync_app">
+        <input type="hidden" name="app_key" value="<?= kintone_h($appKey) ?>">
+        <button class="btn btn--primary" type="submit"><?= fitsc_icon('refresh') ?><?= $role === 'pull' ? 'kintoneから取得' : 'kintoneへ送信' ?></button>
+      </form>
+    </div>
   <?php endif; ?>
 </section>
-<?php endif; ?>
-
-<?php if ($canAdmin && is_array($selected) && $hasToken && $failedJobs !== []): ?>
-<section class="card"><h2>失敗分のみ再同期</h2><form method="post" action="api/sync_kintone.php" class="form-actions">
-  <?= kintone_auth_csrf_field() ?>
-  <input type="hidden" name="action" value="retry_failed">
-  <select name="source_job_id"><?php foreach ($failedJobs as $job): ?><option value="<?= (int)$job['id'] ?>">#<?= (int)$job['id'] ?> <?= kintone_h($job['status']) ?> / failed <?= (int)$job['failed_items'] ?> / <?= kintone_h($job['finished_at'] ?? '') ?></option><?php endforeach; ?></select>
-  <button class="primary" type="submit">選択ジョブの失敗分を再同期</button>
-</form></section>
-<?php endif; ?>
 
 <?php if ($canAdmin && $role === 'push' && $appKey === 'organizations' && $hasToken): ?>
-<section class="card"><h2>団体個別同期</h2><p class="muted">大量同期前のテスト用です。最大200件まで表示しています。</p><form method="post" action="api/sync_kintone.php">
-  <?= kintone_auth_csrf_field() ?><input type="hidden" name="action" value="sync_selected"><input type="hidden" name="app_key" value="organizations">
-  <div class="table-wrap"><table><thead><tr><th></th><th>団体ID</th><th>団体名</th><th>活動状態</th><th>最終同期</th></tr></thead><tbody><?php foreach ($targets as $org): ?><tr><td><input type="checkbox" name="organization_ids[]" value="<?= (int)$org['id'] ?>"></td><td><?= kintone_h($org['organization_code']) ?></td><td><?= kintone_h($org['organization_name']) ?></td><td><?= kintone_h($org['activity_status']) ?></td><td><?= kintone_h($org['last_synced_at'] ?? '-') ?></td></tr><?php endforeach; ?><?php if ($targets === []): ?><tr><td colspan="5" class="empty">同期対象がありません。</td></tr><?php endif; ?></tbody></table></div>
-  <div class="form-actions"><button class="secondary" type="submit">選択団体のみ同期</button></div>
-</form></section>
+<details class="disclosure kt-disclosure">
+  <summary><?= fitsc_icon('list-checks') ?><span>団体を選んで同期</span><small class="text-subtle">大量同期前の動作確認用（最大200件）</small></summary>
+  <form method="post" action="api/sync_kintone.php" data-busy>
+    <?= kintone_auth_csrf_field() ?><input type="hidden" name="action" value="sync_selected"><input type="hidden" name="app_key" value="organizations">
+    <?php if ($targets === []): ?>
+      <div class="empty"><span>同期対象の団体がありません。</span></div>
+    <?php else: ?>
+      <div class="table-wrap kt-table-flat kt-scroll-table">
+        <table class="table table--compact">
+          <thead><tr><th class="kt-col-check"><label class="kt-check-all" aria-label="すべて選択"><input type="checkbox" data-check-all="organization_ids[]"></label></th><th>団体</th><th>活動状態</th><th>最終同期</th></tr></thead>
+          <tbody>
+          <?php foreach ($targets as $org): ?>
+            <tr>
+              <td class="kt-col-check"><input type="checkbox" name="organization_ids[]" value="<?= (int)$org['id'] ?>" aria-label="<?= kintone_h($org['organization_name']) ?> を選択"></td>
+              <td><span class="cell-main"><?= kintone_h($org['organization_name']) ?></span><span class="cell-sub mono"><?= kintone_h($org['organization_code']) ?></span></td>
+              <td><?= kintone_status_badge((string)$org['activity_status']) ?></td>
+              <td class="text-xs"><?= kintone_h($org['last_synced_at'] ?? '—') ?></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+    <div class="form-actions form-actions--end kt-disclosure__foot">
+      <span class="text-sm text-muted" data-selected-count></span>
+      <button class="btn" type="submit"><?= fitsc_icon('send') ?>選択した団体を同期</button>
+    </div>
+  </form>
+</details>
 <?php endif; ?>
 
 <?php if ($role === 'pull'): ?>
-<section class="card"><h2>pullキャッシュ</h2><p>キャッシュ済み: <?= $cacheCount ?>件。未登場レコードは削除せず、<code>synced_at</code> の鮮度で判断します。</p><div class="table-wrap"><table><thead><tr><th>record_key</th><th>kintone ID</th><th>revision</th><th>synced_at</th></tr></thead><tbody><?php foreach ($cacheRows as $row): ?><tr><td><?= kintone_h($row['record_key'] ?? '') ?></td><td><?= kintone_h($row['kintone_record_id']) ?></td><td><?= kintone_h($row['kintone_revision'] ?? '') ?></td><td><?= kintone_h($row['synced_at']) ?></td></tr><?php endforeach; ?><?php if ($cacheRows === []): ?><tr><td colspan="4" class="empty">キャッシュはまだありません。</td></tr><?php endif; ?></tbody></table></div></section>
+<section class="card">
+  <div class="card__header">
+    <div class="card__title"><?= fitsc_icon('database') ?>取得済みキャッシュ <small><?= $cacheCount ?>件</small></div>
+    <span class="text-xs text-subtle">kintone側にないレコードは削除せず、取得日時で鮮度を判断します</span>
+  </div>
+  <?php if ($cacheRows === []): ?>
+    <div class="empty"><span>キャッシュはまだありません。</span></div>
+  <?php else: ?>
+    <div class="table-wrap is-stacked kt-table-flat">
+      <table class="table table--compact">
+        <thead><tr><th>record_key</th><th>kintone ID</th><th>revision</th><th>取得日時</th></tr></thead>
+        <tbody>
+        <?php foreach ($cacheRows as $row): ?>
+          <tr><td class="mono allow-select"><?= kintone_h($row['record_key'] ?? '') ?></td><td class="mono"><?= kintone_h($row['kintone_record_id']) ?></td><td class="mono"><?= kintone_h($row['kintone_revision'] ?? '') ?></td><td class="text-xs"><?= kintone_h($row['synced_at']) ?></td></tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
+</section>
 <?php endif; ?>
 
-<section class="card"><h2>同期ジョブ</h2><div class="table-wrap"><table><thead><tr><th>ID</th><th>状態</th><th>種別</th><th>対象</th><th>成功</th><th>失敗</th><th>開始</th><th>終了</th><th>メッセージ</th></tr></thead><tbody><?php foreach ($latestJobs as $job): ?><tr><td>#<?= (int)$job['id'] ?></td><td><?= kintone_sync_badge((string)$job['status']) ?></td><td><?= kintone_h($job['job_type']) ?></td><td><?= (int)$job['total_items'] ?></td><td><?= (int)$job['success_items'] ?></td><td><?= (int)$job['failed_items'] ?></td><td><?= kintone_h($job['started_at'] ?? '') ?></td><td><?= kintone_h($job['finished_at'] ?? '') ?></td><td><?= kintone_h($job['message'] ?? '') ?></td></tr><?php endforeach; ?><?php if ($latestJobs === []): ?><tr><td colspan="9" class="empty">同期ジョブはまだありません。</td></tr><?php endif; ?></tbody></table></div></section>
-<section class="card"><h2>直近の同期明細</h2><div class="table-wrap"><table><thead><tr><th>ID</th><th>Job</th><th>record_key</th><th>団体ID</th><th>操作</th><th>状態</th><th>kintone ID</th><th>エラー</th><th>作成日時</th></tr></thead><tbody><?php foreach ($lastItems as $item): ?><tr><td><?= (int)$item['id'] ?></td><td>#<?= (int)$item['job_id'] ?></td><td><?= kintone_h($item['record_key'] ?? '') ?></td><td><?= kintone_h($item['organization_code'] ?? '') ?></td><td><?= kintone_h($item['action_type']) ?></td><td><?= kintone_sync_badge((string)$item['status']) ?></td><td><?= kintone_h($item['kintone_record_id'] ?? '') ?></td><td><?= kintone_h($item['error_message'] ?? '') ?></td><td><?= kintone_h($item['created_at']) ?></td></tr><?php endforeach; ?><?php if ($lastItems === []): ?><tr><td colspan="9" class="empty">同期明細はまだありません。</td></tr><?php endif; ?></tbody></table></div></section>
+<section class="card" data-tabs-root>
+  <div class="card__header card__header--tabs">
+    <div class="tabs" data-tabs aria-label="同期の履歴">
+      <button type="button" class="tab" data-tab="jobs"><?= fitsc_icon('refresh') ?>同期ジョブ</button>
+      <button type="button" class="tab" data-tab="items"><?= fitsc_icon('list') ?>直近の明細</button>
+    </div>
+  </div>
+  <div data-tab-panel="jobs">
+    <?php if ($latestJobs === []): ?>
+      <div class="empty"><span>同期ジョブはまだありません。</span></div>
+    <?php else: ?>
+      <div class="table-wrap is-stacked kt-table-flat">
+        <table class="table table--compact">
+          <thead><tr><th>ジョブ</th><th>状態</th><th>種別</th><th class="text-right">対象</th><th class="text-right">成功</th><th class="text-right">失敗</th><th>開始・終了</th><th>メッセージ</th></tr></thead>
+          <tbody>
+          <?php foreach ($latestJobs as $job): ?>
+            <tr>
+              <td class="mono">#<?= (int)$job['id'] ?></td>
+              <td><?= kintone_status_badge((string)$job['status']) ?></td>
+              <td class="mono text-xs"><?= kintone_h($job['job_type']) ?></td>
+              <td class="text-right num"><?= (int)$job['total_items'] ?></td>
+              <td class="text-right num text-success"><?= (int)$job['success_items'] ?></td>
+              <td class="text-right num<?= (int)$job['failed_items'] > 0 ? ' text-danger' : '' ?>"><?= (int)$job['failed_items'] ?></td>
+              <td class="text-xs nowrap"><?= kintone_h($job['started_at'] ?? '') ?><span class="cell-sub"><?= kintone_h($job['finished_at'] ?? '') ?></span></td>
+              <td class="kt-error-cell text-sm allow-select"><?= kintone_h($job['message'] ?? '') ?></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+  </div>
+  <div data-tab-panel="items" hidden>
+    <?php if ($lastItems === []): ?>
+      <div class="empty"><span>同期明細はまだありません。</span></div>
+    <?php else: ?>
+      <div class="table-wrap is-stacked kt-table-flat">
+        <table class="table table--compact">
+          <thead><tr><th>明細</th><th>対象</th><th>操作</th><th>状態</th><th>kintone ID</th><th>エラー</th><th>作成日時</th></tr></thead>
+          <tbody>
+          <?php foreach ($lastItems as $item): ?>
+            <tr>
+              <td><span class="mono"><?= (int)$item['id'] ?></span><span class="cell-sub mono">ジョブ #<?= (int)$item['job_id'] ?></span></td>
+              <td><span class="mono allow-select"><?= kintone_h($item['organization_code'] ?? '') ?></span><?php if (($item['record_key'] ?? '') !== ''): ?><span class="cell-sub mono"><?= kintone_h($item['record_key']) ?></span><?php endif; ?></td>
+              <td class="mono text-xs"><?= kintone_h($item['action_type']) ?></td>
+              <td><?= kintone_status_badge((string)$item['status']) ?></td>
+              <td class="mono"><?= kintone_h($item['kintone_record_id'] ?? '') ?></td>
+              <td class="kt-error-cell"><?= ($item['error_message'] ?? '') !== '' ? '<span class="text-danger allow-select">' . kintone_h($item['error_message']) . '</span>' : '' ?></td>
+              <td class="text-xs nowrap"><?= kintone_h($item['created_at']) ?></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+  </div>
+</section>
+<?php endif; ?>
 <?php kintone_page_footer(); ?>

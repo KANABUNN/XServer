@@ -13,7 +13,8 @@ function wireIdleLogout() {
   const resetTimer = () => {
     if (kioskState.idleTimer) clearTimeout(kioskState.idleTimer);
     kioskState.idleTimer = setTimeout(() => {
-      window.location.href = 'logout.php';
+      // logout.php は CSRF トークンを要求するため付与する
+      window.location.href = `logout.php?csrf_token=${encodeURIComponent(csrfToken)}`;
     }, seconds * 1000);
   };
 
@@ -24,26 +25,34 @@ function wireIdleLogout() {
 }
 
 async function loadKioskReservations() {
-  const result = await apiGet('api/user_data.php');
+  const select = document.getElementById('kiosk-reservation-select');
+  let result;
+  try {
+    result = await apiGet('api/user_data.php');
+  } catch (error) {
+    setKioskStatus('予約を読み込めませんでした。', 'error');
+    return;
+  }
   if (!result.ok) return;
 
-  const select = document.getElementById('kiosk-reservation-select');
   const approvedReservations = result.reservations.filter((r) => r.status === 'approved');
   select.innerHTML = approvedReservations.length
-    ? approvedReservations.map((r) => `<option value="${r.id}">${escapeHtml(r.title)} / ${escapeHtml(r.start_at)}</option>`).join('')
-    : '<option value="">承認済み予約がありません</option>';
+    ? approvedReservations.map((r) => `<option value="${r.id}">${escapeHtml(r.title)} ／ ${escapeHtml(String(r.start_at || '').replace('T', ' ').slice(0, 16))}</option>`).join('')
+    : '<option value="">承認済みの予約がありません</option>';
 }
 
 function setKioskStatus(message, type = 'info') {
   const box = document.getElementById('scan-status');
   setMessage(box, message, type);
+  box?.animate?.([{ transform: 'scale(.98)', opacity: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.16,1,.3,1)' });
 }
 
 function selectAction(nextAction) {
   kioskState.action = nextAction;
   document.querySelectorAll('[data-kiosk-action]').forEach((button) => {
     const active = button.dataset.kioskAction === nextAction;
-    button.classList.toggle('primary', active);
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-checked', active ? 'true' : 'false');
   });
 
   const issueForm = document.getElementById('issue-form');
@@ -54,6 +63,11 @@ function selectAction(nextAction) {
   }
 }
 
+function setScanningUi(scanning) {
+  document.getElementById('scanner-placeholder')?.classList.toggle('hidden', scanning);
+  document.querySelector('.ld-scanner')?.classList.toggle('is-scanning', scanning);
+}
+
 async function handleDecodedText(decodedText) {
   if (!decodedText) return;
   if (!kioskState.isScanning) return;
@@ -62,32 +76,42 @@ async function handleDecodedText(decodedText) {
 
   const reservationId = document.getElementById('kiosk-reservation-select').value;
   if (!reservationId) {
-    setKioskStatus('承認済み予約を選択してください。', 'error');
+    setKioskStatus('承認済みの予約を選択してください。', 'error');
     return;
   }
 
   const issueNote = document.getElementById('issue-note')?.value || '';
-  setKioskStatus(`照合中: ${decodedText}`, 'info');
+  setKioskStatus(`照合しています：${decodedText}`, 'info');
 
-  const result = await apiPost('api/kiosk_action.php', {
-    action: kioskState.action,
-    reservation_id: reservationId,
-    asset_code: decodedText.trim(),
-    issue_note: issueNote,
-  });
+  let result;
+  try {
+    result = await apiPost('api/kiosk_action.php', {
+      action: kioskState.action,
+      reservation_id: reservationId,
+      asset_code: decodedText.trim(),
+      issue_note: issueNote,
+    });
+  } catch (error) {
+    setKioskStatus('通信に失敗しました。もう一度お試しください。', 'error');
+    return;
+  }
 
   if (!result.ok) {
     setKioskStatus(result.message || '処理に失敗しました。', 'error');
     return;
   }
 
-  const doneMessage = `${result.message} (${result.result?.asset_name || decodedText})`;
+  const doneMessage = `${result.message}（${result.result?.asset_name || decodedText}）`;
   setKioskStatus(doneMessage, result.result?.state === 'completed' ? 'success' : 'info');
   await loadKioskReservations();
 }
 
 async function startScanner() {
   if (kioskState.isScanning) return;
+  if (typeof Html5Qrcode === 'undefined') {
+    setKioskStatus('QR リーダーを読み込めませんでした。ネットワークを確認してください。', 'error');
+    return;
+  }
 
   kioskState.scanner = new Html5Qrcode('reader');
   try {
@@ -102,9 +126,10 @@ async function startScanner() {
       () => {}
     );
     kioskState.isScanning = true;
-    setKioskStatus('カメラを起動しました。QRコードをかざしてください。', 'info');
+    setScanningUi(true);
+    setKioskStatus('カメラを起動しました。QR コードをかざしてください。', 'info');
   } catch (error) {
-    setKioskStatus(`カメラ起動に失敗しました: ${error}`, 'error');
+    setKioskStatus(`カメラを起動できませんでした：${error}`, 'error');
   }
 }
 
@@ -114,8 +139,10 @@ async function stopScanner() {
     await kioskState.scanner.stop();
     await kioskState.scanner.clear();
   } catch (_) {
+    // noop
   }
   kioskState.isScanning = false;
+  setScanningUi(false);
 }
 
 document.querySelectorAll('[data-kiosk-action]').forEach((button) => {

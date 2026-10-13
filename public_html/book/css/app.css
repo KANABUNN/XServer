@@ -1,0 +1,327 @@
+/* =====================================================================
+   book（貸し部屋予約 利用者画面）— FIT-SC UI v7 の上に重ねる
+   ===================================================================== */
+.bk {
+  --room-tamoku: #4fd1c5;
+  --room-orange: #ff9f5a;
+  --room-tamoku-soft: rgba(79, 209, 197, .16);
+  --room-orange-soft: rgba(255, 159, 90, .16);
+}
+:root[data-theme="light"] .bk {
+  --room-tamoku: #0d9488;
+  --room-orange: #ea580c;
+  --room-tamoku-soft: rgba(13, 148, 136, .12);
+  --room-orange-soft: rgba(234, 88, 12, .11);
+}
+
+/* ---------- レイアウト ---------- */
+.bk-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+  grid-template-areas:
+    "cal user"
+    "cal cart";
+  grid-template-rows: auto 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.bk-user { grid-area: user; }
+.bk-cal { grid-area: cal; }
+.bk-cart { grid-area: cart; position: sticky; top: calc(62px + 20px); }
+
+.bk-num {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent-fill), var(--accent-fill-2));
+  color: #fff;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  box-shadow: 0 4px 12px -4px var(--accent-glow);
+}
+.bk-user__body { display: grid; gap: 14px; padding-top: 12px; }
+
+/* ---------- カレンダー ---------- */
+.bk-monthnav { display: flex; align-items: center; gap: 4px; }
+.bk-month { min-width: 7.5em; text-align: center; font-size: var(--fs-lg); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.bk-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 14px;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.bk-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.bk-room-dot { width: 14px; height: 6px; border-radius: 3px; display: inline-block; }
+.bk-room-dot--tamoku { background: var(--room-tamoku); }
+.bk-room-dot--orange { background: var(--room-orange); }
+.bk-room-dot--taken { background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.bk-sel { width: 14px; height: 14px; border-radius: 5px; border: 2px solid var(--accent); background: var(--accent-soft); display: inline-block; }
+
+.bk-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.bk-grid.is-entering .bk-day { animation: bk-day-in var(--dur-3) var(--ease-out) both; }
+.bk-grid[data-dir="prev"].is-entering .bk-day { animation-name: bk-day-in-prev; }
+@keyframes bk-day-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+@keyframes bk-day-in-prev { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+.bk-grid__error { grid-column: 1 / -1; }
+.bk-weekday {
+  padding: 4px 0 6px;
+  text-align: center;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text-subtle);
+}
+.bk-weekday.is-sun { color: var(--danger); }
+.bk-weekday.is-sat { color: var(--info); }
+
+.bk-day {
+  position: relative;
+  min-height: 84px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  transition: border-color var(--dur-1), background-color var(--dur-1), transform var(--dur-2) var(--ease-spring), box-shadow var(--dur-2);
+}
+.bk-day.is-empty { background: transparent; border-color: transparent; }
+.bk-day.is-skeleton {
+  border: 0;
+  min-height: 84px;
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 40%, var(--surface-2) 80%);
+  background-size: 300% 100%;
+  animation: ui-shimmer 1.4s ease-in-out infinite;
+}
+.bk-day__num { font-weight: 750; font-size: var(--fs-md); line-height: 1.1; font-variant-numeric: tabular-nums; font-family: var(--font-sans); }
+.bk-day.is-sun .bk-day__num { color: var(--danger); }
+.bk-day.is-sat .bk-day__num { color: var(--info); }
+.bk-day__rooms { display: grid; gap: 3px; margin-top: auto; }
+.bk-room {
+  display: block;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.6;
+}
+.bk-room--tamoku { background: var(--room-tamoku-soft); color: var(--room-tamoku); }
+.bk-room--orange { background: var(--room-orange-soft); color: var(--room-orange); }
+.bk-room.is-taken { background: var(--surface-3); color: var(--text-subtle); text-decoration: line-through; }
+.bk-day__note { font-size: var(--fs-2xs); font-weight: 700; color: var(--text-subtle); }
+.bk-day__check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-fill), var(--accent-fill-2));
+  color: #fff;
+  animation: ui-pop var(--dur-3) var(--ease-out) both;
+}
+.bk-day__check .ico { width: 12px; height: 12px; stroke-width: 3; }
+
+.bk-day.is-available { cursor: pointer; }
+.bk-day.is-available:hover { border-color: var(--accent-line); background: var(--surface-3); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.bk-day.is-available:active { transform: scale(.97); }
+.bk-day.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md);
+}
+.bk-day.is-selected:hover { background: var(--accent-soft); }
+.bk-day.is-today::after {
+  content: "今日";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: var(--fs-2xs);
+  font-weight: 800;
+  color: var(--accent);
+}
+.bk-day.is-today.is-selected::after { display: none; }
+.bk-day.is-disabled { opacity: .38; background: transparent; cursor: not-allowed; }
+.bk-day.is-booked { cursor: not-allowed; background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.bk-day.is-booked .bk-day__num { color: var(--text-subtle); }
+.bk-day:disabled { cursor: not-allowed; }
+.bk-cal__hint { margin-top: 12px; font-size: var(--fs-xs); color: var(--text-subtle); }
+
+/* ---------- 予約内容（日付ごとの設定） ---------- */
+.bk-cart__empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 22px 12px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--r-md);
+  color: var(--text-subtle);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.bk-cart__empty[hidden] { display: none; }
+.bk-dates { display: grid; gap: 8px; max-height: min(52vh, 520px); overflow-y: auto; padding: 2px; margin: -2px; scrollbar-width: thin; }
+.bk-date {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  transition: border-color var(--dur-2), opacity var(--dur-2), transform var(--dur-2) var(--ease-out);
+}
+.bk-date.is-new { animation: ui-fade-up var(--dur-3) var(--ease-out) both; border-color: var(--accent-line); }
+.bk-date.is-leaving { opacity: 0; transform: translateX(16px); }
+.bk-date.has-error { border-color: var(--danger-line); background: var(--danger-soft); }
+.bk-date__head { display: flex; align-items: center; gap: 8px; }
+.bk-date__label { display: inline-flex; align-items: baseline; gap: 4px; }
+.bk-date__label strong { font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
+.bk-date__label span { font-size: var(--fs-sm); color: var(--text-muted); font-weight: 700; }
+.bk-date__label.is-sun span { color: var(--danger); }
+.bk-date__label.is-sat span { color: var(--info); }
+.bk-date__dur { margin-left: auto; font-size: var(--fs-xs); font-weight: 700; color: var(--text-subtle); }
+.bk-date__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+.bk-date__room { grid-column: 1 / -1; }
+.bk-date__tilde { color: var(--text-subtle); font-size: var(--fs-sm); }
+.bk-date select { min-height: 38px; font-variant-numeric: tabular-nums; }
+.bk-date__hint { color: var(--info); }
+.bk-consent.has-error { border-color: var(--danger); background: var(--danger-soft); }
+.bk-consent .btn--link { font-size: var(--fs-xs); }
+
+/* モバイル: 予約内容へのジャンプボタン */
+.bk-jump {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(135deg, var(--accent-fill), var(--accent-fill-2));
+  color: #fff;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  box-shadow: 0 12px 30px -10px var(--accent-glow);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  animation: bk-jump-in var(--dur-4) var(--ease-spring) both;
+  text-decoration: none;
+}
+.bk-jump:hover { color: #fff; text-decoration: none; }
+.bk-jump[hidden] { display: none; }
+@keyframes bk-jump-in { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* ---------- ダイアログ ---------- */
+.bk-terms-body, .bk-manual-body { display: flex; min-height: 0; }
+.bk-terms-frame, .bk-manual-frame, .manual-embed-wrap { flex: 1 1 auto; width: 100%; min-height: 60vh; border: 0; background: var(--surface); }
+.manual-embed-wrap { display: flex; }
+
+/* ---------- 結果ページ ---------- */
+.bk-result { max-width: 760px; }
+.bk-result__card { overflow: hidden; }
+.bk-result__hero { display: grid; justify-items: center; gap: 12px; padding: 36px 24px 26px; text-align: center; border-bottom: 1px solid var(--divider); }
+.bk-result__hero h1 { font-size: clamp(1.35rem, 1.1rem + 1vw, 1.75rem); }
+.bk-result__hero p { color: var(--text-muted); max-width: 46ch; }
+.bk-result__icon {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  animation: ui-pop var(--dur-4) var(--ease-out) both;
+}
+.bk-result__icon .ico { width: 36px; height: 36px; stroke-width: 2.4; }
+.bk-result__icon--success { background: var(--success-soft); color: var(--success); box-shadow: 0 0 0 8px color-mix(in srgb, var(--success) 8%, transparent); }
+.bk-result__icon--danger { background: var(--danger-soft); color: var(--danger); box-shadow: 0 0 0 8px color-mix(in srgb, var(--danger) 8%, transparent); }
+.bk-result__icon--warning { background: var(--warning-soft); color: var(--warning); box-shadow: 0 0 0 8px color-mix(in srgb, var(--warning) 8%, transparent); }
+.bk-result__icon--neutral { background: var(--surface-2); color: var(--text-subtle); }
+.bk-result__section { padding: 20px 24px; display: grid; gap: 12px; }
+.bk-result__section + .bk-result__section { border-top: 1px solid var(--divider); }
+
+.bk-pass-list { display: grid; gap: 8px; }
+.bk-pass {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.bk-pass__meta { display: grid; gap: 2px; min-width: 0; }
+.bk-pass__meta strong { font-size: var(--fs-md); }
+.bk-pass__meta span { font-size: var(--fs-xs); color: var(--text-muted); }
+.bk-pass__code {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  color: var(--text-strong);
+}
+.bk-pass__code--masked { font-family: var(--font-sans); font-size: var(--fs-xs); letter-spacing: .02em; background: var(--surface-3); border-color: var(--border); color: var(--text-subtle); font-weight: 700; }
+.bk-result__actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 4px 24px 28px; }
+
+/* ---------- モバイル ---------- */
+@media (max-width: 960px) {
+  .bk-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "user" "cal" "cart";
+    grid-template-rows: auto;
+  }
+  .bk-cart { position: static; }
+  .bk-dates { max-height: none; overflow: visible; }
+}
+@media (max-width: 640px) {
+  .bk-cal .card__header { flex-direction: column; align-items: stretch; }
+  .bk-monthnav { justify-content: space-between; }
+  .bk-cal .card__body { padding: 14px 10px; }
+  .bk-grid { gap: 4px; }
+  .bk-day { min-height: 62px; padding: 6px 5px; border-radius: 10px; }
+  .bk-day.is-skeleton { min-height: 62px; }
+  .bk-day__num { font-size: var(--fs-sm); }
+  .bk-day__rooms { grid-template-columns: 1fr 1fr; gap: 2px; }
+  .bk-room { height: 6px; padding: 0; border-radius: 3px; }
+  .bk-room__label { display: none; }
+  .bk-room--tamoku { background: var(--room-tamoku); }
+  .bk-room--orange { background: var(--room-orange); }
+  .bk-room.is-taken { background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border-strong); }
+  .bk-day.is-today::after { top: 5px; right: 5px; content: "●"; font-size: 8px; }
+  .bk-day__check { top: 4px; right: 4px; width: 16px; height: 16px; }
+  .bk-day__note { display: none; }
+  .bk-pass { grid-template-columns: minmax(0, 1fr); }
+  .bk-pass__code { justify-self: start; }
+  .bk-result__section { padding: 18px; }
+}

@@ -6,29 +6,36 @@ if (is_logged_in()) {
     exit;
 }
 
-page_header('ログイン', 'forms-login-page');
+page_header('管理者ログイン', 'forms-login-page', ['app_name' => 'フォーム管理']);
 ?>
-<main class="auth-layout">
-    <section class="card auth-card">
-        <h1>フォーム管理ログイン</h1>
-        <p class="muted">現行の共通アカウントログインを使用します。ログインIDまたはメールアドレスでサインインできます。</p>
+<main class="auth">
+    <div class="auth__corner">
+        <a class="btn btn--ghost btn--sm" href="index.php"><?= fitsc_icon('arrow-left') ?>提出フォームへ</a>
+        <?= fitsc_theme_toggle() ?>
+    </div>
+    <section class="auth__card">
+        <div class="auth__head">
+            <span class="brand-mark brand-mark--lg"><?= fitsc_icon('file-text') ?></span>
+            <h1>フォーム管理</h1>
+            <p>共通アカウントでログインしてください</p>
+        </div>
 
         <?php if (isset($_GET['logged_out'])): ?>
-            <div class="alert success">ログアウトしました。</div>
+            <?= fitsc_flash_html('success', 'ログアウトしました。') ?>
         <?php endif; ?>
 
-        <form id="login-form" class="stack-form">
-            <label>
-                <span>ログインIDまたはメールアドレス</span>
-                <input type="text" name="identifier" required placeholder="user1 または user1@example.jp" autocomplete="username" inputmode="text">
+        <form id="login-form" class="stack">
+            <label class="field">
+                <span>ログインID またはメールアドレス</span>
+                <span class="input-icon"><?= fitsc_icon('user') ?><input type="text" name="identifier" required autocomplete="username" inputmode="text" autofocus></span>
             </label>
-            <label>
+            <label class="field">
                 <span>パスワード</span>
-                <input type="password" name="password" required autocomplete="current-password">
+                <span class="input-icon"><?= fitsc_icon('lock') ?><input type="password" name="password" required autocomplete="current-password"></span>
             </label>
-            <button type="submit" class="btn primary">ログイン</button>
+            <div id="login-message" class="alert hidden" role="alert"></div>
+            <button type="submit" class="btn btn--primary btn--lg btn--block"><span>ログイン</span><?= fitsc_icon('arrow-right') ?></button>
         </form>
-        <div id="login-message" class="alert hidden"></div>
     </section>
 </main>
 <?php page_footer(['assets/js/common.js']); ?>

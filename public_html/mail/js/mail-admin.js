@@ -1,33 +1,10 @@
 (function () {
   'use strict';
 
-  const sidebar = document.querySelector('.sidebar');
-  const sidebarButtons = Array.from(document.querySelectorAll('[data-sidebar-href]'));
-
-
-  function navigateFromButton(button) {
-    const href = button.dataset.navHref || button.dataset.sidebarHref || '';
-    if (!href) return;
-    const target = button.dataset.navTarget || '';
-    if (target === '_blank') {
-      window.open(href, '_blank', 'noopener');
-      return;
-    }
-    window.location.href = href;
-  }
-
-  document.querySelectorAll('[data-nav-href]').forEach(button => {
-    button.setAttribute('draggable', 'false');
-    button.addEventListener('click', function () {
-      navigateFromButton(button);
-    });
-    button.addEventListener('dragstart', function (event) {
-      event.preventDefault();
-    });
-  });
+  // 画面遷移・確認ダイアログ・サイドバーは共通 UI（assets/ui/ui.js）が担当する。
+  // ここではメール本文エディタと変数挿入、テンプレートのダウンロードのみを扱う。
 
   document.querySelectorAll('[data-download-href]').forEach(button => {
-    button.setAttribute('draggable', 'false');
     button.addEventListener('click', function () {
       const href = button.dataset.downloadHref || '';
       if (!href) return;
@@ -40,63 +17,7 @@
       link.click();
       link.remove();
     });
-    button.addEventListener('dragstart', function (event) {
-      event.preventDefault();
-    });
   });
-
-  sidebarButtons.forEach(button => {
-    button.setAttribute('draggable', 'false');
-    button.addEventListener('click', function () {
-      navigateFromButton(button);
-    });
-    button.addEventListener('dragstart', function (event) {
-      event.preventDefault();
-    });
-  });
-
-  if (sidebar) {
-    ['dragstart', 'dragover', 'drop'].forEach(type => {
-      sidebar.addEventListener(type, function (event) {
-        event.preventDefault();
-      });
-    });
-  }
-
-  document.querySelectorAll('form[data-confirm]').forEach(form => {
-    form.addEventListener('submit', function (event) {
-      const message = form.dataset.confirm || 'この操作を実行します。続行しますか？';
-      if (!window.confirm(message)) {
-        event.preventDefault();
-      }
-    });
-  });
-
-  const links = Array.from(document.querySelectorAll('[data-view-target]'));
-  const views = Array.from(document.querySelectorAll('.content-view'));
-
-  function activateView(viewId) {
-    for (const view of views) {
-      view.classList.toggle('is-active', view.id === viewId);
-    }
-    for (const link of links) {
-      link.classList.toggle('is-active', link.dataset.viewTarget === viewId);
-    }
-    if (history.replaceState) {
-      history.replaceState(null, '', '#' + viewId);
-    }
-  }
-
-  for (const link of links) {
-    link.addEventListener('click', function () {
-      activateView(link.dataset.viewTarget);
-    });
-  }
-
-  const initialHash = decodeURIComponent(location.hash.replace(/^#/, ''));
-  if (initialHash && document.getElementById(initialHash)) {
-    activateView(initialHash);
-  }
 
   function normalizeEditorHtml(html) {
     return String(html || '')
@@ -260,7 +181,7 @@ document.addEventListener('selectionchange', function () {
         if (!plain) {
           event.preventDefault();
           editor.focus();
-          alert('本文を入力してください。');
+          if (window.UI) UI.toast('本文を入力してください。', { type: 'error', title: '入力内容を確認してください' });
         }
       }
     });

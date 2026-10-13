@@ -160,153 +160,166 @@ if ($mailPdo instanceof PDO && $dbError === '') {
         }
     }
 }
-
-mail_render_page_header('送信バッチ', $user, 'batches.php');
+mail_render_page_header('送信バッチ', $user, 'batches.php', [
+    'subtitle' => '宛先ごとの本文プレビュー・添付の確認・状態の更新',
+    'actions' => '<a class="btn btn--primary" href="compose.php">' . fitsc_icon('plus') . '<span class="hide-mobile">新しいメール</span></a>',
+]);
+$canEditBatch = mail_auth_has_permission($user, 'batch.edit');
 ?>
-<header class="page-head">
-  <div>
-    <h1>送信バッチ</h1>
-    <p class="lead">作成済みの送信バッチを確認し、対象別プレビュー・添付確認・状態更新を行います。</p>
-  </div>
-  <div class="head-actions"><button type="button" class="link-button primary" data-nav-href="compose.php">新規メール作成</button></div>
-</header>
 <?php mail_render_db_error($dbError); ?>
 
 <?php if ($dbError === ''): ?>
-<div class="two-column-grid batch-grid">
-  <section class="panel">
-    <div class="panel-head"><h2>バッチ一覧</h2><span class="muted"><?php echo count($batches); ?>件</span></div>
-    <div class="table-wrap compact-table">
-      <table>
-        <thead><tr><th>ID</th><th>名称</th><th>状態</th><th>対象</th><th>作成者</th></tr></thead>
-        <tbody>
-          <?php if ($batches === []): ?><tr><td colspan="5" class="empty">バッチはまだありません。</td></tr><?php endif; ?>
-          <?php foreach ($batches as $batch): ?>
-            <tr class="<?php echo (int)$batch['id'] === $selectedBatchId ? 'is-selected-row' : ''; ?>">
-              <td><?php echo (int)$batch['id']; ?></td>
-              <td><button type="button" class="text-link" data-nav-href="batches.php?batch_id=<?php echo (int)$batch['id']; ?>"><?php echo mail_h((string)$batch['title']); ?></button></td>
-              <td><span class="badge"><?php echo mail_h(mail_status_label((string)$batch['status'])); ?></span></td>
-              <td><?php echo (int)$batch['target_count']; ?></td>
-              <td><?php echo mail_h(mail_batch_creator_label($batch, $creatorLabels)); ?></td>
-            </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
+<div class="split split--sidebar-left ml-batches">
+  <section class="card ml-batch-list">
+    <div class="card__header">
+      <div class="card__title"><?php echo fitsc_icon('layers'); ?>バッチ <small><?php echo count($batches); ?>件</small></div>
     </div>
-  </section>
-
-  <section class="panel">
-    <div class="panel-head"><h2>選択中バッチ詳細</h2><span class="muted"><?php echo $selectedBatch ? '#' . (int)$selectedBatch['id'] : ''; ?></span></div>
-    <?php if (!$selectedBatch): ?>
-      <p class="empty">バッチを選択してください。</p>
+    <?php if ($batches === []): ?>
+      <div class="empty"><span class="empty__icon"><?php echo fitsc_icon('layers'); ?></span><span>バッチはまだありません。</span></div>
     <?php else: ?>
-      <dl class="detail-list">
-        <div><dt>バッチ名</dt><dd><?php echo mail_h((string)$selectedBatch['title']); ?></dd></div>
-        <div><dt>作成者</dt><dd><?php echo mail_h(mail_batch_creator_label($selectedBatch, $creatorLabels)); ?></dd></div>
-        <div><dt>作成日時</dt><dd><?php echo mail_h((string)$selectedBatch['created_at']); ?></dd></div>
-        <div><dt>対象数</dt><dd><?php echo (int)$selectedBatch['target_count']; ?>件</dd></div>
-        <div><dt>添付</dt><dd>共通 <?php echo (int)$selectedBatch['common_attachment_count']; ?>件 / 個別 <?php echo (int)$selectedBatch['individual_attachment_count']; ?>件</dd></div>
-        <div><dt>状態</dt><dd><span class="badge"><?php echo mail_h(mail_status_label((string)$selectedBatch['status'])); ?></span></dd></div>
-      </dl>
-      <form method="post" class="inline-actions mt-14">
-        <?php echo mail_auth_csrf_field(); ?>
-        <input type="hidden" name="action" value="status">
-        <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
-        <select name="status">
-          <?php foreach (['prepared' => '準備済み', 'reviewing' => '確認中', 'approved' => '確認済み', 'cancelled' => '取消'] as $key => $label): ?>
-            <option value="<?php echo mail_h($key); ?>"<?php echo mail_selected($selectedBatch['status'], $key); ?>><?php echo mail_h($label); ?></option>
-          <?php endforeach; ?>
-        </select>
-        <button type="submit" class="secondary"<?php echo mail_auth_has_permission($user, 'batch.edit') ? '' : ' disabled'; ?>>状態更新</button>
-      </form>
-      <div class="form-actions mt-14">
-        <button type="button" class="link-button secondary" data-nav-href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付を登録・確認</button>
-        <button type="button" class="link-button secondary" data-nav-href="drafts.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">Gmail下書き作成</button>
+      <div class="list ml-scroll-list">
+        <?php foreach ($batches as $batch): ?>
+          <?php $isSelected = (int)$batch['id'] === $selectedBatchId; ?>
+          <a class="list-item<?php echo $isSelected ? ' is-selected' : ''; ?>" href="batches.php?batch_id=<?php echo (int)$batch['id']; ?>"<?php echo $isSelected ? ' aria-current="true"' : ''; ?>>
+            <span class="list-item__main">
+              <span class="list-item__title"><?php echo mail_h((string)$batch['title']); ?></span>
+              <span class="list-item__meta">#<?php echo (int)$batch['id']; ?> ・ <?php echo (int)$batch['target_count']; ?>件 ・ <?php echo mail_h(mail_batch_creator_label($batch, $creatorLabels)); ?></span>
+            </span>
+            <span class="list-item__side"><?php echo mail_status_badge((string)$batch['status']); ?></span>
+          </a>
+        <?php endforeach; ?>
       </div>
-
-      <?php $canDeleteBatch = mail_auth_has_permission($user, 'batch.edit') && !in_array((string)$selectedBatch['status'], ['draft_created', 'sent'], true); ?>
-      <form method="post" class="panel-subform danger-zone mt-14" data-delete-batch-form>
-        <?php echo mail_auth_csrf_field(); ?>
-        <input type="hidden" name="action" value="delete">
-        <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
-        <h3>このバッチを削除</h3>
-        <p class="muted">削除すると、このバッチの送信対象メールと添付対応情報も削除されます。アップロード済みファイル本体と送信ログは保持されます。</p>
-        <?php if (in_array((string)$selectedBatch['status'], ['draft_created', 'sent'], true)): ?>
-          <div class="alert alert-warn">Gmail下書き作成済み、または送信済みのバッチは、Gmail側や送信履歴との不整合を避けるため削除できません。</div>
-        <?php endif; ?>
-        <label><span class="muted">削除確認: バッチID <strong>#<?php echo (int)$selectedBatch['id']; ?></strong> を入力</span><input type="text" name="confirm_batch_id" inputmode="numeric" autocomplete="off" placeholder="<?php echo (int)$selectedBatch['id']; ?>"<?php echo $canDeleteBatch ? '' : ' disabled'; ?>></label>
-        <button type="submit" class="danger"<?php echo $canDeleteBatch ? '' : ' disabled'; ?>>送信バッチを削除</button>
-      </form>
     <?php endif; ?>
   </section>
-</div>
 
-<?php if ($selectedBatch): ?>
-<div class="summary-grid small mt-18">
-  <article class="summary-card"><span>対象メール</span><strong><?php echo (int)$selectedBatch['target_count']; ?></strong></article>
-  <article class="summary-card"><span>共通添付</span><strong><?php echo (int)$selectedBatch['common_attachment_count']; ?></strong></article>
-  <article class="summary-card"><span>個別添付</span><strong><?php echo (int)$selectedBatch['individual_attachment_count']; ?></strong></article>
-  <article class="summary-card"><span>状態</span><strong class="small-strong"><?php echo mail_h(mail_status_label((string)$selectedBatch['status'])); ?></strong></article>
-</div>
+  <div class="stack stack--lg">
+    <?php if (!$selectedBatch): ?>
+      <section class="card"><div class="empty"><span class="empty__icon"><?php echo fitsc_icon('layers'); ?></span><span>左の一覧からバッチを選択してください。</span></div></section>
+    <?php else: ?>
+      <section class="card">
+        <div class="card__header">
+          <div>
+            <div class="card__title"><?php echo mail_h((string)$selectedBatch['title']); ?> <?php echo mail_status_badge((string)$selectedBatch['status']); ?></div>
+            <p class="card__subtitle">#<?php echo (int)$selectedBatch['id']; ?> ・ <?php echo mail_h(mail_batch_creator_label($selectedBatch, $creatorLabels)); ?> ・ <?php echo mail_h((string)$selectedBatch['created_at']); ?></p>
+          </div>
+          <div class="card__actions">
+            <a class="btn" href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>"><?php echo fitsc_icon('paperclip'); ?>添付</a>
+            <a class="btn btn--primary" href="drafts.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>"><?php echo fitsc_icon('inbox'); ?>Gmail下書きへ</a>
+          </div>
+        </div>
+        <div class="card__body stack">
+          <div class="stat-grid ml-mini-stats">
+            <div class="stat stat--compact"><span class="stat__label">送信対象</span><span class="stat__value"><?php echo (int)$selectedBatch['target_count']; ?></span></div>
+            <div class="stat stat--compact stat--teal"><span class="stat__label">共通添付</span><span class="stat__value"><?php echo (int)$selectedBatch['common_attachment_count']; ?></span></div>
+            <div class="stat stat--compact stat--info"><span class="stat__label">個別添付</span><span class="stat__value"><?php echo (int)$selectedBatch['individual_attachment_count']; ?></span></div>
+          </div>
+          <form method="post" class="ml-status-form" data-busy>
+            <?php echo mail_auth_csrf_field(); ?>
+            <input type="hidden" name="action" value="status">
+            <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
+            <label class="field"><span>バッチの状態</span>
+              <select name="status"<?php echo $canEditBatch ? '' : ' disabled'; ?>>
+                <?php foreach (['prepared' => '準備済み', 'reviewing' => '確認中', 'approved' => '確認済み', 'cancelled' => '取消'] as $key => $label): ?>
+                  <option value="<?php echo mail_h($key); ?>"<?php echo mail_selected($selectedBatch['status'], $key); ?>><?php echo mail_h($label); ?></option>
+                <?php endforeach; ?>
+              </select>
+            </label>
+            <button type="submit" class="btn"<?php echo $canEditBatch ? '' : ' disabled'; ?>><?php echo fitsc_icon('check'); ?>更新</button>
+            <span class="small-note">Gmail下書きを作るには「確認済み」にします。</span>
+          </form>
+        </div>
+      </section>
 
-<section class="panel mt-18">
-  <div class="panel-head"><h2>送信対象別プレビュー</h2><span class="muted"><?php echo count($targets); ?>件</span></div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>識別番号</th><th>団体</th><th>宛先</th><th>件名</th><th>状態</th><th>操作</th></tr></thead>
-      <tbody>
-        <?php if ($targets === []): ?><tr><td colspan="6" class="empty">対象がありません。</td></tr><?php endif; ?>
-        <?php foreach ($targets as $target): ?>
-          <tr>
-            <td><code><?php echo mail_h((string)$target['identifier']); ?></code></td>
-            <td><?php echo mail_h((string)$target['organization_name']); ?></td>
-            <td><?php echo mail_h((string)$target['to_email']); ?></td>
-            <td><?php echo mail_h((string)$target['rendered_subject']); ?></td>
-            <td><span class="badge"><?php echo mail_h(mail_status_label((string)$target['status'])); ?></span><?php if (!empty($target['error_message'])): ?><br><span class="danger-text"><?php echo mail_h((string)$target['error_message']); ?></span><?php endif; ?></td>
-            <td><button type="button" class="secondary" data-preview-open data-preview-org="<?php echo mail_h((string)$target['organization_name']); ?>" data-preview-to="<?php echo mail_h((string)$target['to_email']); ?>" data-preview-subject="<?php echo mail_h((string)$target['rendered_subject']); ?>" data-preview-body="<?php echo mail_h((string)$target['rendered_body']); ?>">プレビュー</button></td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-  </div>
-</section>
+      <section class="card">
+        <div class="card__header">
+          <div class="card__title"><?php echo fitsc_icon('mail'); ?>宛先ごとのプレビュー <small><?php echo count($targets); ?>件</small></div>
+        </div>
+        <div class="table-wrap is-stacked">
+          <table class="table">
+            <thead><tr><th>団体</th><th>宛先</th><th>件名</th><th>状態</th><th class="col-actions"></th></tr></thead>
+            <tbody>
+              <?php if ($targets === []): ?><tr><td colspan="5" class="empty">対象がありません。</td></tr><?php endif; ?>
+              <?php foreach ($targets as $target): ?>
+                <tr<?php echo !empty($target['error_message']) ? ' class="is-error"' : ''; ?>>
+                  <td><span class="cell-main"><?php echo mail_h((string)$target['organization_name']); ?></span><span class="cell-sub"><code><?php echo mail_h((string)$target['identifier']); ?></code></span></td>
+                  <td class="allow-select"><?php echo mail_h((string)$target['to_email']); ?></td>
+                  <td><?php echo mail_h((string)$target['rendered_subject']); ?></td>
+                  <td><?php echo mail_status_badge((string)$target['status']); ?><?php if (!empty($target['error_message'])): ?><span class="cell-sub text-danger"><?php echo mail_h((string)$target['error_message']); ?></span><?php endif; ?></td>
+                  <td class="col-actions"><button type="button" class="btn btn--ghost btn--sm" data-preview-open data-preview-org="<?php echo mail_h((string)$target['organization_name']); ?>" data-preview-to="<?php echo mail_h((string)$target['to_email']); ?>" data-preview-subject="<?php echo mail_h((string)$target['rendered_subject']); ?>" data-preview-body="<?php echo mail_h((string)$target['rendered_body']); ?>"><?php echo fitsc_icon('eye'); ?>プレビュー</button></td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-<section class="panel mt-18">
-  <div class="panel-head"><h2>添付対応状況</h2><button type="button" class="text-link" data-nav-href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付を登録する</button></div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>種別</th><th>識別番号</th><th>団体</th><th>ファイル名</th><th>資料種別</th><th>判定</th><th>状態</th></tr></thead>
-      <tbody>
-        <?php if ($attachments === []): ?><tr><td colspan="7" class="empty">添付ファイルはまだ登録されていません。</td></tr><?php endif; ?>
-        <?php foreach ($attachments as $att): ?>
-          <tr>
-            <td><?php echo (int)$att['is_common'] === 1 ? '共通' : '個別'; ?></td>
-            <td><code><?php echo mail_h((string)$att['identifier']); ?></code></td>
-            <td><?php echo mail_h((string)$att['organization_name']); ?></td>
-            <td><?php echo mail_h((string)$att['original_name']); ?></td>
-            <td><?php echo mail_h((string)$att['attachment_type']); ?></td>
-            <td><?php echo mail_h((string)$att['match_method']); ?> / <?php echo (int)$att['match_confidence']; ?>%</td>
-            <td><span class="badge"><?php echo mail_h(mail_status_label((string)$att['status'])); ?></span></td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-  </div>
-</section>
+      <section class="card">
+        <div class="card__header">
+          <div class="card__title"><?php echo fitsc_icon('paperclip'); ?>添付の対応状況 <small><?php echo count($attachments); ?>件</small></div>
+          <a class="btn btn--ghost btn--sm" href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付を登録<?php echo fitsc_icon('arrow-right'); ?></a>
+        </div>
+        <?php if ($attachments === []): ?>
+          <div class="empty"><span class="empty__icon"><?php echo fitsc_icon('paperclip'); ?></span><span>添付ファイルはまだ登録されていません。</span></div>
+        <?php else: ?>
+          <div class="table-wrap is-stacked">
+            <table class="table table--compact">
+              <thead><tr><th>種別</th><th>団体</th><th>ファイル</th><th>判定</th><th>状態</th></tr></thead>
+              <tbody>
+                <?php foreach ($attachments as $att): ?>
+                  <tr<?php echo (string)$att['status'] === 'needs_review' ? ' class="is-attention"' : ''; ?>>
+                    <td><span class="badge<?php echo (int)$att['is_common'] === 1 ? ' badge--teal' : ''; ?>"><?php echo (int)$att['is_common'] === 1 ? '共通' : '個別'; ?></span></td>
+                    <td><span class="cell-main"><?php echo mail_h((string)$att['organization_name']); ?></span><span class="cell-sub"><code><?php echo mail_h((string)$att['identifier']); ?></code></span></td>
+                    <td><span class="cell-main"><?php echo mail_h((string)$att['original_name']); ?></span><span class="cell-sub"><?php echo mail_h((string)$att['attachment_type']); ?></span></td>
+                    <td><span class="cell-sub"><?php echo mail_h((string)$att['match_method']); ?> ・ <?php echo (int)$att['match_confidence']; ?>%</span></td>
+                    <td><?php echo mail_status_badge((string)$att['status']); ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
+      </section>
 
-<div class="modal-backdrop" id="previewModal" hidden>
-  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="previewModalTitle">
-    <div class="modal-head">
-      <div>
-        <h2 id="previewModalTitle">メールプレビュー</h2>
-        <p class="muted" id="previewMeta"></p>
-      </div>
-      <button type="button" class="text-button modal-close" data-preview-close>閉じる</button>
-    </div>
-    <dl class="detail-list">
-      <div><dt>件名</dt><dd id="previewSubject"></dd></div>
-    </dl>
-    <iframe class="mail-preview-frame" id="previewBodyFrame" sandbox=""></iframe>
+      <?php $canDeleteBatch = $canEditBatch && !in_array((string)$selectedBatch['status'], ['draft_created', 'sent'], true); ?>
+      <section class="card card--danger">
+        <div class="card__header"><div class="card__title"><?php echo fitsc_icon('trash'); ?>バッチの削除</div></div>
+        <div class="card__body">
+          <form method="post" class="danger-zone" data-delete-batch-form
+            data-confirm="送信バッチ #<?php echo (int)$selectedBatch['id']; ?> を削除します。送信対象と添付の対応情報も削除されます。" data-confirm-title="バッチを削除しますか？" data-confirm-ok="削除する">
+            <?php echo mail_auth_csrf_field(); ?>
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
+            <div class="danger-zone__text">
+              <strong>確認のためバッチID「<?php echo (int)$selectedBatch['id']; ?>」を入力</strong>
+              <span><?php echo in_array((string)$selectedBatch['status'], ['draft_created', 'sent'], true)
+                  ? 'Gmail下書き作成済み・送信済みのバッチは、履歴との不整合を防ぐため削除できません。'
+                  : 'アップロード済みのファイル本体と送信ログは残ります。'; ?></span>
+            </div>
+            <div class="input-group">
+              <input type="text" name="confirm_batch_id" inputmode="numeric" autocomplete="off" placeholder="<?php echo (int)$selectedBatch['id']; ?>" aria-label="削除確認のバッチID" style="max-width:120px"<?php echo $canDeleteBatch ? '' : ' disabled'; ?>>
+              <button type="submit" class="btn btn--danger"<?php echo $canDeleteBatch ? '' : ' disabled'; ?>><?php echo fitsc_icon('trash'); ?>削除</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <dialog class="modal modal--lg modal--full" id="previewModal" aria-labelledby="previewModalTitle">
+        <div class="modal__panel">
+          <div class="modal__header">
+            <span class="modal__icon"><?php echo fitsc_icon('mail', 'ico--lg'); ?></span>
+            <div>
+              <h2 class="modal__title" id="previewModalTitle">メールプレビュー</h2>
+              <p class="modal__desc" id="previewMeta"></p>
+            </div>
+            <button type="button" class="btn btn--ghost btn--icon modal__close" data-modal-close aria-label="閉じる"><?php echo fitsc_icon('x'); ?></button>
+          </div>
+          <div class="modal__body stack ml-preview">
+            <div class="ml-preview__subject"><span class="text-subtle text-xs">件名</span><strong id="previewSubject" class="allow-select"></strong></div>
+            <iframe class="mail-preview-frame" id="previewBodyFrame" sandbox="" title="本文プレビュー"></iframe>
+          </div>
+        </div>
+      </dialog>
+    <?php endif; ?>
   </div>
 </div>
 
@@ -316,6 +329,7 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
   const meta = document.getElementById('previewMeta');
   const subject = document.getElementById('previewSubject');
   const bodyFrame = document.getElementById('previewBodyFrame');
+  if (!modal) return;
   function escapeHtml(value) {
     return String(value || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch] || ch));
   }
@@ -329,35 +343,18 @@ mail_render_page_header('送信バッチ', $user, 'batches.php');
   }
   document.querySelectorAll('[data-preview-open]').forEach(button => {
     button.addEventListener('click', function () {
-      meta.textContent = `${button.dataset.previewOrg || ''} / ${button.dataset.previewTo || ''}`;
+      meta.textContent = `${button.dataset.previewOrg || ''} ・ ${button.dataset.previewTo || ''}`;
       subject.textContent = button.dataset.previewSubject || '';
       const rawBody = button.dataset.previewBody || '';
       const bodyHtml = looksLikeHtml(rawBody) ? rawBody : plainToHtml(rawBody);
       if (bodyFrame) {
-        bodyFrame.srcdoc = '<!doctype html><html><head><meta charset="UTF-8"><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.75;color:#1b2430;margin:16px;} p{margin:0 0 1em;} table{border-collapse:collapse;} td,th{border:1px solid #d8e0ea;padding:6px 8px;}</style></head><body>' + bodyHtml + '</body></html>';
+        bodyFrame.srcdoc = '<!doctype html><html><head><meta charset="UTF-8"><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;line-height:1.8;color:#1b2430;margin:20px;font-size:15px;} p{margin:0 0 1em;} table{border-collapse:collapse;} td,th{border:1px solid #d8e0ea;padding:6px 8px;}</style></head><body>' + bodyHtml + '</body></html>';
       }
-      modal.hidden = false;
-    });
-  });
-  document.querySelector('[data-preview-close]')?.addEventListener('click', function () {
-    modal.hidden = true;
-  });
-  modal?.addEventListener('click', function (event) {
-    if (event.target === modal) modal.hidden = true;
-  });
-
-  document.querySelectorAll('[data-delete-batch-form]').forEach(form => {
-    form.addEventListener('submit', function (event) {
-      const batchId = form.querySelector('input[name="batch_id"]')?.value || '';
-      const confirmed = window.confirm('送信バッチ #' + batchId + ' を削除します。対象メールと添付対応情報も削除されます。実行してよろしいですか？');
-      if (!confirmed) {
-        event.preventDefault();
-      }
+      UI.openModal(modal);
     });
   });
 })();
 </script>
-<?php endif; ?>
 <?php endif; ?>
 <?php
 mail_render_page_footer();

@@ -1,0 +1,53 @@
+/* =====================================================================
+   バックアップ管理 — FIT-SC UI v7 の上に重ねる
+   ===================================================================== */
+
+.bk-stat-link { color: inherit; text-decoration: none; transition: border-color var(--dur-2), transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2); }
+.bk-stat-link:hover { color: inherit; text-decoration: none; border-color: var(--accent-line); transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.stat .progress { margin: 4px 0 2px; height: 6px; }
+.bk-stat-small { font-size: var(--fs-xl); }
+
+.bk-row-link { cursor: pointer; }
+.bk-wrap { white-space: normal; word-break: break-all; }
+.bk-hash { word-break: break-all; font-size: var(--fs-2xs, 11px); }
+
+.bk-table-flat { border: 0; border-radius: 0 0 var(--r-lg) var(--r-lg); background: transparent; }
+@media (max-width: 760px) { .bk-table-flat.is-stacked { padding: 12px; } }
+.card__header--tabs { padding-block: 0; padding-inline: 12px; }
+.card__header--tabs .tabs { border-bottom: 0; flex: 1 1 auto; }
+
+/* ダッシュボードの未解決アラート */
+.bk-alerts { border-color: var(--warning-line, var(--border)); box-shadow: inset 3px 0 0 var(--warning), var(--shadow-md); }
+.bk-alerts .list-item { align-items: flex-start; }
+.bk-alerts .list-item__title { white-space: normal; }
+
+/* アラート一覧 */
+.bk-alert { align-items: flex-start; }
+.bk-alert.is-resolved { opacity: .6; }
+.bk-alert__level { padding-top: 2px; }
+.bk-alert__message { display: block; font-weight: 600; color: var(--text-strong); line-height: 1.6; word-break: break-word; }
+.bk-alert .list-item__meta { white-space: normal; }
+@media (max-width: 600px) {
+  .bk-alert { flex-wrap: wrap; }
+  .bk-alert > .list-item__side:last-child { width: 100%; justify-content: flex-end; }
+}
+
+/* ストレージのログ */
+.bk-log { max-height: 420px; overflow: auto; margin: 0; font-size: var(--fs-xs); line-height: 1.6; }
+
+/* 復元補助 */
+.bk-job-picker { display: flex; align-items: center; gap: 10px; flex: 1 1 360px; min-width: 0; }
+.bk-job-picker__icon { width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 12px; background: var(--accent-soft); color: var(--accent); }
+.bk-job-picker select { max-width: 520px; font-weight: 700; }
+.bk-facts { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.bk-facts dd { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+@media (max-width: 600px) { .bk-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
+.bk-steps { margin: 0; padding-left: 1.4em; display: grid; gap: 8px; font-size: var(--fs-sm); line-height: 1.7; }
+.bk-steps li::marker { color: var(--accent); font-weight: 800; }
+.bk-candidates { display: grid; gap: 8px; padding: 16px; }
+.bk-candidate__title { display: grid; gap: 2px; min-width: 0; }
+.bk-candidate__title small { color: var(--text-subtle); font-size: var(--fs-xs); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bk-candidate__body { display: grid; gap: 14px; padding: 4px 16px 16px; }
+.bk-command { display: grid; gap: 6px; }
+.bk-command__label { font-size: var(--fs-xs); font-weight: 700; color: var(--text-muted); }
+.bk-command pre { margin: 0; white-space: pre-wrap; word-break: break-all; font-size: var(--fs-xs); }

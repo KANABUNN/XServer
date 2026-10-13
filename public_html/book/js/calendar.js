@@ -1,165 +1,132 @@
+/* =====================================================================
+   貸し部屋予約（利用者画面）
+   左: 月カレンダー（部屋ごとの空き状況）／右: 利用者情報・日付ごとの部屋と時間・規約同意
+   ===================================================================== */
 (() => {
-  const form = document.getElementById('reservationForm');
-  const calendarGrid = document.getElementById('calendarGrid');
-  const calendarTitle = document.getElementById('calendarTitle');
-  const calendarStatusText = document.getElementById('calendarStatusText');
-  const calendarDetail = document.getElementById('calendarDetail');
-  const detailPanel = document.getElementById('detailPanel');
-  const dateConfigList = document.getElementById('dateConfigList');
-  const reservationDetailsInput = document.getElementById('reservationDetails');
-  const prevMonthBtn = document.getElementById('prevMonth');
-  const nextMonthBtn = document.getElementById('nextMonth');
-  const goAvailableStartBtn = document.getElementById('goAvailableStart');
-  const openTermsDialogBtn = document.getElementById('openTermsDialog');
-  const termsDialog = document.getElementById('termsDialog');
-  const agreeFromDialogBtn = document.getElementById('agreeFromDialog');
-  const agreeTerms = document.getElementById('agreeTerms');
-  const openManualDialogBtn = document.getElementById('openManualDialog');
-  const manualDialog = document.getElementById('manualDialog');
+  const $ = (id) => document.getElementById(id);
+  const form = $('reservationForm');
+  const calendarGrid = $('calendarGrid');
+  const calendarTitle = $('calendarTitle');
+  const calendarStatusText = $('calendarStatusText');
+  const calendarDetail = $('calendarDetail');
+  const detailPanel = $('detailPanel');
+  const dateConfigList = $('dateConfigList');
+  const reservationDetailsInput = $('reservationDetails');
+  const prevMonthBtn = $('prevMonth');
+  const nextMonthBtn = $('nextMonth');
+  const goAvailableStartBtn = $('goAvailableStart');
+  const termsDialog = $('termsDialog');
+  const agreeFromDialogBtn = $('agreeFromDialog');
+  const agreeTerms = $('agreeTerms');
+  const manualDialog = $('manualDialog');
   const submitBtn = form ? form.querySelector('.submit-btn') : null;
-  const submitBtnDefaultLabel = submitBtn ? submitBtn.textContent : '';
-
-  // 改善: 入力欄・エラーサマリ・ステップ進捗の参照
-  const emailInput = document.getElementById('email');
-  const orgInput = document.getElementById('organization_name');
-  const formErrorSummary = document.getElementById('formErrorSummary');
+  const submitLabel = submitBtn ? submitBtn.querySelector('.submit-label') : null;
+  const emailInput = $('email');
+  const orgInput = $('organization_name');
+  const formErrorSummary = $('formErrorSummary');
+  const selectedCount = $('selectedCount');
+  const jump = $('bkJump');
+  const jumpText = $('bkJumpText');
   const stepEls = Array.from(document.querySelectorAll('[data-step]'));
-
-  // 改善 (E1): 削除確認ダイアログ要素
-  const confirmDialog = document.getElementById('confirmDialog');
-  const confirmDialogTitle = document.getElementById('confirmDialogTitle');
-  const confirmDialogMessage = document.getElementById('confirmDialogMessage');
-  const confirmDialogOkBtn = document.getElementById('confirmDialogOk');
-  const confirmDialogCancelBtn = document.getElementById('confirmDialogCancel');
-
-  // 改善 (E3): カードヒントの自動消去タイマー管理
-  const cardHintTimers = {};
-
-  // 改善 (F3): マニュアル PDF の元 <object> マークアップを記憶しておき、
-  // モバイル ↔ デスクトップで切り替える際に復元できるようにする
-  const manualEmbedOriginalHtml = '<object data="manuals/booking_user_manual.pdf#view=FitH" type="application/pdf" class="manual-pdf-frame"><p>PDF を表示できない場合は、<a href="manuals/booking_user_manual.pdf" target="_blank" rel="noopener">こちらから開いてください</a>。</p></object>';
-
-  function setSubmitButtonState(isSubmitting) {
-    if (!submitBtn) return;
-    submitBtn.disabled = isSubmitting;
-    submitBtn.classList.toggle('is-submitting', isSubmitting);
-    submitBtn.setAttribute('aria-disabled', isSubmitting ? 'true' : 'false');
-    submitBtn.textContent = isSubmitting ? '送信中...' : submitBtnDefaultLabel;
-  }
 
   if (!form || !calendarGrid || !calendarTitle || !calendarStatusText || !calendarDetail || !detailPanel || !dateConfigList || !reservationDetailsInput) {
     return;
   }
 
+  const icon = (name, cls) => (window.UI ? UI.icon(name, cls) : '');
+  const MANUAL_URL = 'manuals/booking_user_manual.pdf';
+  const ROOMS = [
+    { code: 'tamoku', label: '多目的室', short: '多目的' },
+    { code: 'orange', label: 'オレンジの部屋', short: 'オレンジ' },
+  ];
   const weekdayLabels = ['日', '月', '火', '水', '木', '金', '土'];
   const statusByDate = {};
   const selectedDates = [];
   const detailMap = {};
+  const cardHintTimers = {};
   let currentMonth = new Date();
   currentMonth.setDate(1);
   let minDate = null;
   let maxDate = null;
+  let todayKey = '';
   let bookingTimeStart = '09:00';
   let bookingTimeEnd = '20:00';
   let bookingStepMinutes = 15;
-
-  // 改善: 詳細パネルが直前まで非表示だったかを追跡 (自動スクロール用)
   let detailPanelWasHidden = true;
 
+  /* ---------------- ユーティリティ ---------------- */
   function normalizeDate(date) {
     const copy = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     copy.setHours(0, 0, 0, 0);
     return copy;
   }
-
   function formatDateKey(date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }
-
   function parseDateKey(value) {
     const [y, m, d] = value.split('-').map(Number);
     return new Date(y, m - 1, d);
   }
-
   function formatDateLabel(value) {
     const date = parseDateKey(value);
     return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日(${weekdayLabels[date.getDay()]})`;
   }
-
+  function formatShortDate(value) {
+    const date = parseDateKey(value);
+    return { md: `${date.getMonth() + 1}/${date.getDate()}`, wd: weekdayLabels[date.getDay()], dow: date.getDay() };
+  }
   function timeToMinutes(value) {
     const [hours, minutes] = value.split(':').map(Number);
     return (hours * 60) + minutes;
   }
-
-  function minutesToTime(totalMinutes) {
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  function minutesToTime(total) {
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
   }
-
   function buildTimeOptions(startValue, endValue, { includeEnd = false } = {}) {
     const options = [];
-    const startMinutes = timeToMinutes(startValue);
-    const endMinutes = timeToMinutes(endValue);
-    const limit = includeEnd ? endMinutes : endMinutes - bookingStepMinutes;
-
-    for (let minutes = startMinutes; minutes <= limit; minutes += bookingStepMinutes) {
-      options.push(minutesToTime(minutes));
-    }
+    const limit = includeEnd ? timeToMinutes(endValue) : timeToMinutes(endValue) - bookingStepMinutes;
+    for (let m = timeToMinutes(startValue); m <= limit; m += bookingStepMinutes) options.push(minutesToTime(m));
     return options;
   }
-
   function isWithinRange(date) {
     const target = normalizeDate(date);
     if (minDate && target < minDate) return false;
     if (maxDate && target > maxDate) return false;
     return true;
   }
-
   function getDayStatus(dateKey) {
     return statusByDate[dateKey] || { tamoku: false, orange: false };
   }
-
   function isFullyBooked(dateKey) {
     const day = getDayStatus(dateKey);
     return Boolean(day.tamoku && day.orange);
   }
-
   function getAvailableRooms(dateKey) {
     const day = getDayStatus(dateKey);
-    const rooms = [];
-    if (!day.tamoku) rooms.push({ code: 'tamoku', label: '多目的室' });
-    if (!day.orange) rooms.push({ code: 'orange', label: 'オレンジの部屋' });
-    return rooms;
+    return ROOMS.filter((room) => !day[room.code]);
   }
-
   function escapeHtml(value) {
     return String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
-
   function selectedSortedDates() {
     return [...selectedDates].sort();
   }
-
   function ensureDetail(dateKey) {
     if (!detailMap[dateKey]) {
+      const rooms = getAvailableRooms(dateKey);
       detailMap[dateKey] = {
         use_date: dateKey,
-        room_code: '',
+        room_code: rooms.length === 1 ? rooms[0].code : '',
         usage_start_time: bookingTimeStart,
         usage_end_time: minutesToTime(Math.min(timeToMinutes(bookingTimeStart) + 60, timeToMinutes(bookingTimeEnd))),
       };
     }
     return detailMap[dateKey];
   }
-
   function syncHiddenInput() {
-    const rows = selectedSortedDates().map((dateKey) => {
+    reservationDetailsInput.value = JSON.stringify(selectedSortedDates().map((dateKey) => {
       const detail = ensureDetail(dateKey);
       return {
         use_date: dateKey,
@@ -167,266 +134,148 @@
         usage_start_time: detail.usage_start_time || '',
         usage_end_time: detail.usage_end_time || '',
       };
-    });
-    reservationDetailsInput.value = JSON.stringify(rows);
+    }));
   }
 
-  // ===========================================================
-  // 改善 (B): インラインエラー表示
-  // ===========================================================
-
+  /* ---------------- エラー表示 ---------------- */
+  function cardFor(dateKey) {
+    return dateConfigList.querySelector(`[data-date-card="${CSS.escape(dateKey)}"]`);
+  }
   function showCardError(dateKey, msg) {
-    const card = dateConfigList.querySelector(`[data-date-card="${CSS.escape(dateKey)}"]`);
+    const card = cardFor(dateKey);
     if (!card) return null;
     card.classList.add('has-error');
-    let err = card.querySelector('[data-card-error]');
-    if (!err) {
-      err = document.createElement('p');
-      err.className = 'field-error';
-      err.setAttribute('data-card-error', '');
-      err.setAttribute('role', 'alert');
-      card.appendChild(err);
-    }
-    err.textContent = msg;
-    err.hidden = false;
+    const err = card.querySelector('[data-card-error]');
+    if (err) { err.textContent = msg; err.hidden = false; }
     return card;
   }
-
   function clearCardError(dateKey) {
-    const card = dateConfigList.querySelector(`[data-date-card="${CSS.escape(dateKey)}"]`);
+    const card = cardFor(dateKey);
     if (!card) return;
     card.classList.remove('has-error');
     const err = card.querySelector('[data-card-error]');
-    if (err) {
-      err.textContent = '';
-      err.hidden = true;
-    }
+    if (err) { err.textContent = ''; err.hidden = true; }
   }
-
   function clearAllCardErrors() {
-    dateConfigList.querySelectorAll('.date-config-card').forEach((card) => {
-      card.classList.remove('has-error');
-      const err = card.querySelector('[data-card-error]');
-      if (err) {
-        err.textContent = '';
-        err.hidden = true;
-      }
-    });
+    dateConfigList.querySelectorAll('[data-date-card]').forEach((card) => clearCardError(card.dataset.dateCard));
   }
-
   function showFormErrorSummary(msg) {
     if (!formErrorSummary) return;
-    formErrorSummary.innerHTML = `<strong>入力内容を確認してください</strong>${escapeHtml(msg)}`;
+    formErrorSummary.innerHTML = `${icon('alert-circle')}<div class="alert__body"><strong class="alert__title">入力内容を確認してください</strong>${escapeHtml(msg)}</div>`;
     formErrorSummary.hidden = false;
-    formErrorSummary.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
-
   function clearFormErrorSummary() {
     if (!formErrorSummary) return;
     formErrorSummary.textContent = '';
     formErrorSummary.hidden = true;
   }
-
-  // ===========================================================
-  // 改善 (E3): 一時的ヒントメッセージ (3秒で自動消去)
-  // ===========================================================
-
+  function setFieldError(input, msg) {
+    if (!input) return;
+    const err = form.querySelector(`[data-field-error="${input.name}"]`);
+    if (msg) input.setAttribute('aria-invalid', 'true'); else input.removeAttribute('aria-invalid');
+    if (err) { err.textContent = msg || ''; err.hidden = !msg; }
+  }
   function showCardHint(dateKey, msg) {
-    const card = dateConfigList.querySelector(`[data-date-card="${CSS.escape(dateKey)}"]`);
-    if (!card) return;
-    let hint = card.querySelector('[data-card-hint]');
-    if (!hint) {
-      hint = document.createElement('p');
-      hint.className = 'field-hint';
-      hint.setAttribute('data-card-hint', '');
-      hint.setAttribute('role', 'status');
-      card.appendChild(hint);
-    }
+    const card = cardFor(dateKey);
+    const hint = card?.querySelector('[data-card-hint]');
+    if (!hint) return;
     hint.textContent = msg;
     hint.hidden = false;
     if (cardHintTimers[dateKey]) clearTimeout(cardHintTimers[dateKey]);
     cardHintTimers[dateKey] = setTimeout(() => {
-      if (hint && hint.isConnected) {
-        hint.hidden = true;
-        hint.textContent = '';
-      }
+      if (hint.isConnected) { hint.hidden = true; hint.textContent = ''; }
       delete cardHintTimers[dateKey];
-    }, 3000);
+    }, 3200);
   }
 
-  // ===========================================================
-  // 改善 (E1): <dialog> ベースの確認ダイアログ (alert/confirm 廃止)
-  // ===========================================================
-
-  function showConfirm({ title = '確認', message = '', okText = '削除する', cancelText = 'キャンセル' } = {}) {
-    return new Promise((resolve) => {
-      // <dialog> 非対応環境では window.confirm にフォールバック
-      if (!confirmDialog || typeof confirmDialog.showModal !== 'function'
-          || !confirmDialogOkBtn || !confirmDialogCancelBtn
-          || !confirmDialogTitle || !confirmDialogMessage) {
-        resolve(window.confirm(message));
-        return;
-      }
-
-      confirmDialogTitle.textContent = title;
-      confirmDialogMessage.textContent = message;
-      confirmDialogOkBtn.textContent = okText;
-      confirmDialogCancelBtn.textContent = cancelText;
-
-      let resolved = false;
-      const safeResolve = (value) => {
-        if (resolved) return;
-        resolved = true;
-        confirmDialogOkBtn.removeEventListener('click', handleOk);
-        confirmDialogCancelBtn.removeEventListener('click', handleCancel);
-        confirmDialog.removeEventListener('close', handleCloseEvent);
-        resolve(value);
-      };
-      const handleOk = () => { safeResolve(true); confirmDialog.close(); };
-      const handleCancel = () => { safeResolve(false); confirmDialog.close(); };
-      const handleCloseEvent = () => { safeResolve(false); };
-
-      confirmDialogOkBtn.addEventListener('click', handleOk);
-      confirmDialogCancelBtn.addEventListener('click', handleCancel);
-      confirmDialog.addEventListener('close', handleCloseEvent);
-      confirmDialog.showModal();
-    });
+  function setSubmitButtonState(isSubmitting) {
+    if (!submitBtn) return;
+    submitBtn.disabled = isSubmitting;
+    submitBtn.classList.toggle('is-loading', isSubmitting);
+    submitBtn.setAttribute('aria-busy', isSubmitting ? 'true' : 'false');
+    if (submitLabel) submitLabel.textContent = isSubmitting ? '送信中…' : '予約する';
   }
 
-  // ===========================================================
-  // 改善 (A): ステップ進捗バー
-  // ===========================================================
-
-  function isStep1Done() {
-    if (!emailInput || !orgInput) return false;
-    const emailOk = emailInput.value.trim() !== '' && emailInput.checkValidity();
-    const orgOk = orgInput.value.trim() !== '';
-    return emailOk && orgOk;
+  /* ---------------- ステップ表示 ---------------- */
+  function emailError() {
+    if (!emailInput) return '';
+    const value = emailInput.value.trim();
+    if (!value) return 'メールアドレスを入力してください。';
+    if (!emailInput.checkValidity()) return '@bene.fit.ac.jp または @fit.ac.jp のメールアドレスを入力してください。';
+    return '';
   }
-
-  function isStep2Done() {
-    return selectedDates.length > 0;
-  }
-
   function isDateConfigComplete(dateKey) {
     const detail = detailMap[dateKey];
-    if (!detail) return false;
-    if (!detail.room_code || !detail.usage_start_time || !detail.usage_end_time) return false;
+    if (!detail || !detail.room_code || !detail.usage_start_time || !detail.usage_end_time) return false;
     const s = timeToMinutes(detail.usage_start_time);
     const e = timeToMinutes(detail.usage_end_time);
-    if (e <= s) return false;
-    const allowedS = timeToMinutes(bookingTimeStart);
-    const allowedE = timeToMinutes(bookingTimeEnd);
-    if (s < allowedS || e > allowedE) return false;
-    if (!getAvailableRooms(dateKey).some((r) => r.code === detail.room_code)) return false;
-    return true;
+    if (e <= s || s < timeToMinutes(bookingTimeStart) || e > timeToMinutes(bookingTimeEnd)) return false;
+    return getAvailableRooms(dateKey).some((r) => r.code === detail.room_code);
   }
-
-  function isStep3Done() {
-    if (selectedDates.length === 0) return false;
-    return selectedDates.every((dk) => isDateConfigComplete(dk));
-  }
-
-  function isStep4Done() {
-    return Boolean(agreeTerms?.checked);
-  }
-
   function updateStepProgress() {
-    const states = [isStep1Done(), isStep2Done(), isStep3Done(), isStep4Done()];
+    const states = [
+      !emailError() && Boolean(orgInput?.value.trim()),
+      selectedDates.length > 0,
+      selectedDates.length > 0 && selectedDates.every(isDateConfigComplete),
+      Boolean(agreeTerms?.checked),
+    ];
     let foundActive = false;
-    for (let i = 0; i < 4; i++) {
-      const stepEl = stepEls.find((el) => Number(el.dataset.step) === i + 1);
-      if (!stepEl) continue;
-      const done = states[i];
-      let active = false;
-      if (!done && !foundActive) {
-        active = true;
-        foundActive = true;
-      }
-      stepEl.classList.toggle('is-done', done);
+    stepEls.forEach((stepEl) => {
+      const done = states[Number(stepEl.dataset.step) - 1];
+      const active = !done && !foundActive;
+      if (active) foundActive = true;
+      stepEl.classList.toggle('is-done', Boolean(done));
       stepEl.classList.toggle('is-active', active);
-    }
+    });
+    const n = selectedDates.length;
+    if (selectedCount) selectedCount.textContent = `${n}日`;
+    if (jumpText) jumpText.textContent = `${n}日選択中 ・ 時間を設定`;
+    updateJump();
   }
 
-  // ===========================================================
-  // 既存ロジック (一部更新)
-  // ===========================================================
-
+  /* ---------------- 選択日リスト ---------------- */
   function renderCalendarDetail() {
-    const dates = selectedSortedDates();
-    if (!dates.length) {
-      calendarDetail.innerHTML = '<p class="calendar-detail-placeholder">利用日をクリックして選択してください。選択後に日付ごとの部屋・利用時間を設定できます。</p>';
-      return;
-    }
-
-    const list = dates.map((dateKey) => {
-      const rooms = getAvailableRooms(dateKey);
-      const roomText = rooms.length === 0
-        ? '満室'
-        : rooms.map((room) => room.label).join(' / ');
-      return `<li>${escapeHtml(formatDateLabel(dateKey))}<span>空き部屋: ${escapeHtml(roomText)}</span></li>`;
-    }).join('');
-
-    calendarDetail.innerHTML = `
-      <div class="calendar-detail-card">
-        <h3>選択中の日付</h3>
-        <ul class="selected-date-summary">${list}</ul>
-      </div>
-    `;
+    calendarDetail.hidden = selectedDates.length > 0;
   }
 
   function buildRoomOptions(detail, rooms) {
-    const currentRoomSelectable = rooms.some((room) => room.code === detail.room_code);
-    if (detail.room_code && !currentRoomSelectable) {
-      detail.room_code = '';
-    }
-
-    return ['<option value="">部屋を選択してください</option>']
+    if (detail.room_code && !rooms.some((room) => room.code === detail.room_code)) detail.room_code = '';
+    return ['<option value="">部屋を選択</option>']
       .concat(rooms.map((room) => `<option value="${room.code}" ${detail.room_code === room.code ? 'selected' : ''}>${room.label}</option>`))
       .join('');
   }
-
   function buildStartOptions(detail) {
     const options = buildTimeOptions(bookingTimeStart, bookingTimeEnd, { includeEnd: false });
-    if (!options.includes(detail.usage_start_time)) {
-      detail.usage_start_time = options[0] || '';
-    }
-    return ['<option value="">開始時刻</option>']
-      .concat(options.map((value) => `<option value="${value}" ${detail.usage_start_time === value ? 'selected' : ''}>${value}</option>`))
-      .join('');
+    if (!options.includes(detail.usage_start_time)) detail.usage_start_time = options[0] || '';
+    return options.map((value) => `<option value="${value}" ${detail.usage_start_time === value ? 'selected' : ''}>${value}</option>`).join('');
   }
-
   function normalizeEndTime(detail) {
-    const startMinutes = timeToMinutes(detail.usage_start_time || bookingTimeStart);
-    const minEndMinutes = startMinutes + bookingStepMinutes;
-    const maxEndMinutes = timeToMinutes(bookingTimeEnd);
-    let endMinutes = detail.usage_end_time ? timeToMinutes(detail.usage_end_time) : (minEndMinutes + 45);
-
-    if (endMinutes <= startMinutes) {
-      endMinutes = minEndMinutes;
-    }
-    if (endMinutes > maxEndMinutes) {
-      endMinutes = maxEndMinutes;
-    }
-    if (endMinutes < minEndMinutes) {
-      endMinutes = minEndMinutes;
-    }
-
-    detail.usage_end_time = minutesToTime(endMinutes);
+    const start = timeToMinutes(detail.usage_start_time || bookingTimeStart);
+    const minEnd = start + bookingStepMinutes;
+    const maxEnd = timeToMinutes(bookingTimeEnd);
+    let end = detail.usage_end_time ? timeToMinutes(detail.usage_end_time) : (minEnd + 45);
+    if (end <= start) end = minEnd;
+    if (end > maxEnd) end = maxEnd;
+    if (end < minEnd) end = minEnd;
+    detail.usage_end_time = minutesToTime(end);
   }
-
   function buildEndOptions(detail) {
     normalizeEndTime(detail);
-    const endOptions = buildTimeOptions(minutesToTime(timeToMinutes(detail.usage_start_time) + bookingStepMinutes), bookingTimeEnd, { includeEnd: true });
-    if (!endOptions.includes(detail.usage_end_time)) {
-      detail.usage_end_time = endOptions[0] || '';
-    }
-    return ['<option value="">終了時刻</option>']
-      .concat(endOptions.map((value) => `<option value="${value}" ${detail.usage_end_time === value ? 'selected' : ''}>${value}</option>`))
-      .join('');
+    const options = buildTimeOptions(minutesToTime(timeToMinutes(detail.usage_start_time) + bookingStepMinutes), bookingTimeEnd, { includeEnd: true });
+    if (!options.includes(detail.usage_end_time)) detail.usage_end_time = options[0] || '';
+    return options.map((value) => `<option value="${value}" ${detail.usage_end_time === value ? 'selected' : ''}>${value}</option>`).join('');
   }
 
-  function renderDetailCards() {
+  function durationLabel(detail) {
+    if (!detail.usage_start_time || !detail.usage_end_time) return '';
+    const mins = timeToMinutes(detail.usage_end_time) - timeToMinutes(detail.usage_start_time);
+    if (mins <= 0) return '';
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h ? `${h}時間` : ''}${m ? `${m}分` : ''}`;
+  }
+
+  function renderDetailCards(focusDateKey = '') {
     const dates = selectedSortedDates();
     if (!dates.length) {
       detailPanel.classList.add('is-hidden');
@@ -436,152 +285,123 @@
       updateStepProgress();
       return;
     }
-
-    const wasHidden = detailPanelWasHidden;
     detailPanel.classList.remove('is-hidden');
     detailPanelWasHidden = false;
 
-    dateConfigList.innerHTML = dates.map((dateKey, index) => {
+    dateConfigList.innerHTML = dates.map((dateKey) => {
       const detail = ensureDetail(dateKey);
       const rooms = getAvailableRooms(dateKey);
-      const roomOptions = buildRoomOptions(detail, rooms);
+      const d = formatShortDate(dateKey);
       const startOptions = buildStartOptions(detail);
       const endOptions = buildEndOptions(detail);
-      const roomBadge = rooms.length === 0 ? '<span class="inline-warning">この日は満室です</span>' : '';
-
       return `
-        <article class="date-config-card" data-date-card="${dateKey}">
-          <div class="date-config-head">
-            <div>
-              <h3><span class="date-card-num" aria-hidden="true">${index + 1}</span><span class="date-card-text">${escapeHtml(formatDateLabel(dateKey))}</span></h3>
-              ${roomBadge}
-            </div>
-            <button type="button" class="remove-date-btn" data-remove-date="${dateKey}" aria-label="${escapeHtml(formatDateLabel(dateKey))} の選択を外す">この日を外す</button>
-          </div>
-
-          <div class="date-config-grid">
-            <label class="form-group">
-              <span>部屋<span class="required-badge" aria-hidden="true">必須</span></span>
-              <select class="detail-room-select" data-date="${dateKey}">${roomOptions}</select>
+        <article class="bk-date${dateKey === focusDateKey ? ' is-new' : ''}" data-date-card="${dateKey}">
+          <header class="bk-date__head">
+            <span class="bk-date__label${d.dow === 0 ? ' is-sun' : d.dow === 6 ? ' is-sat' : ''}"><strong>${d.md}</strong><span>(${d.wd})</span></span>
+            <span class="bk-date__dur" data-duration>${escapeHtml(durationLabel(detail))}</span>
+            <button type="button" class="btn btn--ghost btn--icon btn--sm remove-date-btn" data-remove-date="${dateKey}" aria-label="${escapeHtml(formatDateLabel(dateKey))} の選択を外す">${icon('x')}</button>
+          </header>
+          ${rooms.length === 0 ? `<p class="field__error">この日は満室です。日付を選び直してください。</p>` : ''}
+          <div class="bk-date__grid">
+            <label class="field bk-date__room"><span class="sr-only">部屋</span>
+              <select class="detail-room-select" data-date="${dateKey}" aria-label="${escapeHtml(formatDateLabel(dateKey))} の部屋">${buildRoomOptions(detail, rooms)}</select>
             </label>
-
-            <label class="form-group">
-              <span>利用開始時刻<span class="required-badge" aria-hidden="true">必須</span></span>
-              <select class="detail-start-select" data-date="${dateKey}">${startOptions}</select>
+            <label class="field"><span class="sr-only">開始</span>
+              <select class="detail-start-select" data-date="${dateKey}" aria-label="開始時刻">${startOptions}</select>
             </label>
-
-            <label class="form-group">
-              <span>利用終了時刻<span class="required-badge" aria-hidden="true">必須</span></span>
-              <select class="detail-end-select" data-date="${dateKey}">${endOptions}</select>
+            <span class="bk-date__tilde" aria-hidden="true">〜</span>
+            <label class="field"><span class="sr-only">終了</span>
+              <select class="detail-end-select" data-date="${dateKey}" aria-label="終了時刻">${endOptions}</select>
             </label>
           </div>
-
-          <p class="field-error" data-card-error role="alert" hidden></p>
-          <p class="field-hint" data-card-hint role="status" hidden></p>
+          <p class="field__error" data-card-error role="alert" hidden></p>
+          <p class="field__hint bk-date__hint" data-card-hint role="status" hidden></p>
         </article>
       `;
     }).join('');
 
-    dateConfigList.querySelectorAll('.detail-room-select').forEach((select) => {
-      select.addEventListener('change', () => {
-        const dateKey = select.dataset.date;
-        if (!dateKey) return;
-        ensureDetail(dateKey).room_code = select.value;
-        clearCardError(dateKey);
-        clearFormErrorSummary();
-        syncHiddenInput();
-        updateStepProgress();
-      });
-    });
-
-    dateConfigList.querySelectorAll('.detail-start-select').forEach((select) => {
-      select.addEventListener('change', () => {
-        const dateKey = select.dataset.date;
-        if (!dateKey) return;
-        const detail = ensureDetail(dateKey);
-        // 改善 (E3): 終了時刻が自動調整された場合に通知するため、変更前の値を控える
-        const oldEnd = detail.usage_end_time;
-        detail.usage_start_time = select.value;
-        normalizeEndTime(detail);
-        const newEnd = detail.usage_end_time;
-        clearCardError(dateKey);
-        clearFormErrorSummary();
-        renderDetailCards();
-        if (oldEnd !== newEnd && newEnd) {
-          showCardHint(dateKey, `終了時刻を ${newEnd} に自動調整しました。`);
-        }
-      });
-    });
-
-    dateConfigList.querySelectorAll('.detail-end-select').forEach((select) => {
-      select.addEventListener('change', () => {
-        const dateKey = select.dataset.date;
-        if (!dateKey) return;
-        ensureDetail(dateKey).usage_end_time = select.value;
-        clearCardError(dateKey);
-        clearFormErrorSummary();
-        syncHiddenInput();
-        updateStepProgress();
-      });
-    });
-
-    dateConfigList.querySelectorAll('.remove-date-btn').forEach((button) => {
-      button.addEventListener('click', async () => {
-        const dateKey = button.dataset.removeDate;
-        if (!dateKey) return;
-        // 改善 (E1): 誤クリック防止のため <dialog> ベースの確認を表示
-        const ok = await showConfirm({
-          title: '日付の選択を外しますか?',
-          message: `${formatDateLabel(dateKey)} の予約設定がリセットされます。本当に外してよろしいですか?`,
-          okText: '外す',
-          cancelText: 'キャンセル',
-        });
-        if (!ok) return;
-        const index = selectedDates.indexOf(dateKey);
-        if (index >= 0) selectedDates.splice(index, 1);
-        delete detailMap[dateKey];
-        renderCalendar();
-        renderCalendarDetail();
-        renderDetailCards();
-      });
-    });
-
     syncHiddenInput();
     updateStepProgress();
-
-    // 改善 (A): 詳細パネルが新たに表示されたときだけスクロール誘導
-    if (wasHidden) {
-      requestAnimationFrame(() => {
-        detailPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    }
   }
 
+  dateConfigList.addEventListener('change', (event) => {
+    const select = event.target.closest('select[data-date]');
+    if (!select) return;
+    const dateKey = select.dataset.date;
+    const detail = ensureDetail(dateKey);
+    clearCardError(dateKey);
+    clearFormErrorSummary();
+    if (select.classList.contains('detail-room-select')) {
+      detail.room_code = select.value;
+    } else if (select.classList.contains('detail-start-select')) {
+      const oldEnd = detail.usage_end_time;
+      detail.usage_start_time = select.value;
+      normalizeEndTime(detail);
+      const card = cardFor(dateKey);
+      const endSelect = card?.querySelector('.detail-end-select');
+      if (endSelect) endSelect.innerHTML = buildEndOptions(detail);
+      if (oldEnd !== detail.usage_end_time) showCardHint(dateKey, `終了時刻を ${detail.usage_end_time} に調整しました。`);
+    } else if (select.classList.contains('detail-end-select')) {
+      detail.usage_end_time = select.value;
+    }
+    const dur = cardFor(dateKey)?.querySelector('[data-duration]');
+    if (dur) dur.textContent = durationLabel(detail);
+    syncHiddenInput();
+    updateStepProgress();
+  });
+
+  dateConfigList.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-remove-date]');
+    if (!button) return;
+    const dateKey = button.dataset.removeDate;
+    const card = cardFor(dateKey);
+    const remove = () => {
+      const index = selectedDates.indexOf(dateKey);
+      if (index >= 0) selectedDates.splice(index, 1);
+      delete detailMap[dateKey];
+      renderCalendar();
+      renderCalendarDetail();
+      renderDetailCards();
+    };
+    if (card) {
+      card.classList.add('is-leaving');
+      setTimeout(remove, 220);
+    } else {
+      remove();
+    }
+  });
+
+  /* ---------------- カレンダー ---------------- */
   function renderWeekdayHeader() {
-    weekdayLabels.forEach((label) => {
+    weekdayLabels.forEach((label, i) => {
       const el = document.createElement('div');
-      el.className = 'calendar-weekday';
+      el.className = `bk-weekday${i === 0 ? ' is-sun' : i === 6 ? ' is-sat' : ''}`;
       el.textContent = label;
       calendarGrid.appendChild(el);
     });
   }
 
+  function updateMonthNav() {
+    const first = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    if (prevMonthBtn) prevMonthBtn.disabled = Boolean(minDate && first <= new Date(minDate.getFullYear(), minDate.getMonth(), 1));
+    if (nextMonthBtn) nextMonthBtn.disabled = Boolean(maxDate && first >= new Date(maxDate.getFullYear(), maxDate.getMonth(), 1));
+  }
+
   function renderCalendar() {
     calendarGrid.innerHTML = '';
     renderWeekdayHeader();
-
     calendarTitle.textContent = `${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月`;
-    const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-    const startDay = firstDay.getDay();
+    const startDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
     const lastDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+    const today = todayKey || formatDateKey(new Date());
 
-    for (let i = 0; i < startDay; i++) {
+    for (let i = 0; i < startDay; i += 1) {
       const empty = document.createElement('div');
-      empty.className = 'calendar-day is-empty';
+      empty.className = 'bk-day is-empty';
       calendarGrid.appendChild(empty);
     }
 
-    for (let day = 1; day <= lastDate; day++) {
+    for (let day = 1; day <= lastDate; day += 1) {
       const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
       const dateKey = formatDateKey(cellDate);
       const dayStatus = getDayStatus(dateKey);
@@ -593,90 +413,83 @@
 
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'calendar-day';
+      button.className = 'bk-day';
       if (!inRange) button.classList.add('is-disabled');
       if (fullBooked) button.classList.add('is-booked');
       if (partial) button.classList.add('is-partial');
       if (selected) button.classList.add('is-selected');
-      if (selectable && !selected && !partial) button.classList.add('is-available');
-
+      if (selectable) button.classList.add('is-available');
+      if (dateKey === today) button.classList.add('is-today');
+      if (cellDate.getDay() === 0) button.classList.add('is-sun');
+      if (cellDate.getDay() === 6) button.classList.add('is-sat');
       button.disabled = !selectable;
       button.dataset.date = dateKey;
 
-      // 改善 (D1): 「多:○ / 橙:○」記号表記をバッジに置き換え
-      // 改善 (F4): スクリーンリーダー向けに aria-label / aria-pressed を付与
-      const noteText = !inRange ? '対象外' : (fullBooked ? '満室' : (selected ? '選択中' : (partial ? '一部空き' : '選択可')));
-      const tamokuOpen = !dayStatus.tamoku;
-      const orangeOpen = !dayStatus.orange;
-      const tamokuStateLabel = tamokuOpen ? '空き' : '予約あり';
-      const orangeStateLabel = orangeOpen ? '空き' : '予約あり';
+      const roomsHtml = inRange ? ROOMS.map((room) => {
+        const open = !dayStatus[room.code];
+        return `<span class="bk-room bk-room--${room.code}${open ? '' : ' is-taken'}"><span class="bk-room__label">${room.short}</span></span>`;
+      }).join('') : '';
+      const note = !inRange ? '' : fullBooked ? '満室' : '';
 
       button.innerHTML = `
-        <span class="calendar-day-number">${day}</span>
-        <span class="calendar-day-note">${noteText}</span>
-        <span class="calendar-room-chips" aria-hidden="true">
-          <span class="room-chip ${tamokuOpen ? 'is-open' : 'is-taken'}">多目的</span>
-          <span class="room-chip ${orangeOpen ? 'is-open' : 'is-taken'}">オレンジ</span>
-        </span>
+        <span class="bk-day__num">${day}</span>
+        ${selected ? `<span class="bk-day__check">${icon('check', 'ico--sm')}</span>` : ''}
+        ${note ? `<span class="bk-day__note">${note}</span>` : ''}
+        <span class="bk-day__rooms" aria-hidden="true">${roomsHtml}</span>
       `;
-
-      const ariaLabel = inRange
-        ? `${formatDateLabel(dateKey)} ${noteText}。多目的室${tamokuStateLabel}、オレンジの部屋${orangeStateLabel}。`
-        : `${formatDateLabel(dateKey)} ${noteText}`;
-      button.setAttribute('aria-label', ariaLabel);
-      if (selectable) {
-        button.setAttribute('aria-pressed', selected ? 'true' : 'false');
-      }
-
-      button.addEventListener('click', () => {
-        const idx = selectedDates.indexOf(dateKey);
-        if (idx >= 0) {
-          selectedDates.splice(idx, 1);
-          delete detailMap[dateKey];
-        } else {
-          selectedDates.push(dateKey);
-          ensureDetail(dateKey);
-        }
-        clearFormErrorSummary();
-        renderCalendar();
-        renderCalendarDetail();
-        renderDetailCards();
-      });
+      const roomState = ROOMS.map((room) => `${room.label}${dayStatus[room.code] ? '予約あり' : '空き'}`).join('、');
+      button.setAttribute('aria-label', inRange
+        ? `${formatDateLabel(dateKey)}${selected ? ' 選択中' : ''}。${fullBooked ? '満室。' : ''}${roomState}`
+        : `${formatDateLabel(dateKey)} 選択できません`);
+      if (selectable) button.setAttribute('aria-pressed', selected ? 'true' : 'false');
       calendarGrid.appendChild(button);
     }
+    updateMonthNav();
   }
 
-  // 改善 (D2): 月遷移中のシマー付きスケルトン表示
+  calendarGrid.addEventListener('click', (event) => {
+    const button = event.target.closest('button.bk-day[data-date]');
+    if (!button || button.disabled) return;
+    const dateKey = button.dataset.date;
+    const idx = selectedDates.indexOf(dateKey);
+    let added = '';
+    if (idx >= 0) {
+      selectedDates.splice(idx, 1);
+      delete detailMap[dateKey];
+    } else {
+      selectedDates.push(dateKey);
+      ensureDetail(dateKey);
+      added = dateKey;
+    }
+    clearFormErrorSummary();
+    renderCalendar();
+    renderCalendarDetail();
+    renderDetailCards(added);
+    calendarGrid.querySelector(`[data-date="${dateKey}"]`)?.focus({ preventScroll: true });
+  });
+
   function renderSkeleton() {
     calendarGrid.innerHTML = '';
     renderWeekdayHeader();
-    // 6週分(42セル)を生成すれば、どの月でも収まる
-    for (let i = 0; i < 42; i++) {
+    for (let i = 0; i < 35; i += 1) {
       const el = document.createElement('div');
-      el.className = 'calendar-day is-skeleton';
+      el.className = 'bk-day is-skeleton skeleton';
       el.setAttribute('aria-hidden', 'true');
       calendarGrid.appendChild(el);
     }
   }
 
   async function loadMonth(date) {
-    calendarStatusText.textContent = '予約状況を取得しています。';
-    renderSkeleton(); // 改善 (D2): fetch 前にスケルトンを表示
+    calendarStatusText.textContent = '予約状況を取得しています…';
+    renderSkeleton();
     try {
-      const response = await fetch(`get_calendar_status.php?year=${date.getFullYear()}&month=${date.getMonth() + 1}`, {
-        credentials: 'same-origin',
-      });
+      const response = await fetch(`get_calendar_status.php?year=${date.getFullYear()}&month=${date.getMonth() + 1}`, { credentials: 'same-origin' });
       const json = await response.json();
-      if (!json.ok) {
-        throw new Error(json.message || '予約状況の取得に失敗しました。');
-      }
-
-      Object.entries(json.days || {}).forEach(([dateKey, day]) => {
-        statusByDate[dateKey] = day;
-      });
-
+      if (!json.ok) throw new Error(json.message || '予約状況の取得に失敗しました。');
+      Object.entries(json.days || {}).forEach(([dateKey, day]) => { statusByDate[dateKey] = day; });
       if (json.min_date) minDate = normalizeDate(parseDateKey(json.min_date));
       if (json.max_date) maxDate = normalizeDate(parseDateKey(json.max_date));
+      if (json.today) todayKey = json.today;
       if (json.time_start) bookingTimeStart = json.time_start;
       if (json.time_end) bookingTimeEnd = json.time_end;
       if (json.time_step_minutes) bookingStepMinutes = Number(json.time_step_minutes) || 15;
@@ -684,94 +497,95 @@
       renderCalendar();
       renderCalendarDetail();
       renderDetailCards();
+      calendarGrid.classList.remove('is-entering');
+      void calendarGrid.offsetWidth;
+      calendarGrid.classList.add('is-entering');
 
       calendarStatusText.textContent = minDate && maxDate
-        ? `予約可能期間: ${formatDateKey(minDate)} ～ ${formatDateKey(maxDate)} / 利用時間: ${bookingTimeStart}～${bookingTimeEnd}`
+        ? `予約できる期間：${minDate.getMonth() + 1}/${minDate.getDate()} 〜 ${maxDate.getMonth() + 1}/${maxDate.getDate()} ・ 利用時間 ${bookingTimeStart}〜${bookingTimeEnd}`
         : '予約状況を表示しています。';
     } catch (error) {
-      calendarGrid.innerHTML = '<p class="calendar-error">予約状況の取得に失敗しました。</p>';
+      calendarGrid.innerHTML = `<div class="bk-grid__error"><div class="empty"><span class="empty__icon">${icon('alert-triangle')}</span><span>予約状況を取得できませんでした。</span><button type="button" class="btn btn--sm" data-retry>${icon('refresh')}再読み込み</button></div></div>`;
       calendarStatusText.textContent = error instanceof Error ? error.message : '取得に失敗しました。';
     }
   }
+  calendarGrid.addEventListener('click', (event) => {
+    if (event.target.closest('[data-retry]')) loadMonth(currentMonth);
+  });
 
   function moveMonth(offset) {
     const target = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
     if (minDate && target < new Date(minDate.getFullYear(), minDate.getMonth(), 1)) return;
     if (maxDate && target > new Date(maxDate.getFullYear(), maxDate.getMonth(), 1)) return;
     currentMonth = target;
+    calendarGrid.dataset.dir = offset > 0 ? 'next' : 'prev';
     loadMonth(currentMonth);
   }
 
-  // ===========================================================
-  // 改善 (B): validateBeforeSubmit から alert を完全排除
-  // ===========================================================
+  /* ---------------- 送信前チェック ---------------- */
   function validateBeforeSubmit() {
     clearAllCardErrors();
     clearFormErrorSummary();
+    let firstError = null;
+
+    const eErr = emailError();
+    setFieldError(emailInput, eErr);
+    if (eErr && !firstError) firstError = { el: emailInput, msg: eErr };
+    const oErr = orgInput && !orgInput.value.trim() ? '団体名を入力してください。' : '';
+    setFieldError(orgInput, oErr);
+    if (oErr && !firstError) firstError = { el: orgInput, msg: oErr };
 
     const dates = selectedSortedDates();
-    if (!dates.length) {
-      showFormErrorSummary('利用日を1日以上選択してください。');
-      return false;
+    if (!dates.length && !firstError) {
+      firstError = { el: calendarGrid, msg: '利用日を1日以上選択してください。' };
     }
-
-    const allowedStartMinutes = timeToMinutes(bookingTimeStart);
-    const allowedEndMinutes = timeToMinutes(bookingTimeEnd);
-    let firstErrorCard = null;
-    let firstErrorMsg = '';
-
+    const allowedStart = timeToMinutes(bookingTimeStart);
+    const allowedEnd = timeToMinutes(bookingTimeEnd);
     for (const dateKey of dates) {
       const detail = ensureDetail(dateKey);
-      let cardMsg = '';
-
+      let msg = '';
       if (!detail.room_code || !detail.usage_start_time || !detail.usage_end_time) {
-        cardMsg = '部屋と利用時間を設定してください。';
+        msg = '部屋を選択してください。';
       } else {
-        const startMinutes = timeToMinutes(detail.usage_start_time);
-        const endMinutes = timeToMinutes(detail.usage_end_time);
-        if (endMinutes <= startMinutes) {
-          cardMsg = '利用終了時刻は開始時刻より後にしてください。';
-        } else if (startMinutes < allowedStartMinutes || endMinutes > allowedEndMinutes) {
-          cardMsg = `利用時間は ${bookingTimeStart}〜${bookingTimeEnd} の範囲で指定してください。`;
-        } else if (!getAvailableRooms(dateKey).some((room) => room.code === detail.room_code)) {
-          cardMsg = '選択中の部屋は現在予約できません。別の部屋を選び直してください。';
-        }
+        const s = timeToMinutes(detail.usage_start_time);
+        const e = timeToMinutes(detail.usage_end_time);
+        if (e <= s) msg = '終了時刻は開始時刻より後にしてください。';
+        else if (s < allowedStart || e > allowedEnd) msg = `利用時間は ${bookingTimeStart}〜${bookingTimeEnd} の範囲で指定してください。`;
+        else if (!getAvailableRooms(dateKey).some((room) => room.code === detail.room_code)) msg = '選択した部屋はこの日予約できません。';
       }
-
-      if (cardMsg) {
-        const card = showCardError(dateKey, cardMsg);
-        if (!firstErrorCard) {
-          firstErrorCard = card;
-          firstErrorMsg = `${formatDateLabel(dateKey)} に問題があります。詳細はカード内のメッセージを確認してください。`;
-        }
+      if (msg) {
+        const card = showCardError(dateKey, msg);
+        if (!firstError) firstError = { el: card, msg: `${formatDateLabel(dateKey)}：${msg}` };
       }
     }
 
-    if (firstErrorCard) {
-      showFormErrorSummary(firstErrorMsg);
+    if (!agreeTerms?.checked && !firstError) {
+      firstError = { el: agreeTerms.closest('.check-card'), msg: '利用規約に同意してください。' };
+    }
+    agreeTerms?.closest('.check-card')?.classList.toggle('has-error', !agreeTerms.checked);
+
+    if (firstError) {
+      showFormErrorSummary(firstError.msg);
       requestAnimationFrame(() => {
-        firstErrorCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        firstError.el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (firstError.el?.matches?.('input')) setTimeout(() => firstError.el.focus({ preventScroll: true }), 300);
       });
       return false;
     }
-
     syncHiddenInput();
     return true;
   }
 
   form.addEventListener('submit', (event) => {
-    if (!validateBeforeSubmit()) {
-      event.preventDefault();
-      setSubmitButtonState(false);
-      form.dataset.submitting = '0';
-      return;
-    }
-
     if (form.dataset.submitting === '1') {
       event.preventDefault();
       return;
     }
-
+    if (!validateBeforeSubmit()) {
+      event.preventDefault();
+      setSubmitButtonState(false);
+      return;
+    }
     form.dataset.submitting = '1';
     setSubmitButtonState(true);
   });
@@ -781,59 +595,72 @@
     setSubmitButtonState(false);
   });
 
-  prevMonthBtn?.addEventListener('click', () => moveMonth(-1));
-  nextMonthBtn?.addEventListener('click', () => moveMonth(1));
-  goAvailableStartBtn?.addEventListener('click', () => {
-    if (minDate) {
-      currentMonth = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-    } else {
-      currentMonth = new Date();
-      currentMonth.setDate(1);
-    }
-    loadMonth(currentMonth);
-  });
-
-  openTermsDialogBtn?.addEventListener('click', () => {
-    if (typeof termsDialog?.showModal === 'function') {
-      termsDialog.showModal();
-    }
-  });
-
-  openManualDialogBtn?.addEventListener('click', () => {
-    if (typeof manualDialog?.showModal !== 'function') return;
-    // 改善 (F3): iOS Safari など <object type="application/pdf"> を表示できない
-    // モバイル端末では、プレビューをやめて「新しいタブで開く」CTA に置き換える
-    const wrap = manualDialog.querySelector('.manual-embed-wrap');
-    if (wrap) {
-      const isMobile = window.matchMedia('(max-width: 640px)').matches;
-      if (isMobile) {
-        wrap.innerHTML = `
-          <div class="manual-mobile-fallback">
-            <p>マニュアル(PDF)は新しいタブで開きます。</p>
-            <a href="manuals/booking_user_manual.pdf" target="_blank" rel="noopener" class="manual-mobile-open-btn">マニュアルを開く</a>
-          </div>
-        `;
-      } else if (!wrap.querySelector('object')) {
-        wrap.innerHTML = manualEmbedOriginalHtml;
-      }
-    }
-    manualDialog.showModal();
-  });
+  /* ---------------- ダイアログ ---------------- */
+  function openTerms() {
+    if (termsDialog && window.UI) UI.openModal(termsDialog, { focus: '#agreeFromDialog' });
+    else window.open('terms.html', '_blank', 'noopener');
+  }
+  document.getElementById('openTermsDialog')?.addEventListener('click', openTerms);
+  document.querySelectorAll('[data-open-terms]').forEach((b) => b.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openTerms();
+  }));
 
   agreeFromDialogBtn?.addEventListener('click', () => {
-    agreeTerms.checked = true;
-    if (typeof termsDialog?.close === 'function') {
-      termsDialog.close();
-    }
+    if (agreeTerms) agreeTerms.checked = true;
+    agreeTerms?.closest('.check-card')?.classList.remove('has-error');
+    if (window.UI && termsDialog) UI.closeModal(termsDialog);
     updateStepProgress();
   });
 
-  // 改善 (A): 入力欄イベントとステップ進捗連動
-  emailInput?.addEventListener('input', updateStepProgress);
-  emailInput?.addEventListener('blur', updateStepProgress);
-  orgInput?.addEventListener('input', updateStepProgress);
-  orgInput?.addEventListener('blur', updateStepProgress);
-  agreeTerms?.addEventListener('change', updateStepProgress);
+  document.getElementById('openManualDialog')?.addEventListener('click', () => {
+    const isMobile = window.matchMedia('(max-width: 640px)').matches;
+    if (isMobile || !manualDialog || !window.UI) {
+      window.open(MANUAL_URL, '_blank', 'noopener');
+      return;
+    }
+    const wrap = manualDialog.querySelector('.manual-embed-wrap');
+    if (wrap && !wrap.querySelector('object')) {
+      wrap.innerHTML = `<object data="${MANUAL_URL}#view=FitH" type="application/pdf" class="bk-manual-frame"><div class="empty"><span>PDF を表示できません。</span><a class="btn" href="${MANUAL_URL}" target="_blank" rel="noopener">${icon('external')}新しいタブで開く</a></div></object>`;
+    }
+    UI.openModal(manualDialog);
+  });
+
+  /* ---------------- 入力イベント ---------------- */
+  [emailInput, orgInput].forEach((input) => {
+    input?.addEventListener('input', () => {
+      if (input.getAttribute('aria-invalid') === 'true') setFieldError(input, '');
+      updateStepProgress();
+    });
+    input?.addEventListener('blur', updateStepProgress);
+  });
+  agreeTerms?.addEventListener('change', () => {
+    agreeTerms.closest('.check-card')?.classList.remove('has-error');
+    updateStepProgress();
+  });
+
+  prevMonthBtn?.addEventListener('click', () => moveMonth(-1));
+  nextMonthBtn?.addEventListener('click', () => moveMonth(1));
+  goAvailableStartBtn?.addEventListener('click', () => {
+    currentMonth = minDate ? new Date(minDate.getFullYear(), minDate.getMonth(), 1) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    loadMonth(currentMonth);
+  });
+
+  /* ---------------- モバイル: 予約内容へのジャンプ ---------------- */
+  const cart = document.getElementById('bkCart');
+  let cartVisible = false;
+  function updateJump() {
+    if (!jump) return;
+    const show = selectedDates.length > 0 && !cartVisible && window.matchMedia('(max-width: 900px)').matches;
+    jump.hidden = !show;
+  }
+  if (cart && 'IntersectionObserver' in window) {
+    new IntersectionObserver((entries) => {
+      cartVisible = entries.some((entry) => entry.isIntersecting);
+      updateJump();
+    }, { threshold: 0.15 }).observe(cart);
+  }
 
   renderCalendarDetail();
   renderDetailCards();

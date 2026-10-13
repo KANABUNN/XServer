@@ -1,5 +1,5 @@
 <?php
-function app_config(string $key = null, $default = null)
+function app_config(?string $key = null, $default = null)
 {
     if ($key === null) {
         return $GLOBALS['config'] ?? [];
@@ -158,31 +158,32 @@ function asset_url(string $path): string
     return $path;
 }
 
-function page_header(string $title, string $bodyClass = ''): void
+/**
+ * forms / lend 共通のページ先頭。FIT-SC UI v7（assets/ui/）とアプリ CSS（assets/css/app.css）を読み込む。
+ *
+ * @param array{app_name?: string, css?: string[]} $opts
+ */
+function page_header(string $title, string $bodyClass = '', array $opts = []): void
 {
+    require_once dirname(__DIR__) . '/ui_kit.php';
     app_security_headers();
-    $csrf = csrf_token();
-    $appName = h(app_config('app_name', '備品貸出システム'));
-    $stylesUrl = h(asset_url('assets/css/styles.css'));
-    $responsiveUrl = h(asset_url('assets/css/responsive.css'));
-    $commonTokensUrl = h(asset_url('assets/common/tokens.css'));
-    $commonSkinUrl = h(asset_url('assets/common/fit-sc-skin.css?v=20260625a'));
-    $contextMenuGuardUrl = h(asset_url('assets/common/context-menu-guard.js'));
+    $csrf = h(csrf_token());
+    $appName = h((string)($opts['app_name'] ?? app_config('app_name', '備品貸出システム')));
+    $titleText = h($title);
+    $head = fitsc_ui_head([
+        'css' => array_merge(['assets/css/app.css'], $opts['css'] ?? []),
+    ]);
+    $bodyClassAttr = h($bodyClass);
     echo <<<HTML
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{$title} | {$appName}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>{$titleText} | {$appName}</title>
     <meta name="csrf-token" content="{$csrf}">
-    <link rel="stylesheet" href="{$commonTokensUrl}">
-    <link rel="stylesheet" href="{$stylesUrl}">
-    <link rel="stylesheet" href="{$commonSkinUrl}">
-    <link rel="stylesheet" href="{$responsiveUrl}">
-    <script src="{$contextMenuGuardUrl}" defer></script>
-</head>
-<body class="{$bodyClass}">
+{$head}</head>
+<body class="{$bodyClassAttr}">
 HTML;
 }
 

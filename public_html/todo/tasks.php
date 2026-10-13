@@ -9,7 +9,11 @@ $assignee = trim($_GET['assignee'] ?? '');
 
 $where = [];
 $params = [];
-if ($status !== '') {
+if ($status === 'open') {
+    $where[] = "t.status IN ('todo','doing','blocked')";
+} elseif ($status === 'overdue') {
+    $where[] = "t.due_date IS NOT NULL AND t.due_date != '' AND t.due_date < date('now', 'localtime') AND t.status != 'completed'";
+} elseif ($status !== '') {
     $where[] = 't.status = ?';
     $params[] = $status;
 }
@@ -24,75 +28,66 @@ if ($assignee !== '') {
 $sqlWhere = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
 $tasks = query_all("SELECT t.*, m.title AS meeting_title, a.title AS agenda_title FROM tasks t LEFT JOIN meetings m ON m.id = t.meeting_id LEFT JOIN agenda_items a ON a.id = t.agenda_item_id $sqlWhere ORDER BY CASE t.status WHEN 'blocked' THEN 0 WHEN 'doing' THEN 1 WHEN 'todo' THEN 2 WHEN 'completed' THEN 3 ELSE 9 END, t.priority DESC, t.due_date ASC, t.id DESC", $params);
+$hasFilter = $status !== '' || $priority !== '' || $assignee !== '';
+$statusOptions = ['' => 'すべての状態', 'open' => '未完了', 'overdue' => '期限切れ', 'todo' => status_label('todo'), 'doing' => status_label('doing'), 'blocked' => status_label('blocked'), 'completed' => status_label('completed')];
+
+$pageTitle = 'タスク';
+$pageSubtitle = 'すべての会議のタスクをまとめて確認';
+$pageActions = '<a class="btn" href="export_csv.php?type=tasks">' . fitsc_icon('download') . '<span class="hide-mobile">CSV出力</span></a>';
 require __DIR__ . '/../../apps/todo_core/header.php';
 ?>
-<section class="page-head">
-    <div>
-        <h1>横断タスク一覧</h1>
-        <p>会議をまたいで、未完了・期限・担当者の状況を確認できます。</p>
+<section class="card">
+    <div class="card__header">
+        <div class="card__title"><?= fitsc_icon('list-checks') ?>タスク <small><?= count($tasks) ?>件</small></div>
+        <form method="get" class="cluster td-filters" role="search">
+            <div class="search-toggle" data-search-toggle data-submit-on-clear<?= $assignee !== '' ? ' data-open' : '' ?>>
+                <button type="button" class="btn btn--ghost btn--icon search-toggle__button" aria-label="担当者で検索" data-tip="担当者で検索" data-tip-pos="bottom"><?= fitsc_icon('search') ?></button>
+                <div class="search-toggle__field">
+                    <?= fitsc_icon('user') ?>
+                    <input type="search" name="assignee" value="<?= e($assignee) ?>" placeholder="担当者" aria-label="担当者で検索">
+                    <button type="button" class="btn btn--ghost btn--icon search-toggle__clear" aria-label="検索を閉じる"><?= fitsc_icon('x') ?></button>
+                </div>
+            </div>
+            <select name="status" data-autosubmit aria-label="状態で絞り込み">
+                <?php foreach ($statusOptions as $value => $label): ?>
+                    <option value="<?= e($value) ?>" <?= $status === $value ? 'selected' : '' ?>><?= e($label) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select name="priority" data-autosubmit aria-label="優先度で絞り込み">
+                <option value="">すべての優先度</option>
+                <?php foreach (['urgent', 'high', 'medium', 'low'] as $value): ?>
+                    <option value="<?= e($value) ?>" <?= $priority === $value ? 'selected' : '' ?>>優先度：<?= e(status_label($value)) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <?php if ($hasFilter): ?><a class="btn btn--ghost btn--sm" href="tasks.php"><?= fitsc_icon('rotate-ccw') ?>解除</a><?php endif; ?>
+            <noscript><button type="submit" class="btn">適用</button></noscript>
+        </form>
     </div>
-</section>
-
-<section class="card">
-    <h2>絞り込み</h2>
-    <form method="get" class="form-grid slim">
-        <label>
-            <span>状態</span>
-            <select name="status">
-                <option value="">すべて</option>
-                <?php foreach (['todo','doing','blocked','completed'] as $value): ?>
-                    <option value="<?= e($value) ?>" <?= $status === $value ? 'selected' : '' ?>><?= e(status_label($value)) ?></option>
+    <?php if (!$tasks): ?>
+        <div class="empty"><span class="empty__icon"><?= fitsc_icon('list-checks') ?></span><span><?= $hasFilter ? '条件に一致するタスクはありません。' : 'タスクはまだありません。' ?></span></div>
+    <?php else: ?>
+        <div class="table-wrap is-stacked">
+            <table class="table">
+                <thead>
+                <tr><th>タスク</th><th>担当</th><th>期限</th><th>進捗</th><th>状態</th><th>優先度</th></tr>
+                </thead>
+                <tbody>
+                <?php foreach ($tasks as $task): $overdue = is_overdue($task['due_date'] ?? null, (string)$task['status']); $progress = max(0, min(100, (int)$task['progress'])); $href = 'meeting.php?id=' . (int)$task['meeting_id'] . '#task-' . (int)$task['id']; ?>
+                    <tr data-href="<?= e($href) ?>" class="td-row-link<?= $task['status'] === 'completed' ? ' is-muted' : '' ?>">
+                        <td>
+                            <a class="cell-main td-task-link" href="<?= e($href) ?>"><?= e($task['title']) ?></a>
+                            <span class="cell-sub"><?= e($task['meeting_title'] ?: '会議なし') ?><?= ($task['agenda_title'] ?? '') !== '' ? ' ・ ' . e($task['agenda_title']) : '' ?></span>
+                        </td>
+                        <td><?= e($task['assignee'] ?: '—') ?></td>
+                        <td class="nowrap<?= $overdue ? ' text-danger fw-bold' : '' ?>"><?= e($task['due_date'] ?: '—') ?><?= $overdue ? '<span class="cell-sub text-danger">期限切れ</span>' : '' ?></td>
+                        <td><span class="td-progress td-progress--cell"><span class="progress<?= $progress >= 100 ? ' progress--success' : '' ?>"><span style="width: <?= $progress ?>%"></span></span><small><?= $progress ?>%</small></span></td>
+                        <td><?= status_badge((string)$task['status']) ?></td>
+                        <td><?= priority_badge((string)$task['priority']) ?></td>
+                    </tr>
                 <?php endforeach; ?>
-            </select>
-        </label>
-        <label>
-            <span>優先度</span>
-            <select name="priority">
-                <option value="">すべて</option>
-                <?php foreach (['low','medium','high','urgent'] as $value): ?>
-                    <option value="<?= e($value) ?>" <?= $priority === $value ? 'selected' : '' ?>><?= e(status_label($value)) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </label>
-        <label>
-            <span>担当者</span>
-            <input type="text" name="assignee" value="<?= e($assignee) ?>" placeholder="部分一致">
-        </label>
-        <div class="form-actions align-end">
-            <button type="submit" class="btn">適用</button>
-            <a href="tasks.php" class="btn btn-ghost">解除</a>
+                </tbody>
+            </table>
         </div>
-    </form>
-</section>
-
-<section class="card">
-    <table class="table">
-        <thead>
-        <tr>
-            <th>タスク</th>
-            <th>会議</th>
-            <th>議題</th>
-            <th>担当</th>
-            <th>期限</th>
-            <th>進捗</th>
-            <th>状態</th>
-            <th>優先度</th>
-        </tr>
-        </thead>
-        <tbody>
-        <?php foreach ($tasks as $task): ?>
-            <tr>
-                <td><a href="meeting.php?id=<?= e((string)$task['meeting_id']) ?>#task-<?= e((string)$task['id']) ?>"><?= e($task['title']) ?></a></td>
-                <td><?= e($task['meeting_title'] ?: '-') ?></td>
-                <td><?= e($task['agenda_title'] ?: '-') ?></td>
-                <td><?= e($task['assignee'] ?: '-') ?></td>
-                <td><?= e($task['due_date'] ?: '-') ?></td>
-                <td><?= e((string)$task['progress']) ?>%</td>
-                <td><span class="<?= e(badge_class($task['status'])) ?>"><?= e(status_label($task['status'])) ?></span></td>
-                <td><span class="<?= e(badge_class($task['priority'])) ?>"><?= e(status_label($task['priority'])) ?></span></td>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
+    <?php endif; ?>
 </section>
 <?php require __DIR__ . '/../../apps/todo_core/footer.php'; ?>

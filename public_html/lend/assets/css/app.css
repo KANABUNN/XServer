@@ -1,0 +1,107 @@
+/* =====================================================================
+   lend（備品貸出）— FIT-SC UI v7 の上に重ねる
+   ===================================================================== */
+
+/* ---- ヘッダーのナビ ---- */
+.ld-nav { display: flex; align-items: center; gap: 4px; margin-left: 12px; }
+.ld-nav__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: var(--r-md);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color var(--dur-1), color var(--dur-1);
+}
+.ld-nav__item:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+.ld-nav__item.is-active { background: var(--accent-soft); color: var(--text-strong); }
+.ld-nav__item.is-active .ico { color: var(--accent); }
+.ld-user { padding: 0 8px 0 4px; gap: 8px; }
+.ld-user .avatar { width: 28px; height: 28px; }
+@media (max-width: 760px) {
+  .ld-header .site-header__inner { flex-wrap: wrap; row-gap: 8px; }
+  .ld-nav { order: 3; width: 100%; margin: 0; overflow-x: auto; }
+  .ld-nav__item { flex: 1 1 0; justify-content: center; }
+}
+
+/* ---- 利用者ダッシュボード ---- */
+.ld-dashboard { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 960px) { .ld-dashboard { grid-template-columns: minmax(0, 1fr); } }
+
+.ld-list { display: flex; flex-direction: column; }
+.ld-item {
+  display: grid;
+  gap: 8px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--divider);
+  transition: opacity var(--dur-2), transform var(--dur-2) var(--ease-out), background-color var(--dur-1);
+}
+.ld-item:last-child { border-bottom: 0; }
+.ld-item:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.ld-item.is-leaving { opacity: 0; transform: translateX(16px); }
+.ld-item--danger { box-shadow: inset 3px 0 0 var(--danger); }
+.ld-item__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ld-item__head strong { font-size: var(--fs-md); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ld-item__meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--fs-xs); color: var(--text-subtle); }
+.ld-item__meta > span { display: inline-flex; align-items: center; gap: 5px; }
+.ld-item__text { font-size: var(--fs-sm); color: var(--text-muted); line-height: 1.7; }
+.ld-item__text--warn { display: flex; gap: 6px; align-items: flex-start; color: var(--warning); }
+.ld-item__text--warn .ico { margin-top: 4px; }
+.ld-item__actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+/* ---- 管理 ---- */
+.ld-admin-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
+@media (max-width: 1200px) { .ld-admin-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 760px) { .ld-admin-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- 無人受付（タッチ操作向けに大きく） ---- */
+.ld-kiosk { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 960px) { .ld-kiosk { grid-template-columns: minmax(0, 1fr); } }
+.kiosk-page { font-size: var(--fs-md); }
+.ld-kiosk__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ld-kiosk__action {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 22px 12px;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--r-xl);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color var(--dur-2), background-color var(--dur-2), color var(--dur-2), transform var(--dur-2) var(--ease-spring), box-shadow var(--dur-2);
+}
+.ld-kiosk__action strong { font-size: var(--fs-2xl); color: inherit; }
+.ld-kiosk__action small { font-size: var(--fs-sm); color: var(--text-subtle); }
+.ld-kiosk__action:active { transform: scale(.97); }
+.ld-kiosk__action-icon { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 20px; background: var(--surface-3); color: var(--text-subtle); transition: inherit; }
+.ld-kiosk__action.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-strong);
+  box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow-md);
+}
+.ld-kiosk__action.is-active .ld-kiosk__action-icon { background: linear-gradient(135deg, var(--accent-fill), var(--accent-fill-2)); color: #fff; box-shadow: 0 10px 24px -8px var(--accent-glow); }
+.ld-kiosk select { min-height: 52px; font-size: var(--fs-md); }
+.ld-kiosk__controls { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+
+.ld-scanner {
+  position: relative;
+  min-height: 300px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-xl);
+  border: 2px dashed var(--border-strong);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.ld-scanner.is-scanning { border-style: solid; border-color: var(--accent); animation: ui-pulse-ring 1.6s var(--ease-out) infinite; }
+.ld-scanner__view { width: 100%; }
+.ld-scanner__view video { border-radius: var(--r-lg); }
+.ld-scanner__placeholder { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 24px; text-align: center; color: var(--text-subtle); font-size: var(--fs-sm); }
+.ld-scanner__placeholder .ico { width: 56px; height: 56px; stroke-width: 1.6; color: var(--accent); }
+.ld-scan-status { font-size: var(--fs-md); padding: 16px 18px; min-height: 64px; align-items: center; }

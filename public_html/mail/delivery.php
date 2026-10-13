@@ -90,150 +90,152 @@ if ($mailPdo instanceof PDO && $dbError === '') {
         }
     }
 }
-
-mail_render_page_header('Google Workspace SMTP送信', $user, 'delivery.php');
+mail_render_page_header('SMTP 直接送信', $user, 'delivery.php', [
+    'subtitle' => '保守用：確認済みバッチを Google Workspace の SMTP で直接送信します',
+    'actions' => '<a class="btn btn--ghost" href="settings.php">' . fitsc_icon('settings') . '<span class="hide-mobile">送信設定</span></a>',
+]);
 ?>
-<header class="page-head">
-  <div>
-    <h1>Google Workspace SMTP送信</h1>
-    <p class="lead">承認済みバッチをGoogle Workspace / Gmail SMTP経由で送信します。bookのメール送信と同様、PHPMailerでSMTP認証を行います。</p>
-  </div>
-  <div class="head-actions"><a class="link-button secondary" href="settings.php">送信設定を確認</a></div>
-</header>
 <?php mail_render_db_error($dbError); ?>
-
 <?php if ($dbError === ''): ?>
-<div class="two-column-grid wide-left">
-  <section class="panel">
-    <div class="panel-head"><h2>SMTP接続状態</h2><span class="muted">Google Workspace</span></div>
-    <div class="settings-grid">
-      <div><span class="muted">送信ドライバ</span><strong><?php echo mail_h(mail_delivery_driver()); ?></strong></div>
-      <div><span class="muted">SMTP有効</span><strong><?php echo !empty($smtp['enabled']) ? '有効' : '無効'; ?></strong></div>
-      <div><span class="muted">設定状態</span><strong><?php echo $smtpReady ? '利用可能' : '不足あり'; ?></strong></div>
-      <div><span class="muted">ホスト</span><code><?php echo mail_h((string)($smtp['host'] ?? '')); ?>:<?php echo (int)($smtp['port'] ?? 0); ?></code></div>
-      <div><span class="muted">暗号化</span><code><?php echo mail_h((string)($smtp['secure'] ?? 'tls')); ?></code></div>
-      <div><span class="muted">SMTP認証</span><strong><?php echo array_key_exists('smtp_auth', $smtp) && !$smtp['smtp_auth'] ? '無効' : '有効'; ?></strong></div>
-      <div><span class="muted">ユーザー名</span><code><?php echo mail_h((string)($smtp['username'] ?? '')); ?></code></div>
-      <div><span class="muted">送信元</span><code><?php echo mail_h((string)($smtp['from_address'] ?? '')); ?></code></div>
+
+<div class="alert alert--warning">
+  <?php echo fitsc_icon('alert-triangle'); ?>
+  <div class="alert__body">この画面はメールを<strong>実際に送信</strong>します。通常の運用では「Gmail下書き」を使用してください。</div>
+</div>
+
+<div class="split">
+  <section class="card">
+    <div class="card__header">
+      <div class="card__title"><?php echo fitsc_icon('server'); ?>SMTP 接続</div>
+      <?php echo $smtpReady ? '<span class="badge badge--success badge--dot">利用可能</span>' : '<span class="badge badge--warning badge--dot">不足あり</span>'; ?>
     </div>
-    <?php if (!$smtpReady): ?>
-      <div class="alert alert-warn mt-14">不足している設定: <code><?php echo mail_h(implode(', ', $smtpMissing)); ?></code></div>
-    <?php endif; ?>
-    <form method="post" class="mt-14">
-      <?php echo mail_auth_csrf_field(); ?>
-      <input type="hidden" name="action" value="smtp_test">
-      <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatchId; ?>">
-      <button type="submit" class="secondary"<?php echo $smtpReady && mail_auth_has_permission($user, 'settings.manage') ? '' : ' disabled'; ?>>SMTP接続テスト</button>
-    </form>
+    <div class="card__body stack">
+      <dl class="dl">
+        <div><dt>送信ドライバ</dt><dd><code><?php echo mail_h(mail_delivery_driver()); ?></code></dd></div>
+        <div><dt>SMTP</dt><dd><?php echo !empty($smtp['enabled']) ? '有効' : '無効'; ?></dd></div>
+        <div><dt>ホスト</dt><dd><code><?php echo mail_h((string)($smtp['host'] ?? '')); ?>:<?php echo (int)($smtp['port'] ?? 0); ?></code></dd></div>
+        <div><dt>暗号化</dt><dd><code><?php echo mail_h((string)($smtp['secure'] ?? 'tls')); ?></code></dd></div>
+        <div><dt>SMTP 認証</dt><dd><?php echo array_key_exists('smtp_auth', $smtp) && !$smtp['smtp_auth'] ? '無効' : '有効'; ?></dd></div>
+        <div><dt>ユーザー名</dt><dd><code><?php echo mail_h((string)($smtp['username'] ?? '')); ?></code></dd></div>
+        <div><dt>送信元</dt><dd><code><?php echo mail_h((string)($smtp['from_address'] ?? '')); ?></code></dd></div>
+      </dl>
+      <?php if (!$smtpReady): ?>
+        <div class="alert alert--warning"><?php echo fitsc_icon('alert-triangle'); ?><div class="alert__body">不足している設定：<code><?php echo mail_h(implode(', ', $smtpMissing)); ?></code></div></div>
+      <?php endif; ?>
+      <form method="post" data-busy>
+        <?php echo mail_auth_csrf_field(); ?>
+        <input type="hidden" name="action" value="smtp_test">
+        <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatchId; ?>">
+        <button type="submit" class="btn"<?php echo $smtpReady && mail_auth_has_permission($user, 'settings.manage') ? '' : ' disabled'; ?>><?php echo fitsc_icon('zap'); ?>接続テスト</button>
+      </form>
+    </div>
   </section>
 
-  <section class="panel">
-    <div class="panel-head"><h2>対象バッチ</h2><span class="muted">承認済みから送信</span></div>
-    <form method="get" class="stack-form">
-      <label><span>送信バッチ</span>
-        <select name="batch_id" onchange="this.form.submit()">
-          <?php foreach ($batches as $batch): ?>
-            <option value="<?php echo (int)$batch['id']; ?>"<?php echo mail_selected($selectedBatchId, (int)$batch['id']); ?>>#<?php echo (int)$batch['id']; ?> <?php echo mail_h((string)$batch['title']); ?>（<?php echo mail_h(mail_status_label((string)$batch['status'])); ?>）</option>
-          <?php endforeach; ?>
-        </select>
-      </label>
-      <noscript><button type="submit" class="secondary">表示</button></noscript>
-    </form>
-    <?php if ($selectedBatch): ?>
-      <dl class="detail-list mt-14">
-        <div><dt>バッチ名</dt><dd><?php echo mail_h((string)$selectedBatch['title']); ?></dd></div>
-        <div><dt>状態</dt><dd><span class="badge"><?php echo mail_h(mail_status_label((string)$selectedBatch['status'])); ?></span></dd></div>
-        <div><dt>対象件数</dt><dd><?php echo (int)$selectedBatch['target_count']; ?>件</dd></div>
-      </dl>
-    <?php else: ?>
-      <p class="empty">送信バッチがありません。</p>
-    <?php endif; ?>
+  <section class="card">
+    <div class="card__header"><div class="card__title"><?php echo fitsc_icon('layers'); ?>対象のバッチ</div></div>
+    <div class="card__body stack">
+      <form method="get">
+        <label class="field"><span>送信バッチ</span>
+          <select name="batch_id" data-autosubmit>
+            <?php foreach ($batches as $batch): ?>
+              <option value="<?php echo (int)$batch['id']; ?>"<?php echo mail_selected($selectedBatchId, (int)$batch['id']); ?>>#<?php echo (int)$batch['id']; ?> <?php echo mail_h((string)$batch['title']); ?>（<?php echo mail_h(mail_status_label((string)$batch['status'])); ?>）</option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <noscript><button type="submit" class="btn">表示</button></noscript>
+      </form>
+      <?php if ($selectedBatch): ?>
+        <div class="cluster">
+          <?php echo mail_status_badge((string)$selectedBatch['status']); ?>
+          <span class="chip"><?php echo fitsc_icon('users'); ?><?php echo (int)$selectedBatch['target_count']; ?>件</span>
+        </div>
+      <?php else: ?>
+        <p class="small-note">送信バッチがありません。</p>
+      <?php endif; ?>
+    </div>
   </section>
 </div>
 
 <?php if ($selectedBatch): ?>
-<section class="panel mt-18">
-  <div class="panel-head"><h2>SMTP送信実行</h2><span class="muted">直接送信</span></div>
-  <div class="summary-grid small two">
-    <article><span>送信可能</span><strong><?php echo $sendableCount; ?></strong></article>
-    <article><span>送信済み</span><strong><?php echo $sentCount; ?></strong></article>
-    <article><span>要確認添付</span><strong><?php echo $pendingAttachmentCount; ?></strong></article>
-    <article><span>添付総数</span><strong><?php echo count($attachments); ?></strong></article>
+  <div class="stat-grid">
+    <div class="stat stat--info"><span class="stat__label">送信可能</span><span class="stat__value"><?php echo $sendableCount; ?></span></div>
+    <div class="stat stat--success"><span class="stat__label">送信済み</span><span class="stat__value"><?php echo $sentCount; ?></span></div>
+    <div class="stat stat--warning"><span class="stat__label">要確認の添付</span><span class="stat__value"><?php echo $pendingAttachmentCount; ?></span></div>
+    <div class="stat"><span class="stat__label">添付総数</span><span class="stat__value"><?php echo count($attachments); ?></span></div>
   </div>
-
-  <?php if (!in_array((string)$selectedBatch['status'], ['approved','draft_created'], true) && $sendableCount > 0): ?>
-    <div class="alert alert-warn">SMTP送信には、バッチ状態を「確認済み」にする必要があります。送信前レビューを完了してから実行してください。</div>
+  <?php if (!in_array((string)$selectedBatch['status'], ['approved', 'draft_created'], true) && $sendableCount > 0): ?>
+    <div class="alert alert--warning"><?php echo fitsc_icon('alert-triangle'); ?><div class="alert__body">送信するには、バッチの状態を「確認済み」にしてください。</div></div>
   <?php elseif ($pendingAttachmentCount > 0): ?>
-    <div class="alert alert-warn">要確認・未対応の添付が残っています。<a class="text-link" href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付ファイル画面</a>で確定してください。</div>
+    <div class="alert alert--warning"><?php echo fitsc_icon('paperclip'); ?><div class="alert__body">要確認の添付があります。<a href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付ファイル画面</a>で確定してください。</div></div>
   <?php endif; ?>
 
-  <form method="post" class="panel-subform mt-14">
-    <?php echo mail_auth_csrf_field(); ?>
-    <input type="hidden" name="action" value="send_test">
-    <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
-    <h3>テスト送信（自分宛で体裁確認）</h3>
-    <p class="muted">選択した宛先の差し込み結果と、その団体の<strong>承認済み</strong>添付を、入力したアドレスへ1通だけ送ります。件名に [テスト送信] が付き、対象メール・バッチの状態は変化しません。承認前でも実行できます。</p>
-    <label><span class="muted">差し込みに使う宛先</span>
-      <select name="target_id" required>
-        <option value="">宛先を選択…</option>
-        <?php foreach ($targets as $target): ?>
-          <option value="<?php echo (int)$target['id']; ?>">#<?php echo (int)$target['id']; ?> <?php echo mail_h((string)$target['identifier'] . ' ' . (string)$target['organization_name']); ?>（<?php echo mail_h((string)$target['to_email']); ?>）</option>
-        <?php endforeach; ?>
-      </select>
-    </label>
-    <label><span class="muted">テスト送信先メールアドレス</span><input type="email" name="test_email" placeholder="自分のアドレス" required></label>
-    <button type="submit" class="secondary"<?php echo ($smtpReady && mail_auth_has_permission($user, 'send.execute') && $targets !== []) ? '' : ' disabled'; ?>>テスト送信</button>
-  </form>
+  <div class="split">
+    <section class="card">
+      <div class="card__header"><div class="card__title"><?php echo fitsc_icon('eye'); ?>テスト送信（自分宛て）</div></div>
+      <form method="post" class="card__body stack" data-busy>
+        <?php echo mail_auth_csrf_field(); ?>
+        <input type="hidden" name="action" value="send_test">
+        <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
+        <p class="small-note">選んだ宛先の差し込み結果と確認済み添付を、指定アドレスへ 1 通だけ送ります。件名に [テスト送信] が付き、バッチの状態は変わりません。</p>
+        <label class="field"><span>差し込みに使う宛先</span>
+          <select name="target_id" required>
+            <option value="">宛先を選択…</option>
+            <?php foreach ($targets as $target): ?>
+              <option value="<?php echo (int)$target['id']; ?>">#<?php echo (int)$target['id']; ?> <?php echo mail_h((string)$target['identifier'] . ' ' . (string)$target['organization_name']); ?>（<?php echo mail_h((string)$target['to_email']); ?>）</option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <label class="field"><span>テスト送信先</span><input type="email" name="test_email" placeholder="自分のメールアドレス" required></label>
+        <div><button type="submit" class="btn"<?php echo ($smtpReady && mail_auth_has_permission($user, 'send.execute') && $targets !== []) ? '' : ' disabled'; ?>><?php echo fitsc_icon('send'); ?>テスト送信</button></div>
+      </form>
+    </section>
 
-  <form method="post" class="panel-subform danger-zone mt-14">
-    <?php echo mail_auth_csrf_field(); ?>
-    <input type="hidden" name="action" value="send_batch_smtp">
-    <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
-    <h3>一括SMTP送信</h3>
-    <p class="muted">Google Workspaceの送信用アカウントから直接送信します。Gmail下書きは作成されません。実行前に対象・本文・添付を必ず確認してください。</p>
-    <label><span class="muted">1回の最大送信件数</span><input type="text" name="limit" value="<?php echo (int)$maxSendsPerRun; ?>" inputmode="numeric" style="max-width:120px"></label>
-    <label><span class="muted">確認入力</span><input type="text" name="confirm_text" placeholder="送信"></label>
-    <button type="submit" class="danger"<?php echo ($smtpReady && mail_auth_has_permission($user, 'send.execute') && in_array((string)$selectedBatch['status'], ['approved','draft_created'], true) && $pendingAttachmentCount === 0 && $sendableCount > 0) ? '' : ' disabled'; ?>>SMTPで一括送信</button>
-  </form>
-</section>
-
-<section class="panel mt-18">
-  <div class="panel-head"><h2>対象メール一覧</h2><span class="muted">個別送信も可能</span></div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>ID</th><th>識別番号</th><th>団体</th><th>宛先</th><th>状態</th><th>操作</th></tr></thead>
-      <tbody>
-        <?php if ($targets === []): ?><tr><td colspan="6" class="empty">対象メールはありません。</td></tr><?php endif; ?>
-        <?php foreach ($targets as $target): ?>
-          <?php $canSend = $smtpReady && mail_auth_has_permission($user, 'send.execute') && in_array((string)$selectedBatch['status'], ['approved','draft_created'], true) && $pendingAttachmentCount === 0 && in_array((string)$target['status'], ['ready','failed'], true); ?>
-          <tr>
-            <td><?php echo (int)$target['id']; ?></td>
-            <td><code><?php echo mail_h((string)$target['identifier']); ?></code></td>
-            <td><?php echo mail_h((string)$target['organization_name']); ?></td>
-            <td><?php echo mail_h((string)$target['to_email']); ?></td>
-            <td><span class="badge"><?php echo mail_h(mail_status_label((string)$target['status'])); ?></span><?php if (!empty($target['error_message'])): ?><br><span class="danger-text"><?php echo mail_h((string)$target['error_message']); ?></span><?php endif; ?></td>
-            <td class="action-cell">
-              <form method="post" class="inline-form">
-                <?php echo mail_auth_csrf_field(); ?>
-                <input type="hidden" name="action" value="send_target_smtp">
-                <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
-                <input type="hidden" name="target_id" value="<?php echo (int)$target['id']; ?>">
-                <input type="hidden" name="confirm_text" value="送信">
-                <button type="submit" class="danger"<?php echo $canSend ? '' : ' disabled'; ?>>SMTP送信</button>
-              </form>
-            </td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
+    <section class="card card--danger">
+      <div class="card__header"><div class="card__title"><?php echo fitsc_icon('send'); ?>一括送信</div></div>
+      <form method="post" class="card__body stack" data-busy data-confirm="バッチ #<?php echo (int)$selectedBatch['id']; ?> のメールを SMTP で送信します。取り消すことはできません。" data-confirm-title="メールを送信しますか？" data-confirm-ok="送信する">
+        <?php echo mail_auth_csrf_field(); ?>
+        <input type="hidden" name="action" value="send_batch_smtp">
+        <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
+        <p class="small-note">送信用アカウントから直接送信します（Gmail 下書きは作成されません）。宛先・本文・添付を必ず確認してから実行してください。</p>
+        <div class="form-grid">
+          <label class="field"><span>1回の最大送信件数</span><input type="text" name="limit" value="<?php echo (int)$maxSendsPerRun; ?>" inputmode="numeric"></label>
+          <label class="field"><span>確認のため「送信」と入力</span><input type="text" name="confirm_text" placeholder="送信" autocomplete="off"></label>
+        </div>
+        <div><button type="submit" class="btn btn--danger"<?php echo ($smtpReady && mail_auth_has_permission($user, 'send.execute') && in_array((string)$selectedBatch['status'], ['approved', 'draft_created'], true) && $pendingAttachmentCount === 0 && $sendableCount > 0) ? '' : ' disabled'; ?>><?php echo fitsc_icon('send'); ?>一括送信</button></div>
+      </form>
+    </section>
   </div>
-</section>
-<?php endif; ?>
 
-<section class="panel mt-18 feature-panel">
-  <h2>この画面の位置づけ</h2>
-  <p>Google Workspace SMTP Relay経由で送信を完了します。当面の本番送信はこの画面から行う想定です。</p>
-</section>
+  <section class="card">
+    <div class="card__header"><div class="card__title"><?php echo fitsc_icon('mail'); ?>対象メール <small><?php echo count($targets); ?>件</small></div></div>
+    <div class="table-wrap is-stacked">
+      <table class="table">
+        <thead><tr><th>団体</th><th>宛先</th><th>状態</th><th class="col-actions"></th></tr></thead>
+        <tbody>
+          <?php if ($targets === []): ?><tr><td colspan="4" class="empty">対象メールはありません。</td></tr><?php endif; ?>
+          <?php foreach ($targets as $target): ?>
+            <?php $canSend = $smtpReady && mail_auth_has_permission($user, 'send.execute') && in_array((string)$selectedBatch['status'], ['approved', 'draft_created'], true) && $pendingAttachmentCount === 0 && in_array((string)$target['status'], ['ready', 'failed'], true); ?>
+            <tr<?php echo !empty($target['error_message']) ? ' class="is-error"' : ''; ?>>
+              <td><span class="cell-main"><?php echo mail_h((string)$target['organization_name']); ?></span><span class="cell-sub"><code><?php echo mail_h((string)$target['identifier']); ?></code> ・ #<?php echo (int)$target['id']; ?></span></td>
+              <td class="allow-select"><?php echo mail_h((string)$target['to_email']); ?></td>
+              <td><?php echo mail_status_badge((string)$target['status']); ?><?php if (!empty($target['error_message'])): ?><span class="cell-sub text-danger"><?php echo mail_h((string)$target['error_message']); ?></span><?php endif; ?></td>
+              <td class="col-actions">
+                <form method="post" data-busy data-confirm="<?php echo mail_h((string)$target['organization_name']); ?>（<?php echo mail_h((string)$target['to_email']); ?>）へ送信します。" data-confirm-title="このメールを送信しますか？" data-confirm-ok="送信する">
+                  <?php echo mail_auth_csrf_field(); ?>
+                  <input type="hidden" name="action" value="send_target_smtp">
+                  <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
+                  <input type="hidden" name="target_id" value="<?php echo (int)$target['id']; ?>">
+                  <input type="hidden" name="confirm_text" value="送信">
+                  <button type="submit" class="btn btn--danger-ghost btn--sm"<?php echo $canSend ? '' : ' disabled'; ?>><?php echo fitsc_icon('send'); ?>送信</button>
+                </form>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  </section>
+<?php endif; ?>
 <?php endif; ?>
 <?php
 mail_render_page_footer();
