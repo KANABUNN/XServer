@@ -1,5 +1,6 @@
-    </main>
+        </main>
+    </div>
 </div>
-<script src="assets/app.js"></script>
+<script src="<?= e(fitsc_ui_versioned('assets/app.js')) ?>"></script>
 </body>
 </html>

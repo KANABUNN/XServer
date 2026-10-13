@@ -17,22 +17,19 @@ if (($_GET['type'] ?? '') === 'tasks') {
     exit;
 }
 
+$pageTitle = 'CSV出力';
+$pageBack = 'tasks.php';
 require __DIR__ . '/../../apps/todo_core/header.php';
 ?>
-<section class="page-head">
-    <div>
-        <h1>CSV出力</h1>
-        <p>会議台帳や引継ぎ資料用に、横断タスク一覧をCSVで出力できます。</p>
-    </div>
-</section>
 <section class="card">
-    <div class="stack-list">
+    <div class="list">
         <a class="list-item" href="export_csv.php?type=tasks">
-            <div>
-                <div class="list-title">タスク一覧をCSV出力</div>
-                <div class="list-meta">会議名・議題・担当者・期限・進捗を含みます。</div>
-            </div>
-            <span class="btn btn-small">出力</span>
+            <span class="list-item__icon"><?= fitsc_icon('file-text') ?></span>
+            <span class="list-item__main">
+                <span class="list-item__title">タスク一覧（CSV）</span>
+                <span class="list-item__meta">会議・議題・担当者・状態・期限・進捗を含みます</span>
+            </span>
+            <span class="list-item__side"><span class="btn btn--sm"><?= fitsc_icon('download') ?>ダウンロード</span></span>
         </a>
     </div>
 </section>

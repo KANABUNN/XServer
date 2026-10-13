@@ -52,23 +52,41 @@ function consume_flash(): array
 function badge_class(string $value): string
 {
     $map = [
-        'scheduled' => 'badge blue',
-        'done' => 'badge green',
-        'in_progress' => 'badge orange',
-        'closed' => 'badge gray',
-        'pending' => 'badge gray',
-        'resolved' => 'badge green',
-        'carried_over' => 'badge orange',
-        'todo' => 'badge gray',
-        'doing' => 'badge orange',
-        'blocked' => 'badge red',
-        'completed' => 'badge green',
-        'low' => 'badge gray',
-        'medium' => 'badge blue',
-        'high' => 'badge orange',
-        'urgent' => 'badge red',
+        'scheduled' => 'badge badge--info',
+        'in_progress' => 'badge badge--warning',
+        'done' => 'badge badge--success',
+        'closed' => 'badge',
+        'pending' => 'badge',
+        'carried_over' => 'badge badge--orange',
+        'resolved' => 'badge badge--success',
+        'todo' => 'badge',
+        'doing' => 'badge badge--info',
+        'blocked' => 'badge badge--danger',
+        'completed' => 'badge badge--success',
+        'low' => 'badge',
+        'medium' => 'badge badge--teal',
+        'high' => 'badge badge--orange',
+        'urgent' => 'badge badge--danger',
     ];
-    return $map[$value] ?? 'badge gray';
+    return $map[$value] ?? 'badge';
+}
+
+/** 状態バッジ（ドット付き） */
+function status_badge(string $value): string
+{
+    return '<span class="' . e(badge_class($value)) . ' badge--dot">' . e(status_label($value)) . '</span>';
+}
+
+/** 優先度バッジ（低は表示を控えめに） */
+function priority_badge(string $value): string
+{
+    return '<span class="' . e(badge_class($value)) . ' td-prio td-prio--' . e($value) . '" title="優先度">' . e(status_label($value)) . '</span>';
+}
+
+/** 期限切れ（未完了かつ今日より前）か */
+function is_overdue(?string $dueDate, string $status): bool
+{
+    return $dueDate !== null && $dueDate !== '' && $status !== 'completed' && $dueDate < date('Y-m-d');
 }
 
 function status_label(string $value): string
