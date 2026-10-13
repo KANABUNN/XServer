@@ -1,57 +1,70 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0d13">
+  <meta name="robots" content="noindex,nofollow">
   <title>送信エラー - 貸し部屋予約 - 福岡工業大学</title>
   <link rel="icon" href="icon.png">
-  <link rel="stylesheet" href="css/style.css?v=20260715a">
-  <link rel="stylesheet" href="css/style_improvements.css?v=20260715a">
-  <link rel="stylesheet" href="css/style_responsive.css?v=20260713">
-    <script src="assets/common/context-menu-guard.js?v=20260713" defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&amp;family=JetBrains+Mono:wght@500;700&amp;family=Zen+Kaku+Gothic+New:wght@400;500;700&amp;display=swap">
+  <link rel="stylesheet" href="assets/ui/ui.css?v=20261013">
+  <link rel="stylesheet" href="css/app.css?v=20261013">
+  <script src="assets/ui/ui.js?v=20261013"></script>
+  <script src="assets/common/context-menu-guard.js?v=20260713" defer></script>
 </head>
-<body>
-  <div class="container">
-    <div class="hero">
-      <h1>予約を処理できませんでした</h1>
-      <p class="subtitle">入力内容を確認のうえ、もう一度お試しください。問題が続く場合は総合管理事務局へご連絡ください。</p>
-    </div>
+<body class="bk">
+  <div class="site">
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a class="site-brand" href="./">
+          <span class="brand-mark"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-door"></use></svg></span>
+          <span class="site-brand__text"><strong>貸し部屋予約</strong><span>総合管理事務局</span></span>
+        </a>
+        <div class="site-header__actions">
+          <button type="button" class="btn btn--ghost btn--icon theme-toggle" data-theme-toggle aria-label="テーマを切り替え"><svg class="ico ico--sun" aria-hidden="true"><use href="assets/ui/icons.svg#i-sun"></use></svg><svg class="ico ico--moon" aria-hidden="true"><use href="assets/ui/icons.svg#i-moon"></use></svg></button>
+        </div>
+      </div>
+    </header>
 
-    <div class="mistake-error-id" id="mistakeErrorId" hidden>
-      <strong>エラーID</strong>
-      <code id="mistakeErrorIdValue"></code>
-      <p>お問い合わせの際に、上のエラーIDを担当者へお伝えいただくと原因の特定が早くなります。</p>
-    </div>
+    <main class="site-main bk-result">
+      <section class="card bk-result__card">
+        <div class="bk-result__hero">
+          <span class="bk-result__icon bk-result__icon--danger"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-alert-triangle"></use></svg></span>
+          <h1>予約を処理できませんでした</h1>
+          <p>お手数ですが、入力内容を確認してもう一度お試しください。</p>
+        </div>
 
-    <div class="mistake-contact">
-      <p><strong>お問い合わせ先</strong></p>
-      <p>総合管理事務局</p>
-      <p>連絡先は学内案内に記載されている連絡方法をご利用ください。</p>
-    </div>
+        <div class="bk-result__section" id="mistakeErrorId" hidden>
+          <h2 class="section-title">エラーID</h2>
+          <code class="bk-pass__code allow-select" id="mistakeErrorIdValue"></code>
+          <p class="small-note">お問い合わせの際にこのIDをお伝えいただくと、原因の確認がスムーズです。</p>
+        </div>
 
-    <div class="result-actions">
-      <a href="./" class="result-back-btn">入力画面へ戻る</a>
-    </div>
+        <div class="bk-result__section">
+          <h2 class="section-title">問題が続く場合</h2>
+          <p class="text-muted">総合管理事務局へご連絡ください。<br><a href="mailto:sogokanri@bene.fit.ac.jp">sogokanri@bene.fit.ac.jp</a></p>
+        </div>
+
+        <div class="bk-result__actions">
+          <a href="./" class="btn btn--primary btn--lg"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-arrow-left"></use></svg>予約画面へ戻る</a>
+        </div>
+      </section>
+    </main>
   </div>
 
   <script>
-    // URL 末尾の ?eid=... があればエラーIDブロックを表示する。
-    // submit.php 側の catch 節で生成した bin2hex(random_bytes(6)) = 12桁の hex を想定。
+    // submit.php が付与する ?eid=（12桁の16進）を表示する
     (function () {
       try {
-        var params = new URLSearchParams(window.location.search);
-        var eid = (params.get('eid') || '').trim();
+        var eid = (new URLSearchParams(window.location.search).get('eid') || '').trim();
         if (eid && /^[a-f0-9]{4,32}$/i.test(eid)) {
-          var wrap = document.getElementById('mistakeErrorId');
-          var val = document.getElementById('mistakeErrorIdValue');
-          if (wrap && val) {
-            val.textContent = eid;
-            wrap.hidden = false;
-          }
+          document.getElementById('mistakeErrorIdValue').textContent = eid;
+          document.getElementById('mistakeErrorId').hidden = false;
         }
-      } catch (e) {
-        // URLSearchParams 非対応など何かあっても致命傷ではない
-      }
+      } catch (e) { /* noop */ }
     })();
   </script>
 </body>

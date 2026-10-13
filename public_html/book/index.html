@@ -1,196 +1,163 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0d13">
   <title>貸し部屋予約 - 福岡工業大学</title>
   <link rel="icon" href="icon.png">
-  <link rel="stylesheet" href="css/style.css?v=20260715a">
-  <link rel="stylesheet" href="css/style_improvements.css?v=20260715a">
-  <link rel="stylesheet" href="css/style_responsive.css?v=20260713">
-    <script src="assets/common/context-menu-guard.js?v=20260713" defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&amp;family=JetBrains+Mono:wght@500;700&amp;family=Zen+Kaku+Gothic+New:wght@400;500;700&amp;display=swap">
+  <link rel="stylesheet" href="assets/ui/ui.css?v=20261013">
+  <link rel="stylesheet" href="css/app.css?v=20261013">
+  <script src="assets/ui/ui.js?v=20261013"></script>
+  <script src="assets/common/context-menu-guard.js?v=20260713" defer></script>
 </head>
-<body>
-  <div class="container">
-    <header class="hero">
-      <h1>貸し部屋予約</h1>
-      <p class="subtitle">カレンダーで利用日を選んだあと、各日付ごとに部屋と利用時間を設定して予約できます。利用時間は 9:00〜20:00 の範囲です。</p>
-      <div class="hero-actions">
-        <button type="button" class="terms-link-btn hero-action-btn" id="openManualDialog">利用マニュアルを見る</button>
+<body class="bk">
+  <div class="site">
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a class="site-brand" href="./">
+          <span class="brand-mark"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-door"></use></svg></span>
+          <span class="site-brand__text"><strong>貸し部屋予約</strong><span>総合管理事務局</span></span>
+        </a>
+        <div class="site-header__actions">
+          <button type="button" class="btn btn--ghost" id="openManualDialog"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-book"></use></svg><span class="hide-mobile">使い方</span></button>
+          <button type="button" class="btn btn--ghost" id="openTermsDialog"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-file-text"></use></svg><span class="hide-mobile">利用規約</span></button>
+          <button type="button" class="btn btn--ghost btn--icon theme-toggle" data-theme-toggle aria-label="テーマを切り替え"><svg class="ico ico--sun" aria-hidden="true"><use href="assets/ui/icons.svg#i-sun"></use></svg><svg class="ico ico--moon" aria-hidden="true"><use href="assets/ui/icons.svg#i-moon"></use></svg></button>
+        </div>
       </div>
     </header>
 
-    <nav class="step-progress" aria-label="入力ステップ">
-      <ol class="step-list">
-        <li class="step is-active" data-step="1"><span class="step-num">1</span><span class="step-label">利用者情報</span></li>
-        <li class="step" data-step="2"><span class="step-num">2</span><span class="step-label">日付選択</span></li>
-        <li class="step" data-step="3"><span class="step-num">3</span><span class="step-label">時刻・部屋</span></li>
-        <li class="step" data-step="4"><span class="step-num">4</span><span class="step-label">規約同意</span></li>
-      </ol>
-    </nav>
-
-    <form action="submit.php" method="post" class="form" id="reservationForm">
-      <section class="panel">
-        <div class="panel-head">
-          <h2>1. 利用者情報</h2>
-          <p>メールアドレス・団体名を入力してください。</p>
-        </div>
-
-        <div class="form-grid user-grid">
-          <div class="form-group">
-            <label for="email">メールアドレス<span class="required-badge" aria-hidden="true">必須</span></label>
-            <input
-              type="email"
-              name="email"
-              id="email"
-              placeholder="s(学籍番号)@bene.fit.ac.jp または (ユーザー名)@fit.ac.jp"
-              pattern="^[^@]+@(bene\.fit\.ac\.jp|fit\.ac\.jp)$"
-              title="@bene.fit.ac.jp または @fit.ac.jp のメールアドレスのみ使用できます"
-              required
-            >
-            <p class="field-error" data-field-error="email" hidden></p>
+    <main class="site-main">
+      <form action="submit.php" method="post" id="reservationForm" class="bk-layout" novalidate>
+        <!-- 利用者情報 -->
+        <section class="card bk-user" aria-labelledby="bkUserTitle">
+          <div class="card__header card__header--plain">
+            <div class="card__title" id="bkUserTitle"><span class="bk-num">1</span>利用者情報</div>
           </div>
-
-          <div class="form-group">
-            <label for="organization_name">団体名<span class="required-badge" aria-hidden="true">必須</span></label>
-            <input
-              type="text"
-              name="organization_name"
-              id="organization_name"
-              maxlength="150"
-              placeholder="例:総合管理事務局"
-              required
-            >
-            <p class="field-error" data-field-error="organization_name" hidden></p>
+          <div class="card__body bk-user__body">
+            <div class="field">
+              <label class="field__label" for="email">メールアドレス <span class="req">必須</span></label>
+              <input type="email" name="email" id="email" autocomplete="email" inputmode="email"
+                placeholder="s(学籍番号)@bene.fit.ac.jp"
+                pattern="^[^@]+@(bene\.fit\.ac\.jp|fit\.ac\.jp)$"
+                title="@bene.fit.ac.jp または @fit.ac.jp のメールアドレスのみ使用できます" required>
+              <span class="field__hint">@bene.fit.ac.jp / @fit.ac.jp のみ</span>
+              <p class="field__error" data-field-error="email" hidden></p>
+            </div>
+            <div class="field">
+              <label class="field__label" for="organization_name">団体名 <span class="req">必須</span></label>
+              <input type="text" name="organization_name" id="organization_name" maxlength="150" autocomplete="organization" placeholder="例：総合管理事務局" required>
+              <p class="field__error" data-field-error="organization_name" hidden></p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section class="panel calendar-panel" aria-labelledby="calendarHeading">
-        <div class="panel-head calendar-header">
-          <div>
-            <h2 id="calendarHeading">2. 利用日の選択</h2>
-            <p class="calendar-caption">予約可能期間は本日から2日後〜2か月先までです。複数日を選択できます。</p>
+        <!-- カレンダー -->
+        <section class="card bk-cal" aria-labelledby="calendarHeading">
+          <div class="card__header">
+            <div>
+              <div class="card__title" id="calendarHeading"><span class="bk-num">2</span>利用日を選ぶ</div>
+              <p class="card__subtitle" id="calendarStatusText">予約状況を取得しています…</p>
+            </div>
+            <div class="bk-monthnav">
+              <button type="button" class="btn btn--ghost btn--icon" id="prevMonth" aria-label="前の月"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-chevron-left"></use></svg></button>
+              <strong class="bk-month" id="calendarTitle" aria-live="polite">読み込み中</strong>
+              <button type="button" class="btn btn--ghost btn--icon" id="nextMonth" aria-label="次の月"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-chevron-right"></use></svg></button>
+              <button type="button" class="btn btn--sm" id="goAvailableStart" title="予約できる最初の月へ">最初へ</button>
+            </div>
           </div>
-          <div class="calendar-nav">
-            <button type="button" id="prevMonth" class="calendar-nav-btn">‹ 前月</button>
-            <button type="button" id="goAvailableStart" class="calendar-nav-btn">予約開始月へ</button>
-            <button type="button" id="nextMonth" class="calendar-nav-btn">翌月 ›</button>
+          <div class="card__body">
+            <div class="bk-legend" aria-label="凡例">
+              <span><i class="bk-room-dot bk-room-dot--tamoku"></i>多目的室</span>
+              <span><i class="bk-room-dot bk-room-dot--orange"></i>オレンジの部屋</span>
+              <span><i class="bk-room-dot bk-room-dot--taken"></i>予約あり</span>
+              <span><i class="bk-sel"></i>選択中</span>
+            </div>
+            <div class="bk-grid" id="calendarGrid" aria-label="利用日カレンダー"></div>
+            <p class="bk-cal__hint">空きのある日をクリックして選択します（複数日まとめて申請できます）。</p>
           </div>
-        </div>
+        </section>
 
-        <div class="calendar-status-row">
-          <strong id="calendarTitle">読み込み中...</strong>
-          <span id="calendarStatusText">予約状況を取得しています。</span>
-        </div>
+        <!-- 予約内容 -->
+        <section class="card bk-cart" id="bkCart" aria-labelledby="bkCartTitle">
+          <div class="card__header card__header--plain">
+            <div class="card__title" id="bkCartTitle"><span class="bk-num">3</span>部屋と時間 <span class="badge badge--accent" id="selectedCount">0日</span></div>
+          </div>
+          <div class="card__body stack">
+            <div class="steps" aria-label="入力の進み具合">
+              <div class="step is-active" data-step="1"><span class="step__label">利用者</span></div>
+              <div class="step" data-step="2"><span class="step__label">日付</span></div>
+              <div class="step" data-step="3"><span class="step__label">部屋・時間</span></div>
+              <div class="step" data-step="4"><span class="step__label">規約</span></div>
+            </div>
 
-        <div class="calendar-legend">
-          <span><i class="legend-box legend-available"></i>選択可</span>
-          <span><i class="legend-box legend-partial"></i>一部の部屋のみ空き</span>
-          <span><i class="legend-box legend-booked"></i>満室</span>
-          <span><i class="legend-box legend-disabled"></i>選択不可</span>
-          <span><i class="legend-box legend-selected"></i>選択中</span>
-        </div>
+            <div id="calendarDetail" class="bk-cart__empty">
+              <svg class="ico ico--lg" aria-hidden="true"><use href="assets/ui/icons.svg#i-calendar"></use></svg>
+              <span>カレンダーから利用日を選んでください</span>
+            </div>
+            <div id="detailPanel" class="is-hidden">
+              <div class="bk-dates" id="dateConfigList"></div>
+            </div>
+            <input type="hidden" name="reservation_details" id="reservationDetails">
 
-        <div class="calendar-grid" id="calendarGrid"></div>
+            <label class="check-card bk-consent" for="agreeTerms">
+              <input type="checkbox" id="agreeTerms" name="agree_terms" value="1" required>
+              <span><strong>利用規約に同意します <span class="req">必須</span></strong><small><button type="button" class="btn btn--link" data-open-terms>規約を読む</button></small></span>
+            </label>
 
-        <div class="calendar-detail" id="calendarDetail">
-          <p class="calendar-detail-placeholder">利用日をクリックして選択してください。選択後に日付ごとの部屋・利用時間を設定できます。</p>
-        </div>
-      </section>
+            <div class="alert alert--danger" id="formErrorSummary" role="alert" aria-live="assertive" hidden></div>
 
-      <section class="panel detail-panel is-hidden" id="detailPanel">
-        <div class="panel-head">
-          <h2>3. 日付ごとの設定</h2>
-          <p>選んだ各日付について、部屋と利用開始 / 終了時刻を設定してください。</p>
-        </div>
+            <button type="submit" class="btn btn--primary btn--lg btn--block submit-btn"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-send"></use></svg><span class="submit-label">予約する</span></button>
+            <p class="small-note text-center">入室用パスコードは、予約後の画面とメールでお知らせします。</p>
+          </div>
+        </section>
+      </form>
 
-        <div class="date-config-list" id="dateConfigList"></div>
-        <input type="hidden" name="reservation_details" id="reservationDetails">
-      </section>
+      <a href="#bkCart" class="bk-jump" id="bkJump" hidden><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-calendar"></use></svg><span id="bkJumpText">0日選択中</span><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-arrow-right"></use></svg></a>
+    </main>
 
-      <section class="panel">
-        <div class="panel-head">
-          <h2>4. 規約の確認</h2>
-          <p>内容を確認し、同意したうえで送信してください。</p>
-        </div>
-
-        <div class="form-group terms-consent">
-          <button type="button" class="terms-link-btn" id="openTermsDialog">利用規約を開く</button>
-          <label class="consent-tile" for="agreeTerms">
-            <input type="checkbox" id="agreeTerms" name="agree_terms" value="1" required>
-            <span class="consent-mark" aria-hidden="true"></span>
-            <span class="consent-text">利用規約に同意します<span class="required-badge" aria-hidden="true">必須</span></span>
-          </label>
-        </div>
-      </section>
-
-      <div class="form-error-summary" id="formErrorSummary" role="alert" aria-live="assertive" hidden></div>
-
-      <button type="submit" class="submit-btn">予約する</button>
-    </form>
-
-    <p class="copyright">&copy; 2026 総合管理事務局. All rights reserved.</p>
+    <footer class="site-footer">&copy; 2026 総合管理事務局</footer>
   </div>
 
-  <dialog id="termsDialog" class="terms-dialog">
-    <form method="dialog" class="terms-dialog-card">
-      <div class="terms-dialog-head">
-        <h2>貸し部屋予約 利用規約</h2>
-        <button type="submit" class="dialog-close-btn" aria-label="閉じる">×</button>
+  <dialog id="termsDialog" class="modal modal--lg modal--full" aria-labelledby="termsDialogTitle">
+    <div class="modal__panel">
+      <div class="modal__header">
+        <span class="modal__icon"><svg class="ico ico--lg" aria-hidden="true"><use href="assets/ui/icons.svg#i-file-text"></use></svg></span>
+        <div><h2 class="modal__title" id="termsDialogTitle">貸し部屋予約 利用規約</h2></div>
+        <button type="button" class="btn btn--ghost btn--icon modal__close" data-modal-close aria-label="閉じる"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-x"></use></svg></button>
       </div>
-      <div class="terms-dialog-body terms-dialog-body-embed">
-        <iframe
-          src="terms.html"
-          title="貸し部屋予約 利用規約"
-          class="terms-iframe"
-          loading="lazy"
-        >
-          <p>利用規約を表示できません。<a href="terms.html" target="_blank" rel="noopener">利用規約を開く</a>してください。</p>
+      <div class="modal__body modal__body--flush bk-terms-body">
+        <iframe src="terms.html" title="貸し部屋予約 利用規約" class="bk-terms-frame" loading="lazy" data-theme-sync>
+          <p><a href="terms.html" target="_blank" rel="noopener">利用規約を開く</a></p>
         </iframe>
       </div>
-      <div class="terms-dialog-actions">
-        <button type="button" class="calendar-nav-btn" id="agreeFromDialog">内容を確認し、同意する</button>
-        <button type="submit" class="terms-link-btn">閉じる</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="manualDialog" class="terms-dialog manual-dialog">
-    <form method="dialog" class="terms-dialog-card manual-dialog-card">
-      <div class="terms-dialog-head">
-        <h2>利用マニュアル</h2>
-        <button type="submit" class="dialog-close-btn" aria-label="閉じる">×</button>
-      </div>
-      <div class="terms-dialog-body manual-dialog-body">
-        <div class="manual-embed-wrap">
-          <object data="manuals/booking_user_manual.pdf#view=FitH" type="application/pdf" class="manual-pdf-frame">
-            <p>PDF を表示できない場合は、<a href="manuals/booking_user_manual.pdf" target="_blank" rel="noopener">こちらから開いてください</a>。</p>
-          </object>
-        </div>
-      </div>
-      <div class="terms-dialog-actions">
-        <a href="manuals/booking_user_manual.pdf" target="_blank" rel="noopener" class="terms-link-btn">新しいタブで開く</a>
-        <button type="submit" class="calendar-nav-btn">閉じる</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="confirmDialog" class="terms-dialog confirm-dialog" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage">
-    <div class="terms-dialog-card">
-      <div class="terms-dialog-head">
-        <h2 id="confirmDialogTitle">確認</h2>
-      </div>
-      <div class="terms-dialog-body confirm-dialog-body">
-        <p id="confirmDialogMessage"></p>
-      </div>
-      <div class="terms-dialog-actions">
-        <button type="button" class="terms-link-btn" id="confirmDialogCancel">キャンセル</button>
-        <button type="button" class="confirm-dialog-ok-btn" id="confirmDialogOk">削除する</button>
+      <div class="modal__footer">
+        <a href="terms.html" target="_blank" rel="noopener" class="btn btn--ghost"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-external"></use></svg>別タブで開く</a>
+        <button type="button" class="btn btn--primary" id="agreeFromDialog"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-check"></use></svg>同意する</button>
       </div>
     </div>
   </dialog>
 
-  <script src="js/calendar.js?v=20260502b" defer></script>
+  <dialog id="manualDialog" class="modal modal--xl modal--full" aria-labelledby="manualDialogTitle">
+    <div class="modal__panel">
+      <div class="modal__header">
+        <span class="modal__icon"><svg class="ico ico--lg" aria-hidden="true"><use href="assets/ui/icons.svg#i-book"></use></svg></span>
+        <div><h2 class="modal__title" id="manualDialogTitle">利用マニュアル</h2></div>
+        <button type="button" class="btn btn--ghost btn--icon modal__close" data-modal-close aria-label="閉じる"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-x"></use></svg></button>
+      </div>
+      <div class="modal__body modal__body--flush bk-manual-body">
+        <div class="manual-embed-wrap"></div>
+      </div>
+      <div class="modal__footer">
+        <a href="manuals/booking_user_manual.pdf" target="_blank" rel="noopener" class="btn btn--ghost"><svg class="ico" aria-hidden="true"><use href="assets/ui/icons.svg#i-external"></use></svg>新しいタブで開く</a>
+        <button type="button" class="btn" data-modal-close>閉じる</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="js/calendar.js?v=20261013" defer></script>
 </body>
 </html>
