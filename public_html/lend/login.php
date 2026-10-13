@@ -6,37 +6,33 @@ if (is_logged_in()) {
     exit;
 }
 
-page_header('ログイン', 'auth-page');
+page_header('ログイン', 'lend-login-page');
 ?>
-<main class="auth-layout">
-    <section class="card auth-card">
-        <h1>備品貸出システム</h1>
-        <p class="muted">利用者向け画面・無人受付PC・管理画面の共通ログインです。共通DBのアカウントを参照します。</p>
+<main class="auth">
+    <div class="auth__corner"><?= fitsc_theme_toggle() ?></div>
+    <section class="auth__card">
+        <div class="auth__head">
+            <span class="brand-mark brand-mark--lg"><?= fitsc_icon('package') ?></span>
+            <h1>備品貸出システム</h1>
+            <p>共通アカウントでログインしてください</p>
+        </div>
 
         <?php if (isset($_GET['logged_out'])): ?>
-            <div class="alert success">ログアウトしました。</div>
+            <?= fitsc_flash_html('success', 'ログアウトしました。') ?>
         <?php endif; ?>
 
-        <form id="login-form" class="stack-form">
-            <label>
-                <span>ログインIDまたはメールアドレス</span>
-                <input type="text" name="identifier" required placeholder="user または user@example.jp" autocomplete="username">
+        <form id="login-form" class="stack">
+            <label class="field">
+                <span>ログインID または メールアドレス</span>
+                <span class="input-icon"><?= fitsc_icon('user') ?><input type="text" name="identifier" required autocomplete="username" autofocus></span>
             </label>
-            <label>
+            <label class="field">
                 <span>パスワード</span>
-                <input type="password" name="password" required placeholder="password123">
+                <span class="input-icon"><?= fitsc_icon('lock') ?><input type="password" name="password" required autocomplete="current-password"></span>
             </label>
-            <button type="submit" class="btn primary">ログイン</button>
+            <div id="login-message" class="alert hidden" role="alert"></div>
+            <button type="submit" class="btn btn--primary btn--lg btn--block"><span>ログイン</span><?= fitsc_icon('arrow-right') ?></button>
         </form>
-
-        <div id="login-message" class="alert hidden"></div>
-
-        <div class="demo-box">
-            <strong>サンプルアカウント</strong>
-            <ul>
-                <li>サンプル表記は旧構成です。共通アカウントDB移行後は shared_accounts の内容に合わせてください。</li>
-            </ul>
-        </div>
     </section>
 </main>
 <?php page_footer(['assets/js/common.js']); ?>
