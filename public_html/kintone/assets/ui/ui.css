@@ -927,6 +927,11 @@
 
   /* ===== KPI ===== */
   .stat-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  @media (max-width: 600px) {
+    .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .stat-grid > .stat { padding: 12px 14px; }
+    .stat-grid .stat__value { font-size: var(--fs-xl); }
+  }
   .stat {
     position: relative;
     display: grid;
@@ -1040,8 +1045,9 @@
     line-height: 1.7;
   }
   .alert > .ico { color: var(--tone); margin-top: 2px; width: 18px; height: 18px; }
-  .alert__body { display: grid; gap: 2px; min-width: 0; flex: 1 1 auto; }
-  .alert__title { font-weight: 700; color: var(--text-strong); }
+  .alert__body { display: block; min-width: 0; flex: 1 1 auto; }
+  .alert__body > :is(div, p, ul, ol) { margin: 2px 0 0; }
+  .alert__title { display: block; font-weight: 700; color: var(--text-strong); margin-bottom: 2px; }
   .alert--success { --tone: var(--success); --tone-soft: var(--success-soft); --tone-line: var(--success-line); }
   .alert--warning { --tone: var(--warning); --tone-soft: var(--warning-soft); --tone-line: var(--warning-line); }
   .alert--danger  { --tone: var(--danger);  --tone-soft: var(--danger-soft);  --tone-line: var(--danger-line); }
@@ -1295,11 +1301,15 @@
     .is-stacked .table td {
       display: grid;
       grid-template-columns: 7.5em minmax(0, 1fr);
-      gap: 10px;
+      align-items: start;
+      gap: 3px 10px;
       padding: 7px 0;
       border-bottom: 1px dashed var(--divider);
       text-align: left !important;
     }
+    /* ラベル付きセルの中身は常に右列へ（複数要素でも左列に回り込まない） */
+    .is-stacked .table td[data-label]:not([data-label=""]) > * { grid-column: 2; justify-self: start; max-width: 100%; }
+    .is-stacked .table td[data-label]:not([data-label=""]) > :is(input, select, textarea, .input-group, .search-toggle) { justify-self: stretch; }
     .is-stacked .table td:last-child { border-bottom: 0; }
     .is-stacked .table td::before {
       content: attr(data-label);

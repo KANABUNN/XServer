@@ -219,6 +219,7 @@
       item.addEventListener('mouseleave', start);
       start();
     }
+    item.close = function () { dismissToast(item); };
     return item;
   };
 
@@ -644,6 +645,56 @@
     });
   }
 
+  /* ---------- タブ ----------
+     <div class="tabs" data-tabs [data-tabs-hash]> <button class="tab" data-tab="a">…</button> </div>
+     <section data-tab-panel="a">…</section>（同じ [data-tabs-root] 内、なければ document） */
+  function initTabs(bar) {
+    if (bar.__tabsReady) return;
+    bar.__tabsReady = true;
+    var scope = bar.closest('[data-tabs-root]') || document;
+    var tabs = Array.prototype.slice.call(bar.querySelectorAll('[data-tab]'));
+    if (!tabs.length) return;
+    bar.setAttribute('role', 'tablist');
+    var select = function (name, focus) {
+      var found = tabs.some(function (t) { return t.dataset.tab === name; });
+      if (!found) name = tabs[0].dataset.tab;
+      tabs.forEach(function (t) {
+        var on = t.dataset.tab === name;
+        t.setAttribute('role', 'tab');
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+        t.tabIndex = on ? 0 : -1;
+        t.classList.toggle('is-active', on);
+        if (on && focus) t.focus();
+      });
+      scope.querySelectorAll('[data-tab-panel]').forEach(function (panel) {
+        if (!tabs.some(function (t) { return t.dataset.tab === panel.dataset.tabPanel; })) return;
+        var on = panel.dataset.tabPanel === name;
+        panel.hidden = !on;
+        panel.setAttribute('role', 'tabpanel');
+        if (on) { panel.classList.remove('tab-panel'); void panel.offsetWidth; panel.classList.add('tab-panel'); }
+      });
+      if (bar.hasAttribute('data-tabs-hash') && window.history.replaceState) {
+        window.history.replaceState(null, '', '#' + name);
+      }
+      bar.dispatchEvent(new CustomEvent('ui:tab', { bubbles: true, detail: { tab: name } }));
+    };
+    bar.addEventListener('click', function (event) {
+      var tab = event.target.closest('[data-tab]');
+      if (tab && bar.contains(tab)) { event.preventDefault(); select(tab.dataset.tab); }
+    });
+    bar.addEventListener('keydown', function (event) {
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      var i = tabs.indexOf(document.activeElement);
+      if (i < 0) return;
+      event.preventDefault();
+      var next = tabs[(i + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      select(next.dataset.tab, true);
+    });
+    var initial = bar.hasAttribute('data-tabs-hash') ? decodeURIComponent(window.location.hash.slice(1)) : '';
+    var preset = tabs.filter(function (t) { return t.classList.contains('is-active') || t.getAttribute('aria-selected') === 'true'; })[0];
+    select(initial || (preset ? preset.dataset.tab : tabs[0].dataset.tab));
+  }
+
   /* ---------- 起動 ---------- */
   function init() {
     updateThemeMeta(UI.getTheme());
@@ -663,6 +714,7 @@
       }).observe(document.body, { childList: true, subtree: true });
     }
     document.querySelectorAll('[data-search-toggle]').forEach(initSearchToggle);
+    document.querySelectorAll('[data-tabs]').forEach(initTabs);
     initShell();
     initConfirmForms();
     initBusyForms();

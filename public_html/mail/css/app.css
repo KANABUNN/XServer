@@ -38,7 +38,12 @@
 .ml-flow strong { font-size: var(--fs-sm); }
 .ml-flow small { font-size: var(--fs-xs); color: var(--text-subtle); }
 @media (max-width: 1100px) { .ml-flow { grid-template-columns: repeat(3, minmax(0, 1fr)); } .ml-flow li::after { display: none; } }
-@media (max-width: 600px) { .ml-flow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 600px) {
+  .ml-flow { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .ml-flow a { grid-template-columns: 34px minmax(0, 1fr); column-gap: 12px; row-gap: 0; align-items: center; padding: 10px 14px; }
+  .ml-flow__icon { grid-row: span 2; margin: 0; }
+  .ml-flow a::before { top: 50%; transform: translateY(-50%); }
+}
 
 /* ---- メール作成 ---- */
 .ml-compose { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }

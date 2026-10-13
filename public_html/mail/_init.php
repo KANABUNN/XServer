@@ -246,8 +246,8 @@ function mail_render_db_error(string $dbError): void
       <?php echo fitsc_icon('database'); ?>
       <div class="alert__body">
         <strong class="alert__title">メールデータベースに接続できません</strong>
-        <span><?php echo mail_h($dbError); ?></span>
-        <span class="text-subtle text-xs">管理者へ連絡してください（schema.sql の反映・config.local.php の DB 設定を確認）。</span>
+        <div><?php echo mail_h($dbError); ?></div>
+        <div class="text-subtle text-xs">管理者へ連絡してください（schema.sql の反映・config.local.php の DB 設定を確認）。</div>
       </div>
     </div>
     <?php
