@@ -76,122 +76,119 @@ foreach ($templates as $tpl) {
 }
 $templateJsonText = json_encode($templateJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR);
 $defaultTitle = 'メール作成 ' . date('Y-m-d H:i');
-mail_render_page_header('メール作成', $user, 'compose.php');
+mail_render_page_header('メール作成', $user, 'compose.php', [
+    'subtitle' => '本文を作成し、送信対象を選んで送信バッチにします（ここでは送信しません）',
+    'actions' => '<a class="btn btn--ghost" href="templates.php">' . fitsc_icon('template') . '<span class="hide-mobile">テンプレート管理</span></a>',
+]);
+$variableButtons = ['{{識別番号}}', '{{団体名}}', '{{代表者氏名}}', '{{メールアドレス}}', '{{区分}}'];
 ?>
-<header class="page-head">
-  <div>
-    <h1>メール作成</h1>
-    <p class="lead">テンプレートを下敷きに編集するか、直接入力した件名・本文を、選択した団体へ差し込み展開します。ここではまだ送信せず、送信バッチを作成します。</p>
-  </div>
-  <div class="head-actions"><button type="button" class="link-button secondary" data-nav-href="templates.php">テンプレート管理</button></div>
-</header>
 <?php mail_render_db_error($dbError); ?>
 
 <?php if ($dbError === ''): ?>
-<section class="panel">
-  <form method="post" class="stack-form compose-form" id="composeForm">
-    <?php echo mail_auth_csrf_field(); ?>
-    <div class="compose-layout">
-      <div class="compose-main">
-        <div class="panel-head"><h2>メール本文</h2><span class="muted">テンプレート選択 / 直接入力</span></div>
-        <label><span>バッチ名 *</span><input type="text" name="title" value="<?php echo mail_h($defaultTitle); ?>" required></label>
+<form method="post" class="ml-compose" id="composeForm" data-busy>
+  <?php echo mail_auth_csrf_field(); ?>
+  <input type="hidden" name="custom_body_type" value="html">
 
-        <label><span>使用テンプレート</span>
+  <section class="card ml-compose__main">
+    <div class="card__body stack">
+      <div class="form-grid">
+        <label class="field"><span>バッチ名 <span class="req">必須</span></span><input type="text" name="title" value="<?php echo mail_h($defaultTitle); ?>" required></label>
+        <label class="field"><span>テンプレート</span>
           <select name="template_id" id="templateSelect">
-            <option value="0">直接入力する</option>
+            <option value="0">使わずに直接入力する</option>
             <?php foreach ($templates as $tpl): ?>
               <option value="<?php echo (int)$tpl['id']; ?>"><?php echo mail_h((string)$tpl['title']); ?></option>
             <?php endforeach; ?>
           </select>
         </label>
-        <?php if ($templates === []): ?>
-          <div class="alert alert-warn">有効なテンプレートがありません。件名・本文を直接入力してください。</div>
-        <?php endif; ?>
+      </div>
+      <?php if ($templates === []): ?>
+        <div class="alert alert--warning"><?php echo fitsc_icon('alert-triangle'); ?><div class="alert__body">有効なテンプレートがありません。件名と本文を直接入力してください。</div></div>
+      <?php endif; ?>
 
-        <label><span>件名 *</span><input type="text" name="custom_subject" id="composeSubject" data-variable-insert-target placeholder="例: 【学生自治会】{{団体名}}へのご連絡" required></label>
-        <input type="hidden" name="custom_body_type" value="html">
-        <div class="full editor-field">
-          <span class="editor-field-label">本文 * <small class="muted">HTML形式で保存されます</small></span>
-          <textarea name="custom_body" id="composeBody" class="html-editor-source" data-html-editor-input required></textarea>
-          <div class="html-editor-wrap">
-            <div class="html-editor-toolbar" data-editor-toolbar="composeBodyEditor">
-              <button type="button" data-editor-command="bold"><strong>B</strong></button>
-              <button type="button" data-editor-command="italic"><em>I</em></button>
-              <button type="button" data-editor-command="underline"><u>U</u></button>
-              <button type="button" data-editor-command="insertUnorderedList">箇条書き</button>
-              <select data-editor-size title="文字サイズ">
-                <option value="3">標準</option>
-                <option value="2">小さめ</option>
-                <option value="4">大きめ</option>
-                <option value="5">見出し</option>
-              </select>
-              <label class="editor-color-picker">文字色 <input type="color" data-editor-color value="#1b2430"></label>
-              <button type="button" data-editor-command="removeFormat">書式解除</button>
-            </div>
-            <div id="composeBodyEditor" class="html-editor" contenteditable="true" data-variable-insert-target data-html-editor="composeBody" data-placeholder="本文を入力してください。"></div>
+      <label class="field"><span>件名 <span class="req">必須</span></span><input type="text" name="custom_subject" id="composeSubject" data-variable-insert-target placeholder="例: 【学生自治会】{{団体名}}へのご連絡" required></label>
+
+      <div class="field editor-field">
+        <span>本文 <span class="req">必須</span></span>
+        <textarea name="custom_body" id="composeBody" class="html-editor-source" data-html-editor-input required></textarea>
+        <div class="html-editor-wrap">
+          <div class="html-editor-toolbar" data-editor-toolbar="composeBodyEditor" role="toolbar" aria-label="書式">
+            <button type="button" data-editor-command="bold" title="太字"><strong>B</strong></button>
+            <button type="button" data-editor-command="italic" title="斜体"><em>I</em></button>
+            <button type="button" data-editor-command="underline" title="下線"><u>U</u></button>
+            <button type="button" data-editor-command="insertUnorderedList" title="箇条書き"><?php echo fitsc_icon('list', 'ico--sm'); ?></button>
+            <span class="html-editor-sep" aria-hidden="true"></span>
+            <select data-editor-size title="文字サイズ" aria-label="文字サイズ">
+              <option value="3">標準</option>
+              <option value="2">小さめ</option>
+              <option value="4">大きめ</option>
+              <option value="5">見出し</option>
+            </select>
+            <label class="editor-color-picker" title="文字色"><input type="color" data-editor-color value="#1b2430" aria-label="文字色"></label>
+            <button type="button" data-editor-command="removeFormat" title="書式を解除"><?php echo fitsc_icon('rotate-ccw', 'ico--sm'); ?></button>
           </div>
+          <div id="composeBodyEditor" class="html-editor" contenteditable="true" data-variable-insert-target data-html-editor="composeBody" data-placeholder="本文を入力してください。"></div>
         </div>
       </div>
-
-      <aside class="compose-side">
-        <section class="side-card">
-          <h3>利用できる変数</h3>
-          <div class="variable-list vertical">
-            <button type="button" class="variable-chip" data-insert-variable="{{識別番号}}" data-insert-targets="composeSubject,composeBodyEditor">{{識別番号}}</button>
-            <button type="button" class="variable-chip" data-insert-variable="{{団体名}}" data-insert-targets="composeSubject,composeBodyEditor">{{団体名}}</button>
-            <button type="button" class="variable-chip" data-insert-variable="{{代表者氏名}}" data-insert-targets="composeSubject,composeBodyEditor">{{代表者氏名}}</button>
-            <button type="button" class="variable-chip" data-insert-variable="{{メールアドレス}}" data-insert-targets="composeSubject,composeBodyEditor">{{メールアドレス}}</button>
-            <button type="button" class="variable-chip" data-insert-variable="{{区分}}" data-insert-targets="composeSubject,composeBodyEditor">{{区分}}</button>
-          </div>
-          <p class="muted">件名・本文内に記載すると、送信対象団体ごとの値に置換されます。</p>
-        </section>
-
-        <section class="side-card recipient-summary" id="recipientSummary">
-          <h3>送信対象</h3>
-          <strong><span id="selectedRecipientCount">0</span>件選択中</strong>
-          <p class="muted">対象団体は別画面でまとめて選択します。</p>
-          <button type="button" class="secondary" data-modal-open="recipientModal">送信対象を選択</button>
-        </section>
-      </aside>
     </div>
+  </section>
 
-    <div class="form-actions">
-      <button type="submit" class="primary"<?php echo mail_auth_has_permission($user, 'batch.edit') ? '' : ' disabled'; ?>>送信バッチを作成</button>
-      <button type="button" class="link-button secondary" data-nav-href="batches.php">既存バッチを見る</button>
-    </div>
+  <aside class="ml-compose__side stack">
+    <section class="card">
+      <div class="card__header card__header--plain"><div class="card__title"><?php echo fitsc_icon('users'); ?>送信対象</div></div>
+      <div class="card__body stack stack--sm">
+        <div class="ml-recipient-count"><strong id="selectedRecipientCount">0</strong><span>団体を選択中</span></div>
+        <button type="button" class="btn btn--block" data-modal-open="recipientModal"><?php echo fitsc_icon('users'); ?>送信対象を選ぶ</button>
+      </div>
+    </section>
 
-    <div class="modal-backdrop" id="recipientModal" hidden>
-      <div class="modal-card large-modal" role="dialog" aria-modal="true" aria-labelledby="recipientModalTitle">
-        <div class="modal-head">
-          <div>
-            <h2 id="recipientModalTitle">送信対象団体の選択</h2>
-            <p class="muted">階層表示では区分ごとに、一覧表示では検索しながら選択できます。</p>
-          </div>
-          <button type="button" class="text-button modal-close" data-modal-close="recipientModal">閉じる</button>
+    <section class="card">
+      <div class="card__header card__header--plain"><div class="card__title"><?php echo fitsc_icon('tag'); ?>差し込み変数</div></div>
+      <div class="card__body stack stack--sm">
+        <div class="variable-list">
+          <?php foreach ($variableButtons as $variable): ?>
+            <button type="button" class="chip variable-chip" data-insert-variable="<?php echo mail_h($variable); ?>" data-insert-targets="composeSubject,composeBodyEditor"><?php echo mail_h($variable); ?></button>
+          <?php endforeach; ?>
         </div>
-        <div class="modal-toolbar">
-          <div class="segmented-control" role="tablist" aria-label="表示切替">
-            <button type="button" class="is-active" data-recipient-view="tree">階層表示</button>
-            <button type="button" data-recipient-view="list">一覧表示</button>
-          </div>
-          <label class="inline-check"><input type="checkbox" id="selectAllOrganizations"> 表示中を全選択 / 解除</label>
-          <input type="search" id="organizationFilter" placeholder="団体名・識別番号・メールアドレスで絞り込み">
-        </div>
+        <p class="small-note">クリックすると、カーソルのある件名または本文に挿入されます。送信時に団体ごとの値に置き換わります。</p>
+      </div>
+    </section>
 
+    <button type="submit" class="btn btn--primary btn--lg btn--block"<?php echo mail_auth_has_permission($user, 'batch.edit') ? '' : ' disabled'; ?>><?php echo fitsc_icon('layers'); ?>送信バッチを作成</button>
+  </aside>
+
+  <dialog class="modal modal--xl modal--full" id="recipientModal" aria-labelledby="recipientModalTitle">
+    <div class="modal__panel">
+      <div class="modal__header">
+        <span class="modal__icon"><?php echo fitsc_icon('users', 'ico--lg'); ?></span>
+        <div><h2 class="modal__title" id="recipientModalTitle">送信対象の団体を選ぶ</h2><p class="modal__desc">メールアドレスが未設定の団体は選択できません。</p></div>
+        <button type="button" class="btn btn--ghost btn--icon modal__close" data-modal-close aria-label="閉じる"><?php echo fitsc_icon('x'); ?></button>
+      </div>
+      <div class="ml-recipient-toolbar">
+        <div class="segmented" role="tablist" aria-label="表示切替">
+          <button type="button" class="is-active" data-recipient-view="tree" aria-selected="true"><?php echo fitsc_icon('grid', 'ico--sm'); ?>区分ごと</button>
+          <button type="button" data-recipient-view="list" aria-selected="false"><?php echo fitsc_icon('list', 'ico--sm'); ?>一覧</button>
+        </div>
+        <span class="input-icon ml-recipient-search"><?php echo fitsc_icon('search'); ?><input type="search" id="organizationFilter" placeholder="団体名・識別番号・メールで絞り込み" aria-label="団体を絞り込み"></span>
+        <label class="check"><input type="checkbox" id="selectAllOrganizations">表示中をすべて選択</label>
+      </div>
+      <div class="modal__body">
         <div class="recipient-view" id="recipientTreeView">
           <?php if ($organizationsByCategory === []): ?>
-            <p class="empty">有効な団体がありません。</p>
+            <div class="empty"><span class="empty__icon"><?php echo fitsc_icon('building'); ?></span><span>有効な団体がありません。</span></div>
           <?php endif; ?>
           <?php foreach ($organizationsByCategory as $category => $categoryOrgs): ?>
             <section class="recipient-category">
-              <h3><?php echo mail_h($category); ?> <span class="muted">/<?php echo count($categoryOrgs); ?>件</span></h3>
+              <h3 class="section-title"><?php echo mail_h($category); ?> <span class="badge"><?php echo count($categoryOrgs); ?></span></h3>
               <div class="recipient-card-grid">
                 <?php foreach ($categoryOrgs as $org): ?>
                   <?php $hasEmail = filter_var((string)($org['email'] ?? ''), FILTER_VALIDATE_EMAIL); ?>
-                  <label class="recipient-card <?php echo $hasEmail ? '' : 'is-disabled'; ?>" data-recipient-row data-filter-text="<?php echo mail_h(mb_strtolower((string)$org['identifier'] . ' ' . (string)$org['name'] . ' ' . (string)($org['representative_name'] ?? '') . ' ' . (string)($org['email'] ?? '') . ' ' . (string)($org['category'] ?? ''))); ?>">
+                  <label class="check-card recipient-card<?php echo $hasEmail ? '' : ' is-disabled'; ?>" data-recipient-row data-filter-text="<?php echo mail_h(mb_strtolower((string)$org['identifier'] . ' ' . (string)$org['name'] . ' ' . (string)($org['representative_name'] ?? '') . ' ' . (string)($org['email'] ?? '') . ' ' . (string)($org['category'] ?? ''))); ?>">
                     <input type="checkbox" name="organization_ids[]" value="<?php echo (int)$org['id']; ?>" data-org-check<?php echo $hasEmail ? '' : ' disabled'; ?>>
-                    <span><strong><?php echo mail_h((string)$org['name']); ?></strong><code><?php echo mail_h((string)$org['identifier']); ?></code></span>
-                    <small><?php echo $hasEmail ? mail_h((string)$org['email']) : 'メール未設定または形式不正'; ?></small>
+                    <span>
+                      <strong><?php echo mail_h((string)$org['name']); ?></strong>
+                      <small><code><?php echo mail_h((string)$org['identifier']); ?></code> <?php echo $hasEmail ? mail_h((string)$org['email']) : '<span class="text-danger">メール未設定</span>'; ?></small>
+                    </span>
                   </label>
                 <?php endforeach; ?>
               </div>
@@ -200,19 +197,19 @@ mail_render_page_header('メール作成', $user, 'compose.php');
         </div>
 
         <div class="recipient-view is-hidden" id="recipientListView">
-          <div class="table-wrap recipient-table-wrap">
-            <table class="recipient-table" id="recipientTable">
-              <thead><tr><th>選択</th><th>識別番号</th><th>団体名</th><th>代表者</th><th>メールアドレス</th><th>区分</th></tr></thead>
+          <div class="table-wrap">
+            <table class="table table--compact recipient-table" id="recipientTable">
+              <thead><tr><th class="col-check"></th><th>識別番号</th><th>団体名</th><th>代表者</th><th>メールアドレス</th><th>区分</th></tr></thead>
               <tbody>
                 <?php if ($organizations === []): ?><tr><td colspan="6" class="empty">有効な団体がありません。</td></tr><?php endif; ?>
                 <?php foreach ($organizations as $org): ?>
                   <?php $hasEmail = filter_var((string)($org['email'] ?? ''), FILTER_VALIDATE_EMAIL); ?>
-                  <tr data-recipient-row data-filter-text="<?php echo mail_h(mb_strtolower((string)$org['identifier'] . ' ' . (string)$org['name'] . ' ' . (string)($org['representative_name'] ?? '') . ' ' . (string)($org['email'] ?? '') . ' ' . (string)($org['category'] ?? ''))); ?>"<?php echo $hasEmail ? '' : ' class="needs-review-row"'; ?>>
-                    <td><input type="checkbox" name="organization_ids[]" value="<?php echo (int)$org['id']; ?>" data-org-check<?php echo $hasEmail ? '' : ' disabled'; ?>></td>
+                  <tr data-recipient-row data-filter-text="<?php echo mail_h(mb_strtolower((string)$org['identifier'] . ' ' . (string)$org['name'] . ' ' . (string)($org['representative_name'] ?? '') . ' ' . (string)($org['email'] ?? '') . ' ' . (string)($org['category'] ?? ''))); ?>"<?php echo $hasEmail ? '' : ' class="is-attention"'; ?>>
+                    <td><input type="checkbox" name="organization_ids[]" value="<?php echo (int)$org['id']; ?>" data-org-check<?php echo $hasEmail ? '' : ' disabled'; ?> aria-label="<?php echo mail_h((string)$org['name']); ?> を選択"></td>
                     <td><code><?php echo mail_h((string)$org['identifier']); ?></code></td>
                     <td><?php echo mail_h((string)$org['name']); ?></td>
                     <td><?php echo mail_h((string)($org['representative_name'] ?? '')); ?></td>
-                    <td><?php echo $hasEmail ? mail_h((string)$org['email']) : '<span class="danger-text">未設定または形式不正</span>'; ?></td>
+                    <td><?php echo $hasEmail ? mail_h((string)$org['email']) : '<span class="text-danger">未設定または形式不正</span>'; ?></td>
                     <td><?php echo mail_h((string)($org['category'] ?? '')); ?></td>
                   </tr>
                 <?php endforeach; ?>
@@ -220,15 +217,14 @@ mail_render_page_header('メール作成', $user, 'compose.php');
             </table>
           </div>
         </div>
-
-        <div class="modal-actions">
-          <span class="muted"><span id="selectedRecipientCountModal">0</span>件選択中</span>
-          <button type="button" class="primary" data-modal-close="recipientModal">選択を反映</button>
-        </div>
+      </div>
+      <div class="modal__footer modal__footer--split">
+        <span class="text-muted text-sm"><strong id="selectedRecipientCountModal">0</strong> 団体を選択中</span>
+        <button type="button" class="btn btn--primary" data-modal-close><?php echo fitsc_icon('check'); ?>選択を確定</button>
       </div>
     </div>
-  </form>
-</section>
+  </dialog>
+</form>
 
 <script type="application/json" id="composeTemplateData"><?php echo $templateJsonText; ?></script>
 <script>
@@ -242,9 +238,7 @@ mail_render_page_header('メール作成', $user, 'compose.php');
 
   templateSelect?.addEventListener('change', function () {
     const tpl = templates.get(String(templateSelect.value));
-    if (!tpl) {
-      return;
-    }
+    if (!tpl) return;
     subjectInput.value = tpl.subject_template || '';
     bodyInput.value = tpl.body_template || '';
     if (bodyEditor) {
@@ -253,28 +247,16 @@ mail_render_page_header('メール作成', $user, 'compose.php');
     }
   });
 
-  const modalButtons = document.querySelectorAll('[data-modal-open], [data-modal-close]');
-  modalButtons.forEach(button => {
-    button.addEventListener('click', function () {
-      const id = button.dataset.modalOpen || button.dataset.modalClose;
-      const modal = document.getElementById(id);
-      if (!modal) return;
-      modal.hidden = Boolean(button.dataset.modalClose);
-    });
-  });
-  document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-    backdrop.addEventListener('click', function (event) {
-      if (event.target === backdrop) backdrop.hidden = true;
-    });
-  });
-
   const viewButtons = Array.from(document.querySelectorAll('[data-recipient-view]'));
   const treeView = document.getElementById('recipientTreeView');
   const listView = document.getElementById('recipientListView');
   viewButtons.forEach(button => {
     button.addEventListener('click', function () {
       const view = button.dataset.recipientView;
-      viewButtons.forEach(b => b.classList.toggle('is-active', b === button));
+      viewButtons.forEach(b => {
+        b.classList.toggle('is-active', b === button);
+        b.setAttribute('aria-selected', b === button ? 'true' : 'false');
+      });
       treeView.classList.toggle('is-hidden', view !== 'tree');
       listView.classList.toggle('is-hidden', view !== 'list');
     });
@@ -289,7 +271,12 @@ mail_render_page_header('メール作成', $user, 'compose.php');
   }
   function updateCount() {
     const selected = new Set(checks.filter(c => c.checked && !c.disabled).map(c => c.value));
-    countLabels.forEach(label => { label.textContent = String(selected.size); });
+    countLabels.forEach(label => {
+      if (label.textContent !== String(selected.size)) {
+        label.textContent = String(selected.size);
+        label.animate?.([{ transform: 'scale(1.25)' }, { transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.34,1.4,.64,1)' });
+      }
+    });
   }
   checks.forEach(check => {
     check.addEventListener('change', function () {

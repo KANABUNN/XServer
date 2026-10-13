@@ -674,6 +674,8 @@
       });
     }
     convertFlashes();
+    // サーバー側で開いた状態にしたいダイアログ（編集画面など）
+    document.querySelectorAll('dialog.modal[data-open-on-load]').forEach(function (d) { UI.openModal(d); });
     root.classList.add('ui-ready');
   }
 

@@ -66,61 +66,48 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $errorMessage === '' && 
     }
 }
 ?>
+<?php require_once __DIR__ . '/../../apps/ui_kit.php'; ?>
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ログイン | mail.fit-sc.jp</title>
-  <link rel="stylesheet" href="./assets/common/tokens.css?v=20260716a">
-  <link rel="stylesheet" href="./css/admin-auth.css">
-  <link rel="stylesheet" href="./assets/common/fit-sc-skin.css?v=20260716a">
-  <link rel="stylesheet" href="./css/mail-responsive.css?v=20260713">
-  <script src="./assets/common/context-menu-guard.js?v=20260713" defer></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>ログイン | メール管理</title>
+  <?php echo fitsc_ui_head(['css' => ['./css/app.css'], 'guard' => './assets/common/context-menu-guard.js']); ?>
 </head>
 <body>
-  <main class="auth-shell">
-    <section class="auth-card">
-      <div class="auth-card-head">
-        <p class="auth-kicker">mail.fit-sc.jp</p>
-        <h1>メール管理ログイン</h1>
-        <p class="auth-lead">共通アカウントの <code>shared_account_app_roles.app_key = mail</code> に付与された権限でログインします。</p>
+  <main class="auth">
+    <div class="auth__corner"><?php echo fitsc_theme_toggle(); ?></div>
+    <section class="auth__card">
+      <div class="auth__head">
+        <span class="brand-mark brand-mark--lg"><?php echo fitsc_icon('mail'); ?></span>
+        <h1>メール管理</h1>
+        <p>共通アカウントでログインしてください</p>
       </div>
+      <div class="stack">
+        <?php if ($infoMessage !== ''): ?>
+          <?php echo fitsc_flash_html('info', $infoMessage); ?>
+        <?php endif; ?>
+        <?php if ($errorMessage !== ''): ?>
+          <div class="alert alert--danger" role="alert"><?php echo fitsc_icon('x-circle'); ?><div class="alert__body"><?php echo mail_h($errorMessage); ?></div></div>
+        <?php endif; ?>
+        <?php if ($roleUserCount === 0 && $errorMessage === ''): ?>
+          <div class="alert alert--warning"><?php echo fitsc_icon('alert-triangle'); ?><div class="alert__body">メール管理の利用者が登録されていません。共通アカウント管理で mail の権限を付与してください。</div></div>
+        <?php endif; ?>
 
-      <?php if ($infoMessage !== ''): ?>
-        <div class="auth-message auth-message-info"><?php echo mail_h($infoMessage); ?></div>
-      <?php endif; ?>
-
-      <?php if ($errorMessage !== ''): ?>
-        <div class="auth-message auth-message-error"><?php echo mail_h($errorMessage); ?></div>
-      <?php endif; ?>
-
-      <?php if ($roleUserCount === 0 && $errorMessage === ''): ?>
-        <div class="auth-message auth-message-warn">
-          mail アプリに紐づく利用者が未登録です。<code>fitsc_account.shared_account_app_roles</code> に <code>app_key = 'mail'</code> のロールを追加してください。
-        </div>
-      <?php endif; ?>
-
-      <form method="post" class="auth-form" autocomplete="on">
-        <?php echo mail_auth_csrf_field(); ?>
-        <input type="hidden" name="return_to" value="<?php echo mail_h($returnTo); ?>">
-
-        <label class="auth-field">
-          <span>ログインIDまたはメールアドレス</span>
-          <input type="text" name="login_id" maxlength="100" autocomplete="username" required>
-        </label>
-
-        <label class="auth-field">
-          <span>パスワード</span>
-          <input type="password" name="password" autocomplete="current-password" required>
-        </label>
-
-        <button type="submit" class="auth-primary">ログイン</button>
-      </form>
-
-      <div class="auth-foot">
-        <p>権限ロール: 閲覧者 viewer / 編集者 user / 管理者 admin</p>
-        <p>Basic認証を前段に置く場合は <code>.htaccess</code> の該当行を有効化してください。</p>
+        <form method="post" class="stack" autocomplete="on" data-busy>
+          <?php echo mail_auth_csrf_field(); ?>
+          <input type="hidden" name="return_to" value="<?php echo mail_h($returnTo); ?>">
+          <label class="field">
+            <span>ログインID または メールアドレス</span>
+            <span class="input-icon"><?php echo fitsc_icon('user'); ?><input type="text" name="login_id" maxlength="100" autocomplete="username" required autofocus></span>
+          </label>
+          <label class="field">
+            <span>パスワード</span>
+            <span class="input-icon"><?php echo fitsc_icon('lock'); ?><input type="password" name="password" autocomplete="current-password" required></span>
+          </label>
+          <button type="submit" class="btn btn--primary btn--lg btn--block"><span>ログイン</span><?php echo fitsc_icon('arrow-right'); ?></button>
+        </form>
       </div>
     </section>
   </main>

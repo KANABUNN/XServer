@@ -101,156 +101,146 @@ if ($mailPdo instanceof PDO && $dbError === '') {
         }
     }
 }
-
-mail_render_page_header('Graph下書き・送信', $user, 'graph.php');
+mail_render_page_header('Graph 下書き・送信', $user, 'graph.php', [
+    'subtitle' => '保守用：Microsoft Graph で Outlook の下書き作成・送信を行います',
+    'actions' => '<a class="btn btn--ghost" href="settings.php">' . fitsc_icon('settings') . '<span class="hide-mobile">送信設定</span></a>',
+]);
 ?>
-<header class="page-head">
-  <div>
-    <h1>Graph下書き・送信</h1>
-    <p class="lead">承認済みバッチからOutlook下書きを作成し、必要に応じて作成済み下書きを送信します。初期運用は自治会管轄Entra IDのapp-only方式です。</p>
-  </div>
-</header>
 <?php mail_render_db_error($dbError); ?>
-
 <?php if ($dbError === ''): ?>
-<div class="two-column-grid wide-left">
-  <section class="panel">
-    <div class="panel-head"><h2>Graph接続状態</h2><span class="muted">client_credentials</span></div>
-    <div class="settings-grid">
-      <div><span class="muted">Graph有効</span><strong><?php echo !empty($graph['enabled']) ? '有効' : '無効'; ?></strong></div>
-      <div><span class="muted">設定状態</span><strong><?php echo $graphReady ? '利用可能' : '不足あり'; ?></strong></div>
-      <div><span class="muted">送信UI</span><strong><?php echo $sendEnabled ? '有効' : '無効'; ?></strong></div>
-      <div><span class="muted">認証方式</span><code><?php echo mail_h((string)($graph['auth_mode'] ?? 'client_credentials')); ?></code></div>
-      <div><span class="muted">テナントID</span><code><?php echo mail_h((string)($graph['tenant_id'] ?? '')); ?></code></div>
-      <div><span class="muted">送信用ユーザー</span><code><?php echo mail_h((string)($graph['sender_user_id'] ?? '')); ?></code></div>
+
+<div class="split">
+  <section class="card">
+    <div class="card__header">
+      <div class="card__title"><?php echo fitsc_icon('cloud'); ?>Graph 接続</div>
+      <?php echo $graphReady ? '<span class="badge badge--success badge--dot">利用可能</span>' : '<span class="badge badge--warning badge--dot">不足あり</span>'; ?>
     </div>
-    <?php if (!$graphReady): ?>
-      <div class="alert alert-warn mt-14">Graph設定が不足しています: <code><?php echo mail_h(implode(', ', $graphMissing)); ?></code>。<code>apps/mail_core/config.local.php</code> を確認してください。</div>
-    <?php endif; ?>
-    <?php if (!$sendEnabled): ?>
-      <div class="alert alert-info mt-14">送信UIは無効です。送信まで使う場合は、Entra IDで <code>Mail.Send</code> を付与したうえで <code>graph.allow_send_from_ui = true</code> にしてください。</div>
-    <?php endif; ?>
-    <form method="post" class="inline-actions mt-14">
-      <?php echo mail_auth_csrf_field(); ?>
-      <input type="hidden" name="action" value="test">
-      <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatchId; ?>">
-      <button type="submit" class="secondary"<?php echo $graphReady && mail_auth_has_permission($user, 'settings.manage') ? '' : ' disabled'; ?>>Graph接続テスト</button>
-      <a class="text-link" href="settings.php">設定を確認</a>
-    </form>
+    <div class="card__body stack">
+      <dl class="dl">
+        <div><dt>Graph</dt><dd><?php echo !empty($graph['enabled']) ? '有効' : '無効'; ?></dd></div>
+        <div><dt>送信 UI</dt><dd><?php echo $sendEnabled ? '有効' : '無効'; ?></dd></div>
+        <div><dt>認証方式</dt><dd><code><?php echo mail_h((string)($graph['auth_mode'] ?? 'client_credentials')); ?></code></dd></div>
+        <div><dt>テナントID</dt><dd><code><?php echo mail_h((string)($graph['tenant_id'] ?? '')); ?></code></dd></div>
+        <div><dt>送信用ユーザー</dt><dd><code><?php echo mail_h((string)($graph['sender_user_id'] ?? '')); ?></code></dd></div>
+      </dl>
+      <?php if (!$graphReady): ?>
+        <div class="alert alert--warning"><?php echo fitsc_icon('alert-triangle'); ?><div class="alert__body">Graph の設定が不足しています：<code><?php echo mail_h(implode(', ', $graphMissing)); ?></code></div></div>
+      <?php endif; ?>
+      <?php if (!$sendEnabled): ?>
+        <div class="alert alert--info"><?php echo fitsc_icon('info'); ?><div class="alert__body">送信 UI は無効です。送信まで使う場合は Entra ID で <code>Mail.Send</code> を付与し、<code>graph.allow_send_from_ui = true</code> にしてください。</div></div>
+      <?php endif; ?>
+      <form method="post" data-busy>
+        <?php echo mail_auth_csrf_field(); ?>
+        <input type="hidden" name="action" value="test">
+        <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatchId; ?>">
+        <button type="submit" class="btn"<?php echo $graphReady && mail_auth_has_permission($user, 'settings.manage') ? '' : ' disabled'; ?>><?php echo fitsc_icon('zap'); ?>接続テスト</button>
+      </form>
+    </div>
   </section>
 
-  <section class="panel">
-    <div class="panel-head"><h2>対象バッチ</h2><span class="muted"><?php echo count($batches); ?>件</span></div>
-    <form method="get" class="stack-form">
-      <label><span>バッチ選択</span>
-        <select name="batch_id" onchange="this.form.submit()">
-          <?php foreach ($batches as $batch): ?>
-            <option value="<?php echo (int)$batch['id']; ?>"<?php echo mail_selected($selectedBatchId, (int)$batch['id']); ?>>#<?php echo (int)$batch['id']; ?> <?php echo mail_h((string)$batch['title']); ?> / <?php echo mail_h(mail_status_label((string)$batch['status'])); ?></option>
-          <?php endforeach; ?>
-        </select>
-      </label>
-      <noscript><button type="submit" class="secondary">表示</button></noscript>
-    </form>
+  <section class="card">
+    <div class="card__header"><div class="card__title"><?php echo fitsc_icon('layers'); ?>対象のバッチ <small><?php echo count($batches); ?>件</small></div></div>
+    <div class="card__body">
+      <form method="get">
+        <label class="field"><span>バッチ</span>
+          <select name="batch_id" data-autosubmit>
+            <?php foreach ($batches as $batch): ?>
+              <option value="<?php echo (int)$batch['id']; ?>"<?php echo mail_selected($selectedBatchId, (int)$batch['id']); ?>>#<?php echo (int)$batch['id']; ?> <?php echo mail_h((string)$batch['title']); ?> / <?php echo mail_h(mail_status_label((string)$batch['status'])); ?></option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <noscript><button type="submit" class="btn">表示</button></noscript>
+      </form>
+    </div>
   </section>
 </div>
 
 <?php if ($selectedBatch): ?>
-<section class="panel mt-18">
-  <div class="panel-head">
-    <div>
-      <h2><?php echo mail_h((string)$selectedBatch['title']); ?></h2>
-      <p class="muted">状態: <?php echo mail_h(mail_status_label((string)$selectedBatch['status'])); ?> / 対象: <?php echo (int)$selectedBatch['target_count']; ?>件</p>
-    </div>
-    <a class="text-link" href="batches.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">バッチ詳細へ</a>
+  <div class="stat-grid">
+    <div class="stat"><span class="stat__label">対象メール</span><span class="stat__value"><?php echo count($targets); ?></span></div>
+    <div class="stat stat--info"><span class="stat__label">下書き可能</span><span class="stat__value"><?php echo (int)$draftableCount; ?></span></div>
+    <div class="stat stat--teal"><span class="stat__label">送信可能</span><span class="stat__value"><?php echo (int)$sendableCount; ?></span></div>
+    <div class="stat stat--success"><span class="stat__label">送信済み</span><span class="stat__value"><?php echo (int)$sentCount; ?></span></div>
+    <div class="stat stat--warning"><span class="stat__label">要確認の添付</span><span class="stat__value"><?php echo (int)$pendingAttachmentCount; ?></span></div>
   </div>
-
-  <div class="summary-grid small">
-    <article class="summary-card"><span>対象メール</span><strong><?php echo count($targets); ?></strong></article>
-    <article class="summary-card"><span>下書き可能</span><strong><?php echo (int)$draftableCount; ?></strong></article>
-    <article class="summary-card"><span>送信可能</span><strong><?php echo (int)$sendableCount; ?></strong></article>
-    <article class="summary-card"><span>送信済み</span><strong><?php echo (int)$sentCount; ?></strong></article>
-    <article class="summary-card"><span>要確認添付</span><strong><?php echo (int)$pendingAttachmentCount; ?></strong></article>
-    <article class="summary-card"><span>添付総数</span><strong><?php echo count($attachments); ?></strong></article>
-  </div>
-
   <?php if ((string)$selectedBatch['status'] !== 'approved' && $draftableCount > 0): ?>
-    <div class="alert alert-warn">Graph下書き作成には、バッチ状態を「確認済み」にする必要があります。送信前レビューを完了してから実行してください。</div>
+    <div class="alert alert--warning"><?php echo fitsc_icon('alert-triangle'); ?><div class="alert__body">下書きを作成するには、バッチの状態を「確認済み」にしてください。</div></div>
   <?php elseif ($pendingAttachmentCount > 0): ?>
-    <div class="alert alert-warn">要確認・未対応の添付が残っています。<a class="text-link" href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付ファイル画面</a>で確定してください。</div>
+    <div class="alert alert--warning"><?php echo fitsc_icon('paperclip'); ?><div class="alert__body">要確認の添付があります。<a href="attachments.php?batch_id=<?php echo (int)$selectedBatch['id']; ?>">添付ファイル画面</a>で確定してください。</div></div>
   <?php endif; ?>
 
-  <div class="two-column-grid mt-14">
-    <form method="post" class="panel-subform">
-      <?php echo mail_auth_csrf_field(); ?>
-      <input type="hidden" name="action" value="create_batch_drafts">
-      <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
-      <h3>1. Outlook下書き作成</h3>
-      <p class="muted">Graphで送信用メールボックスのDraftsに下書きを作成します。添付もこの段階で追加されます。</p>
-      <label><span class="muted">1回の最大作成件数</span><input type="text" name="limit" value="<?php echo (int)$maxDraftsPerRun; ?>" inputmode="numeric" style="max-width:120px"></label>
-      <button type="submit" class="primary"<?php echo ($graphReady && mail_auth_has_permission($user, 'draft.create') && (string)$selectedBatch['status'] === 'approved' && $pendingAttachmentCount === 0 && $draftableCount > 0) ? '' : ' disabled'; ?>>下書きを一括作成</button>
-    </form>
+  <div class="split">
+    <section class="card">
+      <div class="card__header"><div class="card__title"><span class="ml-step-num">1</span>Outlook 下書きを作成</div></div>
+      <form method="post" class="card__body stack" data-busy>
+        <?php echo mail_auth_csrf_field(); ?>
+        <input type="hidden" name="action" value="create_batch_drafts">
+        <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
+        <p class="small-note">送信用メールボックスの下書きフォルダに作成します。添付もこの段階で追加されます。</p>
+        <label class="field"><span>1回の最大作成件数</span><input type="text" name="limit" value="<?php echo (int)$maxDraftsPerRun; ?>" inputmode="numeric" style="max-width:140px"></label>
+        <div><button type="submit" class="btn btn--primary"<?php echo ($graphReady && mail_auth_has_permission($user, 'draft.create') && (string)$selectedBatch['status'] === 'approved' && $pendingAttachmentCount === 0 && $draftableCount > 0) ? '' : ' disabled'; ?>><?php echo fitsc_icon('inbox'); ?>下書きを一括作成</button></div>
+      </form>
+    </section>
 
-    <form method="post" class="panel-subform danger-zone">
-      <?php echo mail_auth_csrf_field(); ?>
-      <input type="hidden" name="action" value="send_batch_drafts">
-      <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
-      <h3>2. 作成済み下書きの送信</h3>
-      <p class="muted">Graph message_id を保持している下書きだけを送信します。実行には管理者権限、Mail.Send権限、送信UIの有効化が必要です。</p>
-      <label><span class="muted">1回の最大送信件数</span><input type="text" name="limit" value="<?php echo (int)$maxSendsPerRun; ?>" inputmode="numeric" style="max-width:120px"></label>
-      <label><span class="muted">確認入力</span><input type="text" name="confirm_text" placeholder="送信"></label>
-      <button type="submit" class="danger"<?php echo ($graphReady && $sendEnabled && mail_auth_has_permission($user, 'send.execute') && $sendableCount > 0) ? '' : ' disabled'; ?>>下書きを一括送信</button>
-    </form>
+    <section class="card card--danger">
+      <div class="card__header"><div class="card__title"><span class="ml-step-num">2</span>作成済みの下書きを送信</div></div>
+      <form method="post" class="card__body stack" data-busy data-confirm="作成済みの下書きを送信します。取り消すことはできません。" data-confirm-title="メールを送信しますか？" data-confirm-ok="送信する">
+        <?php echo mail_auth_csrf_field(); ?>
+        <input type="hidden" name="action" value="send_batch_drafts">
+        <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
+        <p class="small-note">Graph の message_id を持つ下書きだけを送信します。管理者権限・Mail.Send 権限・送信 UI の有効化が必要です。</p>
+        <div class="form-grid">
+          <label class="field"><span>1回の最大送信件数</span><input type="text" name="limit" value="<?php echo (int)$maxSendsPerRun; ?>" inputmode="numeric"></label>
+          <label class="field"><span>確認のため「送信」と入力</span><input type="text" name="confirm_text" placeholder="送信" autocomplete="off"></label>
+        </div>
+        <div><button type="submit" class="btn btn--danger"<?php echo ($graphReady && $sendEnabled && mail_auth_has_permission($user, 'send.execute') && $sendableCount > 0) ? '' : ' disabled'; ?>><?php echo fitsc_icon('send'); ?>下書きを一括送信</button></div>
+      </form>
+    </section>
   </div>
-</section>
 
-<section class="panel mt-18">
-  <div class="panel-head"><h2>対象メール一覧</h2><span class="muted">個別実行も可能</span></div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>ID</th><th>識別番号</th><th>団体</th><th>宛先</th><th>状態</th><th>Graph message_id</th><th>操作</th></tr></thead>
-      <tbody>
-        <?php if ($targets === []): ?><tr><td colspan="7" class="empty">対象メールはありません。</td></tr><?php endif; ?>
-        <?php foreach ($targets as $target): ?>
-          <?php
-            $canCreate = $graphReady && mail_auth_has_permission($user, 'draft.create') && (string)$selectedBatch['status'] === 'approved' && $pendingAttachmentCount === 0 && in_array((string)$target['status'], ['ready','failed'], true) && empty($target['graph_message_id']);
-            $canSend = $graphReady && $sendEnabled && mail_auth_has_permission($user, 'send.execute') && (string)$target['status'] === 'draft_created' && !empty($target['graph_message_id']);
-          ?>
-          <tr>
-            <td><?php echo (int)$target['id']; ?></td>
-            <td><code><?php echo mail_h((string)$target['identifier']); ?></code></td>
-            <td><?php echo mail_h((string)$target['organization_name']); ?></td>
-            <td><?php echo mail_h((string)$target['to_email']); ?></td>
-            <td><span class="badge"><?php echo mail_h(mail_status_label((string)$target['status'])); ?></span><?php if (!empty($target['error_message'])): ?><br><span class="danger-text"><?php echo mail_h((string)$target['error_message']); ?></span><?php endif; ?></td>
-            <td><code><?php echo mail_h((string)($target['graph_message_id'] ?? '')); ?></code></td>
-            <td class="action-cell">
-              <form method="post" class="inline-form">
-                <?php echo mail_auth_csrf_field(); ?>
-                <input type="hidden" name="action" value="create_target_draft">
-                <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
-                <input type="hidden" name="target_id" value="<?php echo (int)$target['id']; ?>">
-                <button type="submit" class="secondary"<?php echo $canCreate ? '' : ' disabled'; ?>>下書き作成</button>
-              </form>
-              <form method="post" class="inline-form">
-                <?php echo mail_auth_csrf_field(); ?>
-                <input type="hidden" name="action" value="send_target_draft">
-                <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
-                <input type="hidden" name="target_id" value="<?php echo (int)$target['id']; ?>">
-                <input type="hidden" name="confirm_text" value="送信">
-                <button type="submit" class="danger"<?php echo $canSend ? '' : ' disabled'; ?>>送信</button>
-              </form>
-            </td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-  </div>
-</section>
+  <section class="card">
+    <div class="card__header"><div class="card__title"><?php echo fitsc_icon('mail'); ?>対象メール <small><?php echo count($targets); ?>件</small></div></div>
+    <div class="table-wrap is-stacked">
+      <table class="table">
+        <thead><tr><th>団体</th><th>宛先</th><th>状態</th><th>message_id</th><th class="col-actions"></th></tr></thead>
+        <tbody>
+          <?php if ($targets === []): ?><tr><td colspan="5" class="empty">対象メールはありません。</td></tr><?php endif; ?>
+          <?php foreach ($targets as $target): ?>
+            <?php
+              $canCreate = $graphReady && mail_auth_has_permission($user, 'draft.create') && (string)$selectedBatch['status'] === 'approved' && $pendingAttachmentCount === 0 && in_array((string)$target['status'], ['ready', 'failed'], true) && empty($target['graph_message_id']);
+              $canSend = $graphReady && $sendEnabled && mail_auth_has_permission($user, 'send.execute') && (string)$target['status'] === 'draft_created' && !empty($target['graph_message_id']);
+            ?>
+            <tr<?php echo !empty($target['error_message']) ? ' class="is-error"' : ''; ?>>
+              <td><span class="cell-main"><?php echo mail_h((string)$target['organization_name']); ?></span><span class="cell-sub"><code><?php echo mail_h((string)$target['identifier']); ?></code> ・ #<?php echo (int)$target['id']; ?></span></td>
+              <td class="allow-select"><?php echo mail_h((string)$target['to_email']); ?></td>
+              <td><?php echo mail_status_badge((string)$target['status']); ?><?php if (!empty($target['error_message'])): ?><span class="cell-sub text-danger"><?php echo mail_h((string)$target['error_message']); ?></span><?php endif; ?></td>
+              <td><?php echo !empty($target['graph_message_id']) ? '<code class="text-xs">' . mail_h((string)$target['graph_message_id']) . '</code>' : '<span class="text-subtle">—</span>'; ?></td>
+              <td class="col-actions">
+                <div class="btn-group">
+                  <form method="post" data-busy>
+                    <?php echo mail_auth_csrf_field(); ?>
+                    <input type="hidden" name="action" value="create_target_draft">
+                    <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
+                    <input type="hidden" name="target_id" value="<?php echo (int)$target['id']; ?>">
+                    <button type="submit" class="btn btn--sm"<?php echo $canCreate ? '' : ' disabled'; ?>>下書き作成</button>
+                  </form>
+                  <form method="post" data-busy data-confirm="<?php echo mail_h((string)$target['organization_name']); ?> へ送信します。" data-confirm-title="このメールを送信しますか？" data-confirm-ok="送信する">
+                    <?php echo mail_auth_csrf_field(); ?>
+                    <input type="hidden" name="action" value="send_target_draft">
+                    <input type="hidden" name="batch_id" value="<?php echo (int)$selectedBatch['id']; ?>">
+                    <input type="hidden" name="target_id" value="<?php echo (int)$target['id']; ?>">
+                    <input type="hidden" name="confirm_text" value="送信">
+                    <button type="submit" class="btn btn--danger-ghost btn--sm"<?php echo $canSend ? '' : ' disabled'; ?>>送信</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  </section>
 <?php endif; ?>
-
-<section class="panel mt-18 feature-panel">
-  <h2>実装済みの範囲</h2>
-  <p>この画面では、Graph APIのアクセストークン取得、送信用ユーザー確認、Outlook下書き作成、3MB未満の通常添付、3MB以上150MB以下のアップロードセッション添付、既存下書き送信、処理ログ保存までを実行します。委任認証方式は後続実装用として設定枠のみ残しています。</p>
-</section>
 <?php endif; ?>
 <?php
 mail_render_page_footer();
