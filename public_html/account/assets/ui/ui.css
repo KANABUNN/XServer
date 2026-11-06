@@ -110,8 +110,8 @@
   /* layers */
   --z-sticky: 20;
   --z-topbar: 30;
-  --z-sidebar: 40;
   --z-backdrop: 45;
+  --z-sidebar: 50; /* モバイルで開いたサイドバーは背景のぼかしより手前に出す */
   --z-menu: 70;
   --z-modal: 60;
   --z-toast: 90;
