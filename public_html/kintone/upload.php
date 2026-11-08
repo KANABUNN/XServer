@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_layout.php';
+kintone_require_legacy_feature();
 $user = kintone_auth_require_operator_access();
 kintone_page_header('名簿アップロード', $user, ['subtitle' => '部員名簿CSVを解析して、団体マスタとの差分を作成します']);
 kintone_render_flash();

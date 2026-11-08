@@ -344,7 +344,6 @@ if ($error !== '' && !$openEditor): ?><?= fitsc_flash_html('error', $error) ?><?
                     <input type="hidden" name="app_key" value="<?= kintone_h($key) ?>">
                     <button type="submit" class="menu__item" role="menuitem"><?= fitsc_icon('zap') ?>接続テスト</button>
                   </form>
-                  <?php if ($active): ?><a class="menu__item" role="menuitem" href="sync.php?app_key=<?= rawurlencode($key) ?>"><?= fitsc_icon('refresh') ?>同期画面へ</a><?php endif; ?>
                   <?php if ($key !== 'organizations'): ?>
                     <div class="menu__sep"></div>
                     <form method="post" action="settings.php" data-confirm="<?= $active ? '無効化すると同期対象から外れます。設定は残ります。' : 'このアプリを再び同期対象にします。' ?>" data-confirm-title="「<?= kintone_h($app['display_name']) ?>」を<?= $active ? '無効化' : '再有効化' ?>しますか？" data-confirm-ok="<?= $active ? '無効化する' : '再有効化する' ?>"<?= $active ? '' : ' data-confirm-tone="default"' ?>>
@@ -393,7 +392,7 @@ if ($error !== '' && !$openEditor): ?><?= fitsc_flash_html('error', $error) ?><?
         </label>
         <label class="field">
           <span>表示名 <span class="req">必須</span></span>
-          <input name="display_name" value="<?= kintone_h($selected['display_name'] ?? '') ?>" required placeholder="例: 団体マスタ">
+          <input name="display_name" value="<?= kintone_h($selected['display_name'] ?? '') ?>" required placeholder="例: 部員名簿">
         </label>
         <label class="field">
           <span>サブドメイン <span class="req">必須</span></span>

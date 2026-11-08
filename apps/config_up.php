@@ -351,6 +351,8 @@ return [
         'api_connect_timeout_seconds' => 15,
         'api_max_retries' => 3,
         'api_chunk_pause_ms' => 200,
+        // 旧機能（CSV名簿取込・団体マスタ・ID77送信）の画面・API。原則廃止のため false（ソースは流用用に残す）
+        'legacy_features_enabled' => false,
 
         'role_rank_map' => [
             '代表' => 100,

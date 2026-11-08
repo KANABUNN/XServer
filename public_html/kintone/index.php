@@ -2,166 +2,103 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/_layout.php';
+require_once __DIR__ . '/_roster.php';
 $user = kintone_auth_require_view_access();
-$pdo = kintone_pdo('org');
-$counts = [
-    'orgs' => (int)$pdo->query('SELECT COUNT(*) FROM organizations')->fetchColumn(),
-    'active' => (int)$pdo->query('SELECT COUNT(*) FROM organizations WHERE activity_status="active"')->fetchColumn(),
-    'inactive' => (int)$pdo->query('SELECT COUNT(*) FROM organizations WHERE activity_status="inactive"')->fetchColumn(),
-    'review' => (int)$pdo->query('SELECT COUNT(*) FROM organization_change_logs WHERE risk_level="high" AND applied_at IS NULL')->fetchColumn(),
-];
-$latest = $pdo->query('SELECT * FROM roster_import_batches ORDER BY id DESC LIMIT 5')->fetchAll() ?: [];
-$latestSync = $pdo->query('SELECT * FROM kintone_sync_jobs ORDER BY id DESC LIMIT 1')->fetch() ?: null;
-$apps = [];
-try {
-    $apps = $pdo->query('SELECT app_key, display_name, app_role, status, last_sync_status, last_synced_at FROM kintone_apps WHERE is_active = 1 ORDER BY FIELD(app_key, "organizations") DESC, app_key ASC LIMIT 8')->fetchAll() ?: [];
-} catch (Throwable $e) {
-    error_log('[kintone dashboard apps] ' . $e->getMessage());
-}
-$canOperate = kintone_user_can_operate($user);
 $isAdmin = kintone_auth_user_has_role($user, 'admin');
-$rosterCounts = null;
+
+$counts = null;
+$heartbeat = null;
+$directory = null;
+$attention = [];
 try {
-    require_once dirname(__DIR__, 2) . '/apps/roster_core/bootstrap.php';
-    $rosterCounts = roster_staff_counts();
+    $pdo = roster_db();
+    $counts = roster_staff_counts();
+    $heartbeat = roster_worker_heartbeat_status($pdo);
+    $directory = roster_directory_status($pdo);
+    $attention = array_slice(roster_staff_list(['state' => 'attention']), 0, 8);
 } catch (Throwable $e) {
     error_log('[kintone dashboard roster] ' . $e->getMessage());
 }
+
+$stat = static function (string $href, string $label, string $icon, string $tone, int $count): string {
+    return '<a class="stat ' . ($count > 0 && $tone !== '' ? 'stat--' . $tone : '') . ' kt-stat-link" href="' . kintone_h($href) . '">'
+        . '<span class="stat__label"><span class="stat__icon">' . fitsc_icon($icon) . '</span>' . kintone_h($label) . '</span>'
+        . '<span class="stat__value">' . $count . '</span></a>';
+};
+
 kintone_page_header('ダッシュボード', $user, [
     'actions' => '<a class="btn btn--primary hide-mobile" href="roster.php">' . fitsc_icon('users') . '名簿の提出・承認</a>',
 ]);
 kintone_render_flash();
 ?>
-<section class="card">
-  <div class="card__header">
-    <div>
-      <div class="card__title"><?= fitsc_icon('users') ?>部員名簿（Forms 提出）</div>
-      <p class="card__subtitle">団体が Forms で提出 → ここで差分を確認して差し戻し・accept → accept した内容だけが自動で kintone の部員名簿（ID20）へ反映されます。</p>
-    </div>
-    <a class="btn btn--ghost btn--sm" href="roster.php">提出一覧<?= fitsc_icon('arrow-right') ?></a>
-  </div>
-  <div class="card__body">
-    <?php if (is_array($rosterCounts)): ?>
-      <div class="stat-grid kt-roster-stats">
-        <a class="stat stat--compact <?= $rosterCounts['submitted'] > 0 ? 'stat--info' : '' ?> kt-stat-link" href="roster.php?state=submitted"><span class="stat__label"><span class="stat__icon"><?= fitsc_icon('inbox') ?></span>確認待ち</span><span class="stat__value"><?= (int)$rosterCounts['submitted'] ?></span></a>
-        <a class="stat stat--compact kt-stat-link" href="roster.php?state=queued"><span class="stat__label"><span class="stat__icon"><?= fitsc_icon('clock') ?></span>反映待ち</span><span class="stat__value"><?= (int)$rosterCounts['queued'] + (int)$rosterCounts['running'] ?></span></a>
-        <a class="stat stat--compact <?= ($rosterCounts['failed'] + $rosterCounts['conflict'] + $rosterCounts['unknown']) > 0 ? 'stat--danger' : '' ?> kt-stat-link" href="roster.php?state=attention"><span class="stat__label"><span class="stat__icon"><?= fitsc_icon('alert-triangle') ?></span>失敗・競合・結果確認待ち</span><span class="stat__value"><?= (int)$rosterCounts['failed'] + (int)$rosterCounts['conflict'] + (int)$rosterCounts['unknown'] ?></span></a>
-        <a class="stat stat--compact stat--success kt-stat-link" href="roster.php?state=applied"><span class="stat__label"><span class="stat__icon"><?= fitsc_icon('check-circle') ?></span>反映済み</span><span class="stat__value"><?= (int)$rosterCounts['applied'] ?></span></a>
-      </div>
-    <?php else: ?>
-      <p class="text-subtle">名簿の提出情報を読み込めませんでした。<a href="roster_settings.php">反映・接続の確認</a>を開いてください。</p>
-    <?php endif; ?>
-  </div>
-</section>
+<?php if (!is_array($counts)): ?>
+  <div class="alert alert--danger"><?= fitsc_icon('alert-circle') ?><div class="alert__body">名簿の提出情報を読み込めませんでした。<a href="roster_settings.php">反映・接続の確認</a>を開いてください。</div></div>
+<?php else: ?>
+  <?php if (is_array($heartbeat) && $heartbeat['is_stale']): ?>
+    <div class="alert alert--warning"><?= fitsc_icon('alert-triangle') ?><div class="alert__body"><strong>反映ワーカーが最近動いていません。</strong>accept した名簿が kintone へ反映されないため、cron の設定を確認してください（<a href="roster_settings.php">反映・接続の確認</a>）。</div></div>
+  <?php endif; ?>
 
-<h2 class="section-title">旧機能：団体マスタ（CSV名簿取込・ID77送信）</h2>
-<div class="stat-grid">
-  <a class="stat kt-stat-link" href="organizations.php">
-    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('building') ?></span>登録団体</span>
-    <span class="stat__value"><?= $counts['orgs'] ?></span>
-  </a>
-  <a class="stat stat--success kt-stat-link" href="organizations.php">
-    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('check-circle') ?></span>活動中</span>
-    <span class="stat__value"><?= $counts['active'] ?></span>
-  </a>
-  <a class="stat stat--danger kt-stat-link" href="organizations.php">
-    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('x-circle') ?></span>活動不可</span>
-    <span class="stat__value"><?= $counts['inactive'] ?></span>
-  </a>
-  <a class="stat <?= $counts['review'] > 0 ? 'stat--warning' : 'stat--teal' ?> kt-stat-link" href="review.php">
-    <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('alert-triangle') ?></span>高リスク・未反映</span>
-    <span class="stat__value"><?= $counts['review'] ?></span>
-  </a>
-</div>
-
-<section class="card">
-  <div class="card__header card__header--plain">
-    <div class="card__title"><?= fitsc_icon('sparkles') ?>CSV名簿取込（旧機能）の流れ</div>
+  <div class="stat-grid">
+    <?= $stat('roster.php?state=submitted', '確認待ち', 'inbox', 'info', (int)$counts['submitted']) ?>
+    <?= $stat('roster.php?state=queued', '反映待ち', 'clock', 'info', (int)$counts['queued'] + (int)$counts['running']) ?>
+    <?= $stat('roster.php?state=attention', '失敗・競合・結果確認待ち', 'alert-triangle', 'danger', (int)$counts['failed'] + (int)$counts['conflict'] + (int)$counts['unknown']) ?>
+    <?= $stat('roster.php?state=applied', '反映済み', 'check-circle', 'success', (int)$counts['applied']) ?>
   </div>
-  <div class="card__body">
-    <ol class="kt-flow">
-      <li><a href="upload.php"><span class="kt-flow__icon"><?= fitsc_icon('upload') ?></span><strong>名簿アップロード</strong><small>部員名簿CSVを解析</small></a></li>
-      <li><a href="diff.php"><span class="kt-flow__icon"><?= fitsc_icon('diff') ?></span><strong>差分の確認</strong><small>変更点とリスクを確認</small></a></li>
-      <li><a href="review.php"><span class="kt-flow__icon"><?= fitsc_icon('inbox') ?></span><strong>レビュー</strong><small>要確認の値を確定・除外</small></a></li>
-      <li><a href="diff.php"><span class="kt-flow__icon"><?= fitsc_icon('check-circle') ?></span><strong>承認・反映</strong><small>団体マスタへ反映</small></a></li>
-      <li><a href="sync.php"><span class="kt-flow__icon"><?= fitsc_icon('refresh') ?></span><strong>kintone同期</strong><small>各アプリへ送信・取得</small></a></li>
-    </ol>
-  </div>
-</section>
 
-<div class="split">
   <section class="card">
-    <div class="card__header">
-      <div class="card__title"><?= fitsc_icon('cloud') ?>kintoneアプリ</div>
-      <?php if ($isAdmin): ?><a class="btn btn--ghost btn--sm" href="settings.php"><?= fitsc_icon('settings') ?>アプリ設定</a><?php endif; ?>
+    <div class="card__header card__header--plain">
+      <div class="card__title"><?= fitsc_icon('sparkles') ?>部員名簿の流れ</div>
     </div>
-    <?php if ($apps === []): ?>
-      <div class="empty"><span class="empty__icon"><?= fitsc_icon('cloud') ?></span><span>アプリはまだ登録されていません。</span></div>
-    <?php else: ?>
-      <div class="list">
-        <?php foreach ($apps as $app): ?>
-          <a class="list-item" href="sync.php?app_key=<?= rawurlencode((string)$app['app_key']) ?>">
-            <span class="list-item__icon"><?= fitsc_icon((string)$app['app_role'] === 'pull' ? 'download' : ((string)$app['app_role'] === 'push' ? 'upload' : 'database'), 'ico--sm') ?></span>
-            <span class="list-item__main">
-              <span class="list-item__title"><?= kintone_h($app['display_name']) ?></span>
-              <span class="list-item__meta"><span class="mono"><?= kintone_h($app['app_key']) ?></span> ・ 最終同期 <?= kintone_h($app['last_synced_at'] ?? '—') ?></span>
-            </span>
-            <span class="list-item__side"><?= kintone_role_badge((string)$app['app_role']) ?><?= kintone_status_badge((string)($app['last_sync_status'] ?: $app['status'])) ?></span>
-          </a>
-        <?php endforeach; ?>
-      </div>
-    <?php endif; ?>
+    <div class="card__body">
+      <ol class="kt-flow">
+        <li><a href="roster.php"><span class="kt-flow__icon"><?= fitsc_icon('file-text') ?></span><strong>団体が提出</strong><small>Forms の部員名簿フォーム</small></a></li>
+        <li><a href="roster.php?state=submitted"><span class="kt-flow__icon"><?= fitsc_icon('diff') ?></span><strong>差分の確認</strong><small>kintone の現在値と比較</small></a></li>
+        <li><a href="roster.php?state=returned"><span class="kt-flow__icon"><?= fitsc_icon('return') ?></span><strong>差し戻し</strong><small>理由を付けて修正を依頼</small></a></li>
+        <li><a href="roster.php?state=queued"><span class="kt-flow__icon"><?= fitsc_icon('check-circle') ?></span><strong>accept</strong><small>反映を予約</small></a></li>
+        <li><a href="roster.php?state=applied"><span class="kt-flow__icon"><?= fitsc_icon('refresh') ?></span><strong>自動反映</strong><small>定期実行で kintone ID20 へ</small></a></li>
+      </ol>
+    </div>
   </section>
 
-  <div class="stack">
+  <div class="split">
     <section class="card">
       <div class="card__header">
-        <div class="card__title"><?= fitsc_icon('refresh') ?>最新の同期</div>
-        <a class="btn btn--ghost btn--sm" href="sync.php">同期画面<?= fitsc_icon('arrow-right') ?></a>
+        <div class="card__title"><?= fitsc_icon('alert-triangle') ?>対応が必要な提出</div>
+        <a class="btn btn--ghost btn--sm" href="roster.php?state=attention">すべて見る<?= fitsc_icon('arrow-right') ?></a>
       </div>
-      <?php if (is_array($latestSync)): ?>
-        <div class="card__body">
-          <div class="kt-sync-summary">
-            <div class="kt-sync-summary__head">
-              <span class="mono">#<?= (int)$latestSync['id'] ?></span>
-              <span class="mono text-subtle"><?= kintone_h($latestSync['target_app']) ?></span>
-              <?= kintone_status_badge((string)$latestSync['status']) ?>
-            </div>
-            <dl class="kt-sync-summary__nums">
-              <div><dt>成功</dt><dd class="text-success"><?= (int)$latestSync['success_items'] ?></dd></div>
-              <div><dt>失敗</dt><dd class="<?= (int)$latestSync['failed_items'] > 0 ? 'text-danger' : '' ?>"><?= (int)$latestSync['failed_items'] ?></dd></div>
-              <div><dt>終了</dt><dd class="text-sm"><?= kintone_h($latestSync['finished_at'] ?? '—') ?></dd></div>
-            </dl>
-          </div>
-        </div>
-      <?php else: ?>
-        <div class="empty"><span class="empty__icon"><?= fitsc_icon('refresh') ?></span><span>同期ジョブはまだありません。</span></div>
-      <?php endif; ?>
-    </section>
-
-    <section class="card">
-      <div class="card__header">
-        <div class="card__title"><?= fitsc_icon('file-text') ?>最近のアップロード</div>
-        <a class="btn btn--ghost btn--sm" href="diff.php">差分を見る<?= fitsc_icon('arrow-right') ?></a>
-      </div>
-      <?php if ($latest === []): ?>
-        <div class="empty"><span class="empty__icon"><?= fitsc_icon('upload') ?></span><span>アップロード履歴はありません。</span></div>
+      <?php if ($attention === []): ?>
+        <div class="empty"><span class="empty__icon"><?= fitsc_icon('check-circle') ?></span><span>対応が必要な提出はありません。</span></div>
       <?php else: ?>
         <div class="list">
-          <?php foreach ($latest as $row): ?>
-            <a class="list-item" href="diff.php?batch_id=<?= (int)$row['id'] ?>">
-              <span class="list-item__icon"><?= fitsc_icon('file-text', 'ico--sm') ?></span>
+          <?php foreach ($attention as $c): ?>
+            <a class="list-item" href="roster_detail.php?case_id=<?= (int)$c['id'] ?>">
+              <span class="list-item__icon"><?= fitsc_icon('users', 'ico--sm') ?></span>
               <span class="list-item__main">
-                <span class="list-item__title"><?= kintone_h($row['original_name']) ?></span>
-                <span class="list-item__meta">#<?= (int)$row['id'] ?> ・ <?= (int)$row['total_rows'] ?>行 ・ <?= kintone_h($row['created_at']) ?></span>
+                <span class="list-item__title"><?= kintone_h($c['group_name']) ?></span>
+                <span class="list-item__meta"><span class="mono"><?= kintone_h($c['group_code']) ?></span> ・ <?= (int)$c['fiscal_year'] ?>年度 ・ 第<?= (int)$c['latest_revision_number'] ?>版</span>
               </span>
-              <span class="list-item__side"><?= kintone_status_badge((string)$row['status']) ?></span>
+              <span class="list-item__side"><?= (string)$c['review_state'] === ROSTER_REVIEW_SUBMITTED ? kt_roster_review_badge((string)$c['review_state']) : kt_roster_apply_badge((string)$c['apply_state']) ?></span>
             </a>
           <?php endforeach; ?>
         </div>
       <?php endif; ?>
     </section>
+
+    <section class="card">
+      <div class="card__header">
+        <div class="card__title"><?= fitsc_icon('activity') ?>反映・接続</div>
+        <a class="btn btn--ghost btn--sm" href="roster_settings.php">詳細<?= fitsc_icon('arrow-right') ?></a>
+      </div>
+      <div class="card__body">
+        <dl class="dl dl--grid">
+          <div><dt>反映ワーカー</dt><dd><?= is_array($heartbeat) && !$heartbeat['is_stale'] ? kt_roster_badge('稼働中', 'success') : kt_roster_badge('最近の実行なし', 'danger') ?></dd></div>
+          <div><dt>最終実行</dt><dd class="text-sm"><?= kintone_h((string)($heartbeat['row']['last_finished_at'] ?? $heartbeat['row']['last_started_at'] ?? '記録なし')) ?></dd></div>
+          <div><dt>団体一覧（ID7）</dt><dd class="num"><?= (int)($directory['present'] ?? 0) ?>団体</dd></div>
+          <div><dt>団体一覧の更新</dt><dd class="text-sm"><?= kintone_h((string)($directory['refreshed_at'] ?? '') ?: '未取得') ?></dd></div>
+        </dl>
+        <?php if ($isAdmin): ?><p class="small-note"><a href="settings.php"><?= fitsc_icon('settings', 'ico--sm') ?>アプリ設定（APIトークン）</a></p><?php endif; ?>
+      </div>
+    </section>
   </div>
-</div>
+<?php endif; ?>
 <?php kintone_page_footer(); ?>
