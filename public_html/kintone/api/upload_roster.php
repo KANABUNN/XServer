@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/_layout.php';
+kintone_require_legacy_feature();
 require_once dirname(__DIR__, 3) . '/apps/kintone_core/upload_helpers.php';
 require_once dirname(__DIR__, 3) . '/apps/kintone_core/roster_csv_parser.php';
 require_once dirname(__DIR__, 3) . '/apps/kintone_core/diff_service.php';

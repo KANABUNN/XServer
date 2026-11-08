@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/_layout.php';
+kintone_require_legacy_feature();
 require_once dirname(__DIR__, 3) . '/apps/kintone_core/apply_service.php';
 $user = kintone_auth_require_admin_access();
 kintone_auth_require_csrf();
