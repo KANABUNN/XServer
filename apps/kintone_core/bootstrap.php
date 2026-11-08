@@ -31,6 +31,11 @@ function kintone_load_config(): array
         kintone_project_root() . '/apps/config.php',
         kintone_project_root() . '/apps/config_up.php',
     ];
+    // ローカル検証用: サーバー管理者が環境変数で設定ファイルを明示した場合だけ差し替える
+    $override = getenv('FITSC_CONFIG_FILE');
+    if (is_string($override) && $override !== '' && is_file($override)) {
+        $candidates = [$override];
+    }
     foreach ($candidates as $path) {
         if (!is_file($path)) {
             continue;

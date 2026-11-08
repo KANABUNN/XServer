@@ -73,6 +73,10 @@ try {
         json_response(['ok' => false, 'message' => '対象フォームが見つかりません。'], 404);
         exit;
     }
+    if ((string)($form['settings']['form_type'] ?? 'standard') === 'roster') {
+        // 部員名簿は団体確認付きの専用画面（api/roster.php）からだけ提出できる
+        json_response(['ok' => false, 'message' => 'このフォームは部員名簿の専用画面から提出してください。ページを再読み込みしてください。'], 409);
+    }
     if (!forms_is_publicly_available($form)) {
         $availability = forms_public_period_context($form);
         json_response(['ok' => false, 'message' => forms_period_unavailable_public_message($availability)], 403);

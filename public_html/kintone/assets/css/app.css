@@ -135,3 +135,16 @@
 .kt-disclosure__body { padding: 4px 16px 16px; }
 .kt-scroll-table { max-height: 420px; }
 @media (max-width: 600px) { .kt-disclosure > summary small { display: none; } }
+
+/* ---- 部員名簿（Forms 提出の審査・反映） ---- */
+.kt-roster-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.kt-roster-stats .kt-stat-link.is-active { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-soft); }
+.kt-roster-head { margin-bottom: 4px; }
+.kt-roster-kept { margin-top: 8px; font-size: var(--fs-sm); }
+.kt-roster-kept summary { cursor: pointer; color: var(--text-muted); }
+.kt-roster-kept ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+.kt-plain-list { margin: 4px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
+.kt-roster-job--failed { border-color: var(--danger-line, var(--border)); }
+.kt-roster-job--conflict, .kt-roster-job--unknown { border-color: var(--warning-line, var(--border)); }
+.card__header form.cluster { flex-wrap: wrap; justify-content: flex-end; }
+.card__header form.cluster select, .card__header form.cluster .input-icon { width: auto; min-width: 0; flex: 0 1 auto; }

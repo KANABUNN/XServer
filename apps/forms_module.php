@@ -621,6 +621,11 @@ function forms_default_settings(): array
         'public_end_time' => '',
         'submit_button_label' => '送信する',
         'completion_message' => '送信を受け付けました。',
+        // standard: 通常フォーム / roster: 部員名簿フォーム（団体確認付きの専用画面・kintone連携）
+        'form_type' => 'standard',
+        'roster_fiscal_year' => '',
+        'roster_phone_required_scope' => 'officers',
+        'roster_phone_required_manager' => false,
     ];
 }
 
@@ -1116,6 +1121,8 @@ function forms_save_form(array $formData, array $fields): array
     $settings['submit_button_label'] = trim((string)($formData['submit_button_label'] ?? $settings['submit_button_label'])) ?: '送信する';
     $settings['completion_message'] = trim((string)($formData['completion_message'] ?? $settings['completion_message'])) ?: '送信を受け付けました。';
 
+    forms_apply_roster_settings_from_input($pdo, $settings, $formData, $id);
+
     if (!$settings['enable_date_field']) {
         $settings['date_required'] = false;
     }
@@ -1180,6 +1187,48 @@ function forms_save_form(array $formData, array $fields): array
     }
 
     return forms_load_form($formId) ?? [];
+}
+
+/**
+ * 部員名簿フォームの設定（種別・対象年度・電話番号の必須範囲）。
+ * 名簿の提出は apps/roster_core が扱い、一般フォームの日付・添付欄は使わない。
+ */
+function forms_apply_roster_settings_from_input(PDO $pdo, array &$settings, array $formData, int $formId): void
+{
+    $previousType = (string)($settings['form_type'] ?? 'standard');
+    $formType = (string)($formData['form_type'] ?? $previousType);
+    $formType = in_array($formType, ['standard', 'roster'], true) ? $formType : 'standard';
+    if ($formId > 0 && $previousType === 'roster' && $formType !== 'roster' && forms_roster_case_count($pdo, $formId) > 0) {
+        throw new InvalidArgumentException('部員名簿の提出履歴があるため、フォームの種別を変更できません。');
+    }
+    $settings['form_type'] = $formType;
+    if ($formType !== 'roster') {
+        return;
+    }
+    $year = (int)($formData['roster_fiscal_year'] ?? $settings['roster_fiscal_year'] ?? 0);
+    if ($year < 2000 || $year > 2100) {
+        throw new InvalidArgumentException('部員名簿フォームの対象年度（西暦4桁）を入力してください。');
+    }
+    $scope = (string)($formData['roster_phone_required_scope'] ?? $settings['roster_phone_required_scope'] ?? 'officers');
+    $settings['roster_fiscal_year'] = $year;
+    $settings['roster_phone_required_scope'] = in_array($scope, ['officers', 'all', 'none'], true) ? $scope : 'officers';
+    $settings['roster_phone_required_manager'] = forms_normalize_boolean($formData['roster_phone_required_manager'] ?? $settings['roster_phone_required_manager'] ?? false);
+    $settings['enable_date_field'] = false;
+    $settings['date_required'] = false;
+    $settings['allow_file_upload'] = false;
+    $settings['file_required'] = false;
+}
+
+function forms_roster_case_count(PDO $pdo, int $formId): int
+{
+    try {
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM roster_cases WHERE form_id = :form_id');
+        $stmt->execute([':form_id' => $formId]);
+        return (int)$stmt->fetchColumn();
+    } catch (Throwable $e) {
+        // 名簿テーブル未作成（名簿機能を未導入）の環境では 0 件として扱う
+        return 0;
+    }
 }
 
 /**
@@ -1294,6 +1343,10 @@ function forms_duplicate_form(int $sourceFormId, array $overrides = []): array
         'public_end_time' => (string)($sourceSettings['public_end_time'] ?? ''),
         'submit_button_label' => (string)($sourceSettings['submit_button_label'] ?? '送信する'),
         'completion_message' => (string)($sourceSettings['completion_message'] ?? '送信を受け付けました。'),
+        'form_type' => (string)($sourceSettings['form_type'] ?? 'standard'),
+        'roster_fiscal_year' => $sourceSettings['roster_fiscal_year'] ?? '',
+        'roster_phone_required_scope' => (string)($sourceSettings['roster_phone_required_scope'] ?? 'officers'),
+        'roster_phone_required_manager' => (bool)($sourceSettings['roster_phone_required_manager'] ?? false),
     ];
 
     $fields = array_map(static function (array $field): array {
@@ -1318,6 +1371,10 @@ function forms_delete_form(int $formId): void
 {
     forms_bootstrap();
     $pdo = forms_db();
+    if (forms_roster_case_count($pdo, $formId) > 0) {
+        // 部員名簿の提出原本・accept・反映履歴は削除しない
+        throw new InvalidArgumentException('部員名簿の提出履歴があるフォームは削除できません。受付を終了する場合は非公開にしてください。');
+    }
 
     $relativePaths = [];
     $formSettingsStmt = $pdo->prepare('SELECT settings_json FROM managed_forms WHERE id = :id LIMIT 1');

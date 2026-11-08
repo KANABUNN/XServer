@@ -464,6 +464,14 @@
       return;
     }
 
+    // 部員名簿フォームは団体確認付きの専用画面（roster.js）で入力する
+    if ((form.settings || {}).form_type === 'roster') {
+      el.host.innerHTML = `<article class="card fp-card">${headerHtml(form)}${distributionHtml(form)}<div class="fp-roster" id="fp-roster-host"></div></article>`;
+      const rosterHost = document.getElementById('fp-roster-host');
+      if (window.FitscRoster && rosterHost) window.FitscRoster.mount(rosterHost, form);
+      return;
+    }
+
     const settings = form.settings || {};
     const draft = loadDraft(form.id);
     const hasDraft = draftHasContent(draft);

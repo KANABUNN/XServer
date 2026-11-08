@@ -68,4 +68,4 @@ page_header('提出フォーム', 'forms-public-page', ['app_name' => '総合管
 <script>
 window.FITSC_KINTONE_BRIDGE = <?= json_encode($kintoneBridgePayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 </script>
-<?php page_footer(['assets/js/common.js', 'assets/js/public.js']); ?>
+<?php page_footer(['assets/js/common.js', 'assets/js/roster.js', 'assets/js/public.js']); ?>

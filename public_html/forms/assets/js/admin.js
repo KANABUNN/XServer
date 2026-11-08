@@ -1318,6 +1318,7 @@ function renderOverview(form) {
       chip(settings.allow_file_upload, 'paperclip', settings.allow_file_upload ? `添付（${settings.file_required ? '必須' : '任意'}・${settings.max_upload_files || 1}個まで）` : '添付なし'),
       chip(settings.distribution_enabled, 'download', settings.distribution_enabled ? `配布資料あり${hasDistributionFile ? '' : '（ファイル未登録）'}` : '配布資料なし'),
       chip(true, 'send', `ボタン「${settings.submit_button_label || '送信する'}」`),
+      settings.form_type === 'roster' ? chip(true, 'users', `部員名簿フォーム（${settings.roster_fiscal_year || '年度未設定'}年度）`) : '',
     ].join('');
   }
 
@@ -1392,6 +1393,13 @@ function fillEditor(form) {
   editor.elements.public_end_time.value = form?.settings?.public_end_time || '';
   editor.elements.submit_button_label.value = form?.settings?.submit_button_label || '送信する';
   editor.elements.completion_message.value = form?.settings?.completion_message || '送信を受け付けました。';
+  if (editor.elements.form_type) {
+    editor.elements.form_type.value = form?.settings?.form_type === 'roster' ? 'roster' : 'standard';
+    editor.elements.roster_fiscal_year.value = form?.settings?.roster_fiscal_year || '';
+    editor.elements.roster_phone_required_scope.value = form?.settings?.roster_phone_required_scope || 'officers';
+    editor.elements.roster_phone_required_manager.checked = Boolean(form?.settings?.roster_phone_required_manager);
+    syncRosterSettingsVisibility(editor);
+  }
 
   const fieldRoot = document.getElementById('field-builder-list');
   fieldRoot.innerHTML = '';
@@ -1714,7 +1722,73 @@ async function selectFormById(formId) {
   await loadEntries(form.id, null, false);
 }
 
+/* ---- 部員名簿フォーム（提出一覧は表示のみ。承認の正本は kintone管理サイト） ---- */
+function syncRosterSettingsVisibility(editor) {
+  const isRoster = editor?.elements?.form_type?.value === 'roster';
+  editor?.querySelectorAll('[data-roster-only]').forEach((node) => {
+    node.hidden = !isRoster;
+    node.querySelectorAll('input, select').forEach((input) => { input.disabled = !isRoster; });
+  });
+}
+
+function setRosterResponsesMode(isRoster) {
+  const panel = document.querySelector('[data-workspace-panel="responses"]');
+  if (!panel) return;
+  document.getElementById('roster-cases-panel')?.classList.toggle('hidden', !isRoster);
+  panel.querySelectorAll(':scope > section.card:not(#roster-cases-panel), :scope > .fa-responses').forEach((node) => node.classList.toggle('hidden', isRoster));
+}
+
+async function loadRosterCases(form) {
+  setRosterResponsesMode(true);
+  const listRoot = document.getElementById('roster-cases-list');
+  const summary = document.getElementById('roster-cases-summary');
+  listRoot.innerHTML = '<div class="empty"><span class="spinner"></span><span>読み込み中…</span></div>';
+  let result;
+  try {
+    result = await apiGet(`api/admin_roster_cases.php?form_id=${encodeURIComponent(form.id)}`);
+  } catch (error) {
+    result = { ok: false, message: describeApiError(error).message };
+  }
+  if (!result.ok) {
+    listRoot.innerHTML = `<div class="empty"><span>${escapeHtml(result.message || '取得に失敗しました。')}</span></div>`;
+    return;
+  }
+  const c = result.counts || {};
+  adminState.entriesResult = {
+    entries: [],
+    filters: {},
+    summary: { total_count: c.total || 0, filtered_count: c.total || 0, status_counts: [{ status: 'new', label: '確認待ち', class: 'status-new', count: c.submitted || 0 }] },
+  };
+  summary.textContent = `${result.fiscal_year}年度 ・ 提出 ${c.total || 0}団体（確認待ち ${c.submitted || 0} / 差し戻し ${c.returned || 0} / accept済み ${c.accepted || 0}${c.attention ? ` / 反映の要確認 ${c.attention}` : ''}）。差し戻し・accept・反映は kintone管理サイトで行います。`;
+  const tone = (state) => ({ submitted: 'info', returned: 'warning', accepted: 'accent', queued: 'info', running: 'info', applied: 'success', failed: 'danger', conflict: 'warning', unknown: 'warning' }[state] || '');
+  const badge = (label, state) => `<span class="badge badge--dot${tone(state) ? ` badge--${tone(state)}` : ''}">${escapeHtml(label)}</span>`;
+  const cases = result.cases || [];
+  listRoot.innerHTML = cases.length ? cases.map((item) => `
+    <div class="list-item">
+      <span class="list-item__icon">${icon('users', 'ico--sm')}</span>
+      <span class="list-item__main">
+        <span class="list-item__title">${escapeHtml(item.group_name)} <span class="mono text-subtle">${escapeHtml(item.group_code)}</span></span>
+        <span class="list-item__meta">提出ID ${item.case_id} ・ 第${item.revision_number}版 ・ 最終提出 ${escapeHtml(item.last_submitted_at || '—')}${item.has_draft ? ' ・ 下書きあり' : ''}</span>
+      </span>
+      <span class="list-item__side">
+        ${badge(item.review_label, item.review_state)}
+        ${item.review_state === 'accepted' || item.apply_state !== 'not_applicable' ? badge(item.apply_label, item.apply_state) : ''}
+        ${item.detail_url ? `<a class="btn btn--sm" href="${escapeHtml(item.detail_url)}" target="_blank" rel="noopener">${icon('external')}kintone管理サイトで確認</a>` : ''}
+      </span>
+    </div>`).join('') : `<div class="empty"><span class="empty__icon">${icon('inbox')}</span><span>まだ提出はありません。</span></div>`;
+  if (!result.kintone_site_base_url) {
+    listRoot.insertAdjacentHTML('beforeend', '<p class="small-note">apps/config.php の roster.kintone_site_base_url を設定すると、kintone管理サイトの提出詳細へ直接移動できます。</p>');
+  }
+  renderOverview(getActiveForm());
+}
+
 async function loadEntries(formId, filters = null, preserveActiveEntry = true) {
+  const rosterForm = getActiveForm();
+  if (rosterForm && rosterForm.id === formId && rosterForm.settings?.form_type === 'roster') {
+    await loadRosterCases(rosterForm);
+    return;
+  }
+  setRosterResponsesMode(false);
   const activeFilters = filters || getEntryFilterValues();
   const queryString = buildEntriesQuery(formId, activeFilters);
   const result = await apiGet(`api/admin_entries.php?${queryString}`);
@@ -2339,6 +2413,15 @@ function bindEvents() {
     await loadEntries(adminState.activeFormId, null, true);
   });
 
+  document.getElementById('refresh-roster-cases-button')?.addEventListener('click', async () => {
+    if (!adminState.activeFormId) return;
+    await loadEntries(adminState.activeFormId, null, true);
+  });
+
+  document.querySelector('#form-editor select[name="form_type"]')?.addEventListener('change', (event) => {
+    syncRosterSettingsVisibility(event.currentTarget.form);
+  });
+
   document.getElementById('entry-filter-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!adminState.activeFormId) return;
@@ -2493,6 +2576,10 @@ function bindEvents() {
         public_end_time: form.elements.public_end_time.value,
         submit_button_label: form.elements.submit_button_label.value,
         completion_message: form.elements.completion_message.value,
+        form_type: form.elements.form_type?.value || 'standard',
+        roster_fiscal_year: Number(form.elements.roster_fiscal_year?.value || 0) || '',
+        roster_phone_required_scope: form.elements.roster_phone_required_scope?.value || 'officers',
+        roster_phone_required_manager: form.elements.roster_phone_required_manager?.checked || false,
       },
       fields: collectFields(),
     };

@@ -21,11 +21,41 @@ try {
 }
 $canOperate = kintone_user_can_operate($user);
 $isAdmin = kintone_auth_user_has_role($user, 'admin');
+$rosterCounts = null;
+try {
+    require_once dirname(__DIR__, 2) . '/apps/roster_core/bootstrap.php';
+    $rosterCounts = roster_staff_counts();
+} catch (Throwable $e) {
+    error_log('[kintone dashboard roster] ' . $e->getMessage());
+}
 kintone_page_header('ダッシュボード', $user, [
-    'actions' => $canOperate ? '<a class="btn btn--primary hide-mobile" href="upload.php">' . fitsc_icon('upload') . '名簿をアップロード</a>' : '',
+    'actions' => '<a class="btn btn--primary hide-mobile" href="roster.php">' . fitsc_icon('users') . '名簿の提出・承認</a>',
 ]);
 kintone_render_flash();
 ?>
+<section class="card">
+  <div class="card__header">
+    <div>
+      <div class="card__title"><?= fitsc_icon('users') ?>部員名簿（Forms 提出）</div>
+      <p class="card__subtitle">団体が Forms で提出 → ここで差分を確認して差し戻し・accept → accept した内容だけが自動で kintone の部員名簿（ID20）へ反映されます。</p>
+    </div>
+    <a class="btn btn--ghost btn--sm" href="roster.php">提出一覧<?= fitsc_icon('arrow-right') ?></a>
+  </div>
+  <div class="card__body">
+    <?php if (is_array($rosterCounts)): ?>
+      <div class="stat-grid kt-roster-stats">
+        <a class="stat stat--compact <?= $rosterCounts['submitted'] > 0 ? 'stat--info' : '' ?> kt-stat-link" href="roster.php?state=submitted"><span class="stat__label"><span class="stat__icon"><?= fitsc_icon('inbox') ?></span>確認待ち</span><span class="stat__value"><?= (int)$rosterCounts['submitted'] ?></span></a>
+        <a class="stat stat--compact kt-stat-link" href="roster.php?state=queued"><span class="stat__label"><span class="stat__icon"><?= fitsc_icon('clock') ?></span>反映待ち</span><span class="stat__value"><?= (int)$rosterCounts['queued'] + (int)$rosterCounts['running'] ?></span></a>
+        <a class="stat stat--compact <?= ($rosterCounts['failed'] + $rosterCounts['conflict'] + $rosterCounts['unknown']) > 0 ? 'stat--danger' : '' ?> kt-stat-link" href="roster.php?state=attention"><span class="stat__label"><span class="stat__icon"><?= fitsc_icon('alert-triangle') ?></span>失敗・競合・結果確認待ち</span><span class="stat__value"><?= (int)$rosterCounts['failed'] + (int)$rosterCounts['conflict'] + (int)$rosterCounts['unknown'] ?></span></a>
+        <a class="stat stat--compact stat--success kt-stat-link" href="roster.php?state=applied"><span class="stat__label"><span class="stat__icon"><?= fitsc_icon('check-circle') ?></span>反映済み</span><span class="stat__value"><?= (int)$rosterCounts['applied'] ?></span></a>
+      </div>
+    <?php else: ?>
+      <p class="text-subtle">名簿の提出情報を読み込めませんでした。<a href="roster_settings.php">反映・接続の確認</a>を開いてください。</p>
+    <?php endif; ?>
+  </div>
+</section>
+
+<h2 class="section-title">旧機能：団体マスタ（CSV名簿取込・ID77送信）</h2>
 <div class="stat-grid">
   <a class="stat kt-stat-link" href="organizations.php">
     <span class="stat__label"><span class="stat__icon"><?= fitsc_icon('building') ?></span>登録団体</span>
@@ -47,7 +77,7 @@ kintone_render_flash();
 
 <section class="card">
   <div class="card__header card__header--plain">
-    <div class="card__title"><?= fitsc_icon('sparkles') ?>名簿反映の流れ</div>
+    <div class="card__title"><?= fitsc_icon('sparkles') ?>CSV名簿取込（旧機能）の流れ</div>
   </div>
   <div class="card__body">
     <ol class="kt-flow">

@@ -381,4 +381,32 @@ return [
             'notes' => 'notes',
         ],
     ],
+
+    // 部員名簿（Forms 提出 → kintone管理サイトで accept → ID20 へ自動反映）
+    // 省略した項目は apps/roster_core/bootstrap.php の roster_default_config() の値になる。
+    // APIトークンはここに書かず、kintone管理サイト「アプリ設定」で app_key ごとに登録する。
+    'roster' => [
+        'enabled' => true,
+        'kintone' => [
+            'roster_app_key' => 'member_roster', // ID20 部員名簿（同期ロール: manual）
+            'group_app_key' => 'groups',         // ID7 公認団体・組織（同期ロール: manual）
+        ],
+        'groups' => [
+            'allowed_ranks' => ['部', '同好会', '愛好会', '組織'],
+            'allowed_statuses' => ['活動中', '結成登録中'],
+            'directory_max_age_minutes' => 360,
+        ],
+        'verification' => [
+            'mail_transport' => 'smtp',
+            'mail_from_name' => '総合管理事務局 提出フォーム',
+        ],
+        'worker' => [
+            'lock_file' => __DIR__ . '/kintone_core/storage/roster_worker.lock',
+            'max_attempts' => 6,
+            'retry_backoff_seconds' => [60, 300, 900, 1800, 3600],
+            'unknown_reconcile_delay_seconds' => 300,
+        ],
+        // Forms 管理画面の提出一覧から kintone管理サイトの提出詳細を開くときのURL（末尾 /）
+        'kintone_site_base_url' => '',
+    ],
 ];
