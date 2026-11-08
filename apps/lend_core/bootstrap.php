@@ -4,6 +4,12 @@ $configCandidates = [
     dirname(__DIR__, 2) . '/includes/config.php',
 ];
 
+// ローカル検証用: サーバー管理者が環境変数で設定ファイルを明示した場合だけ差し替える
+$configOverride = getenv('FITSC_CONFIG_FILE');
+if (is_string($configOverride) && $configOverride !== '' && is_file($configOverride)) {
+    $configCandidates = [$configOverride];
+}
+
 $configPath = null;
 foreach ($configCandidates as $candidate) {
     if (is_file($candidate)) {

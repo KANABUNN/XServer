@@ -229,6 +229,33 @@ page_header('フォーム管理', 'forms-admin-page', ['app_name' => 'フォー�
                             </div>
                         </section>
 
+                        <section class="card span-full" id="roster-settings-card">
+                            <div class="card__header">
+                                <div>
+                                    <div class="card__title"><?= fitsc_icon('users') ?>部員名簿フォーム</div>
+                                    <p class="card__subtitle">団体確認付きの部員名簿の入力画面を表示します。提出は kintone管理サイトで確認・accept された後に kintone の部員名簿へ反映されます。</p>
+                                </div>
+                            </div>
+                            <div class="card__body form-grid form-grid--3">
+                                <label class="field"><span>フォームの種類</span>
+                                    <select name="form_type">
+                                        <option value="standard">通常のフォーム</option>
+                                        <option value="roster">部員名簿フォーム</option>
+                                    </select>
+                                </label>
+                                <label class="field" data-roster-only><span>対象年度（西暦） <span class="req">必須</span></span><input type="number" name="roster_fiscal_year" min="2000" max="2100" placeholder="例：2026"></label>
+                                <label class="field" data-roster-only><span>電話番号を必須にする部員</span>
+                                    <select name="roster_phone_required_scope">
+                                        <option value="officers">役職のある在籍・入部の部員</option>
+                                        <option value="all">在籍・入部の全員</option>
+                                        <option value="none">必須にしない</option>
+                                    </select>
+                                </label>
+                                <div class="field span-full" data-roster-only><label class="switch"><input type="checkbox" name="roster_phone_required_manager">マネージャーも電話番号を必須にする</label></div>
+                                <p class="field__hint span-full" data-roster-only>対象年度は日付から自動判定しません。新年度の受付を始めるときに変更してください（変更すると前年度の未反映の提出は反映されなくなります）。部員名簿フォームでは日付入力・添付ファイル・追加項目は使いません。</p>
+                            </div>
+                        </section>
+
                         <section class="card">
                             <div class="card__header"><div class="card__title"><?= fitsc_icon('send') ?>送信時の表示</div></div>
                             <div class="card__body form-grid">
@@ -305,6 +332,17 @@ page_header('フォーム管理', 'forms-admin-page', ['app_name' => 'フォー�
                         </form>
                         <div id="entry-status-summary" class="status-card-grid"></div>
                     </div>
+                </section>
+
+                <section class="card hidden" id="roster-cases-panel">
+                    <div class="card__header">
+                        <div>
+                            <div class="card__title"><?= fitsc_icon('users') ?>部員名簿の提出</div>
+                            <p class="card__subtitle" id="roster-cases-summary">差し戻し・accept・kintoneへの反映は kintone管理サイトで行います（ここでは表示のみ）。</p>
+                        </div>
+                        <button type="button" class="btn btn--ghost btn--icon" id="refresh-roster-cases-button" aria-label="再読込" data-tip="再読込"><?= fitsc_icon('refresh') ?></button>
+                    </div>
+                    <div id="roster-cases-list" class="list"></div>
                 </section>
 
                 <div class="fa-responses">

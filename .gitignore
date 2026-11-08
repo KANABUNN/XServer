@@ -16,3 +16,5 @@ tests/
 .env
 *.sql
 rate_limit_*.json
+# 部員名簿の移行SQL（tools/roster_migration_sql.php で生成）は管理対象にする
+!apps/roster_core/migrations/*.sql

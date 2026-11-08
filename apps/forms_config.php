@@ -1,7 +1,9 @@
 <?php
 declare(strict_types=1);
 
-$shared = require __DIR__ . '/config.php';
+// ローカル検証用: サーバー管理者が環境変数で設定ファイルを明示した場合だけ差し替える
+$sharedConfigPath = getenv('FITSC_CONFIG_FILE');
+$shared = require (is_string($sharedConfigPath) && $sharedConfigPath !== '' && is_file($sharedConfigPath) ? $sharedConfigPath : __DIR__ . '/config.php');
 $formsDb = (array)($shared['forms_db'] ?? []);
 
 return [

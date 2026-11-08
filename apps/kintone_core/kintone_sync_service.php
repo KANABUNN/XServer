@@ -87,6 +87,34 @@ function kintone_sync_app(string $appKey): array
     return $row;
 }
 
+/**
+ * 部員名簿アプリ（ID20）は、accept 済みの提出を反映する専用ワーカー（apps/roster_core/worker.php）以外から
+ * 追加・更新・取得させない。同期ロールの設定に関係なく、汎用の push/pull/再同期の経路をここで止める。
+ */
+function kintone_sync_assert_not_roster_app(array $app): void
+{
+    $rosterConfig = kintone_config_value('roster', []);
+    $rosterKey = is_array($rosterConfig) ? (string)($rosterConfig['kintone']['roster_app_key'] ?? 'member_roster') : 'member_roster';
+    $appKey = (string)($app['app_key'] ?? '');
+    $isRoster = $appKey === $rosterKey;
+    if (!$isRoster && $rosterKey !== '') {
+        try {
+            $stmt = kintone_pdo('org')->prepare('SELECT kintone_app_id, kintone_subdomain FROM kintone_apps WHERE app_key = :key LIMIT 1');
+            $stmt->execute([':key' => $rosterKey]);
+            $roster = $stmt->fetch();
+            $isRoster = is_array($roster)
+                && (int)$roster['kintone_app_id'] > 0
+                && (int)$roster['kintone_app_id'] === (int)($app['kintone_app_id'] ?? 0)
+                && (string)$roster['kintone_subdomain'] === (string)($app['kintone_subdomain'] ?? '');
+        } catch (Throwable) {
+            $isRoster = false;
+        }
+    }
+    if ($isRoster) {
+        throw new KintoneSyncException('部員名簿アプリは汎用の同期では扱えません。部員名簿の提出・accept画面から反映してください。');
+    }
+}
+
 function kintone_sync_list_apps(bool $activeOnly = true): array
 {
     $sql = 'SELECT a.*, c.api_token_encrypted IS NOT NULL AND c.api_token_encrypted <> "" AS has_token ' .
@@ -456,6 +484,7 @@ function kintone_sync_push_app(string $appKey = 'organizations', array $organiza
 {
     $appKey = kintone_normalize_app_key($appKey);
     $app = kintone_sync_app($appKey);
+    kintone_sync_assert_not_roster_app($app);
     if ((string)$app['app_role'] !== 'push') {
         throw new InvalidArgumentException('push同期対象ではありません: ' . $appKey);
     }
@@ -618,6 +647,7 @@ function kintone_sync_pull_app(string $appKey, array $actor = [], string $jobTyp
 {
     $appKey = kintone_normalize_app_key($appKey);
     $app = kintone_sync_app($appKey);
+    kintone_sync_assert_not_roster_app($app);
     if ((string)$app['app_role'] !== 'pull') {
         throw new InvalidArgumentException('pull同期対象ではありません: ' . $appKey);
     }
@@ -716,6 +746,7 @@ function kintone_sync_pull_app(string $appKey, array $actor = [], string $jobTyp
 function kintone_sync_app_by_role(string $appKey, array $organizationIds = [], array $actor = [], string $jobType = 'manual'): array
 {
     $app = kintone_sync_app($appKey);
+    kintone_sync_assert_not_roster_app($app);
     return match ((string)$app['app_role']) {
         'push' => kintone_sync_push_app($appKey, $organizationIds, $actor, $jobType),
         'pull' => kintone_sync_pull_app($appKey, $actor, $jobType),
@@ -741,6 +772,7 @@ function kintone_sync_retry_failed_job(int $sourceJobId, array $actor = []): arr
     }
     $appKey = kintone_normalize_app_key((string)$job['target_app']);
     $app = kintone_sync_app($appKey);
+    kintone_sync_assert_not_roster_app($app);
     if ((string)$app['app_role'] === 'push') {
         $ids = kintone_sync_failed_organization_ids($sourceJobId);
         if ($ids === []) {

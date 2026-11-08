@@ -28,13 +28,16 @@ function kintone_nav_items(array $user): array
     $isAdmin = kintone_auth_user_has_role($user, 'admin');
     $items = [
         ['href' => 'index.php', 'label' => 'ダッシュボード', 'icon' => 'dashboard', 'section' => '', 'show' => true],
-        ['href' => 'upload.php', 'label' => '名簿アップロード', 'icon' => 'upload', 'section' => '名簿の取込', 'show' => $canOperate],
-        ['href' => 'diff.php', 'label' => '差分・承認', 'icon' => 'diff', 'section' => '名簿の取込', 'show' => true],
-        ['href' => 'review.php', 'label' => 'レビュー待ち', 'icon' => 'inbox', 'section' => '名簿の取込', 'show' => true],
-        ['href' => 'organizations.php', 'label' => '団体マスタ', 'icon' => 'building', 'section' => 'データ', 'show' => true],
-        ['href' => 'sync.php', 'label' => 'kintone同期', 'icon' => 'refresh', 'section' => 'データ', 'show' => true],
+        ['href' => 'roster.php', 'label' => '名簿の提出・承認', 'icon' => 'users', 'section' => '部員名簿（Forms 提出）', 'show' => true],
+        ['href' => 'roster_settings.php', 'label' => '反映・接続の確認', 'icon' => 'gauge', 'section' => '部員名簿（Forms 提出）', 'show' => true],
         ['href' => 'logs.php', 'label' => 'ログ', 'icon' => 'history', 'section' => 'データ', 'show' => true],
         ['href' => 'settings.php', 'label' => 'アプリ設定', 'icon' => 'settings', 'section' => '設定', 'show' => $isAdmin],
+        // 旧機能: CSV 名簿取込 → 団体マスタ（organizations）→ ID77 送信。メール・予約等が organizations を参照するため残す。
+        ['href' => 'upload.php', 'label' => '名簿CSVアップロード', 'icon' => 'upload', 'section' => '旧機能（CSV取込・団体マスタ）', 'show' => $canOperate],
+        ['href' => 'diff.php', 'label' => '差分・承認（CSV）', 'icon' => 'diff', 'section' => '旧機能（CSV取込・団体マスタ）', 'show' => true],
+        ['href' => 'review.php', 'label' => 'レビュー待ち（CSV）', 'icon' => 'inbox', 'section' => '旧機能（CSV取込・団体マスタ）', 'show' => true],
+        ['href' => 'organizations.php', 'label' => '団体マスタ', 'icon' => 'building', 'section' => '旧機能（CSV取込・団体マスタ）', 'show' => true],
+        ['href' => 'sync.php', 'label' => 'kintone同期（団体マスタ）', 'icon' => 'refresh', 'section' => '旧機能（CSV取込・団体マスタ）', 'show' => true],
     ];
     return array_values(array_filter($items, static fn(array $item): bool => $item['show']));
 }
@@ -47,6 +50,9 @@ function kintone_page_header(string $title, array $user, array $opts = []): void
     $current = basename((string)($_SERVER['SCRIPT_NAME'] ?? '')) ?: 'index.php';
     if ($current === 'confirm_apply.php') {
         $current = 'diff.php';
+    }
+    if ($current === 'roster_detail.php') {
+        $current = 'roster.php';
     }
     $displayName = (string)($user['display_name'] ?? $user['login_id'] ?? '');
     $subtitle = (string)($opts['subtitle'] ?? '');
@@ -64,7 +70,7 @@ function kintone_page_header(string $title, array $user, array $opts = []): void
   <aside class="sidebar" id="app-sidebar" aria-label="メニュー">
     <a class="sidebar__brand" href="index.php">
       <span class="brand-mark"><?= fitsc_icon('cloud') ?></span>
-      <span class="brand-text"><strong>kintone管理</strong><span>団体マスタ・名簿連携</span></span>
+      <span class="brand-text"><strong>kintone管理</strong><span>部員名簿・団体連携</span></span>
     </a>
     <nav class="sidebar__nav" aria-label="kintone管理メニュー">
       <?php $section = null; ?>

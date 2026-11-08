@@ -728,3 +728,100 @@ button.status-summary-card.is-active { border-color: color-mix(in srgb, var(--to
 @media (max-width: 1023px) {
   .fa-shell .sidebar { width: min(340px, 90vw); }
 }
+
+/* =====================================================================
+   部員名簿フォーム（roster.js）
+   表示幅が狭いとき（スマートフォン・狭い画面）は部員ごとのカードに切り替える
+   ===================================================================== */
+.fp-roster { container-type: inline-size; }
+.rs { display: grid; gap: 0; }
+.rs-pad { padding: 22px 32px 28px; }
+.rs-group {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 16px 32px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface-2);
+}
+.rs-group__main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.rs-group__icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: var(--accent-soft); color: var(--accent); flex: 0 0 auto; }
+.rs-group__name { font-weight: 800; color: var(--text-strong); }
+.rs-group__meta { font-size: var(--fs-xs); color: var(--text-subtle); }
+.rs-status { display: grid; gap: 10px; padding: 16px 32px 0; }
+.rs-note { margin: 16px 32px 0; }
+.rs-section { display: grid; gap: 14px; padding: 18px 32px 28px; }
+.rs-section__title { display: flex; align-items: center; gap: 8px; font-size: var(--fs-lg); margin: 0; }
+.rs-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rs-counts { display: flex; gap: 8px; flex-wrap: wrap; }
+.rs-count {
+  display: inline-flex; align-items: baseline; gap: 4px; padding: 6px 12px; border-radius: var(--r-pill);
+  background: var(--surface-2); border: 1px solid var(--border); font-size: var(--fs-sm); color: var(--text-muted);
+}
+.rs-count small { font-size: var(--fs-2xs); color: var(--text-subtle); margin-right: 2px; }
+.rs-count strong { font-size: var(--fs-lg); color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.rs-count--active { background: var(--success-soft); border-color: var(--success-line); }
+.rs-count--active strong { color: var(--success); }
+.rs-count--warn { background: var(--warning-soft); border-color: var(--warning-line); }
+.rs-count--warn strong { color: var(--warning); }
+.rs-table-wrap { max-height: none; }
+.rs-table { table-layout: fixed; width: 100%; min-width: 740px; }
+.rs-table th { font-size: var(--fs-xs); line-height: 1.3; padding-left: 6px; padding-right: 6px; }
+.rs-table th .req { margin-left: 3px; }
+.rs-table td { vertical-align: middle; padding: 5px 6px; }
+.rs-table th:nth-child(1) { width: 52px; }
+.rs-table th:nth-child(2) { width: 82px; }
+.rs-table th:nth-child(4) { width: 108px; }
+.rs-table th:nth-child(5) { width: 132px; }
+.rs-table th:nth-child(6) { width: 136px; }
+.rs-table th:nth-child(7), .rs-table th:nth-child(8) { width: 68px; }
+.rs-table th:nth-child(9) { width: 40px; }
+.rs-table input[type="text"], .rs-table input[type="tel"], .rs-table select { width: 100%; min-width: 0; padding: 6px 7px; font-size: var(--fs-sm); }
+.rs-table select { padding-right: 22px; text-overflow: ellipsis; }
+.rs-col-no { white-space: nowrap; color: var(--text-subtle); }
+.rs-col-check { text-align: center; }
+.rs-col-check .check { justify-content: center; }
+.rs-table:not(.rs-table--readonly) .rs-check-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.rs-col-op { text-align: right; }
+.rs-origin { display: inline-flex; margin-left: 4px; color: var(--accent); vertical-align: -2px; }
+.rs-check-label { font-size: var(--fs-xs); color: var(--text-subtle); }
+.rs-table tr.is-invalid td { background: color-mix(in srgb, var(--danger-soft) 55%, transparent); }
+.rs-row-error td { color: var(--danger); font-size: var(--fs-xs); padding-top: 0 !important; background: color-mix(in srgb, var(--danger-soft) 55%, transparent); }
+.rs-table [aria-invalid="true"] { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+.rs-table--readonly { min-width: 680px; }
+.rs-table--readonly th:nth-child(7), .rs-table--readonly th:nth-child(8) { width: 72px; }
+.rs-submit { margin-top: 4px; }
+.rs-history { margin: 0 32px 24px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
+.rs-history > summary { cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 12px 16px; font-weight: 700; }
+.rs-history__list { list-style: none; margin: 0; padding: 0 16px 14px; display: grid; gap: 10px; }
+.rs-history__list li { padding-top: 10px; border-top: 1px dashed var(--border); }
+.rs-history__reason { margin: 6px 0 0; font-size: var(--fs-sm); color: var(--warning); }
+.rs-msg-list { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 2px; font-size: var(--fs-sm); }
+.rs-diff-summary { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--text-muted); }
+.rs-diff-table { min-width: 620px; }
+.rs-submitter { max-width: 420px; }
+.rs-code-field input { max-width: 200px; font-size: var(--fs-xl); letter-spacing: .2em; font-family: var(--font-mono, monospace); }
+.rs-steps { max-width: 560px; margin: 4px 0 6px; }
+
+@container (max-width: 760px) {
+  .rs-pad, .rs-section { padding-left: 16px; padding-right: 16px; }
+  .rs-group, .rs-status { padding-left: 16px; padding-right: 16px; }
+  .rs-note, .rs-history { margin-left: 16px; margin-right: 16px; }
+  .rs-table { min-width: 0; table-layout: auto; }
+  .rs-table:not(.rs-table--readonly) .rs-check-label { position: static; width: auto; height: auto; clip: auto; }
+  .rs-table td.rs-col-no { display: flex; align-items: center; gap: 6px; }
+  .rs-table td.rs-col-no::before { content: "No."; }
+  .rs-table thead { display: none; }
+  .rs-table, .rs-table tbody { display: block; }
+  .rs-table tr[data-key], .rs-table--readonly tr {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px;
+    padding: 12px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface);
+  }
+  .rs-table td { display: grid; gap: 2px; padding: 0 !important; border: 0 !important; min-width: 0 !important; width: auto !important; text-align: left; }
+  .rs-table td::before { content: attr(data-label); font-size: var(--fs-2xs); color: var(--text-subtle); font-weight: 700; }
+  .rs-table td.rs-col-no { grid-column: 1 / 2; font-weight: 800; color: var(--text-strong); }
+  .rs-table td.rs-col-op { grid-column: 2 / 3; grid-row: 1; justify-self: end; }
+  .rs-table td.rs-col-op::before { content: none; }
+  .rs-table td[data-label="氏名"], .rs-table td[data-label="学籍番号"] { grid-column: span 1; }
+  .rs-col-check .check { justify-content: flex-start; }
+  .rs-table tr.is-invalid { border-color: var(--danger); }
+  .rs-row-error { display: block; margin: -6px 0 10px; }
+  .rs-row-error td { display: block; padding: 4px 12px !important; border-radius: var(--r-md); }
+  .rs-row-error td::before { content: none; }
+}
