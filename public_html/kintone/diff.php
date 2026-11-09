@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_layout.php';
+kintone_require_legacy_feature();
 require_once dirname(__DIR__, 2) . '/apps/kintone_core/diff_service.php';
 $user = kintone_auth_require_view_access();
 $batchId = (int)($_GET['batch_id'] ?? 0);

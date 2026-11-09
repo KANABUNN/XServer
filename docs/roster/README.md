@@ -56,11 +56,12 @@ flowchart LR
 - `public_html/forms/index.php`・`assets/js/public.js`・`assets/css/app.css`: 名簿フォームを専用画面で表示
 - `public_html/forms/admin.php`・`assets/js/admin.js`: 名簿フォームの設定欄、提出一覧（kintone管理サイトへのリンク）
 - `apps/kintone_core/kintone_sync_service.php`: 部員名簿アプリを汎用同期から除外するガード
-- `public_html/kintone/_layout.php`・`index.php`・`assets/css/app.css`: メニューに「部員名簿（Forms 提出）」を追加し、CSV取込・団体マスタは「旧機能」に分けて残す
+- `public_html/kintone/_layout.php`・`index.php`・`logs.php`・`settings.php`・`assets/css/app.css`: メニューとダッシュボードを部員名簿中心に変更
+- 旧機能（CSV名簿取込・差分承認・レビュー・団体マスタ・団体マスタの kintone 同期）は原則廃止。画面・メニュー・ダッシュボード・ログの同期ジョブ表示から外し、ページは名簿の画面へ、API は 404 を返す（`kintone_require_legacy_feature()`）。ソースは流用のため残しており、`kintone.legacy_features_enabled = true` で再び使える
 - `apps/config_up.php`: `roster` 設定の例
 - `apps/kintone_core/bootstrap.php`・`apps/lend_core/bootstrap.php`・`apps/forms_config.php`: 環境変数 `FITSC_CONFIG_FILE` による設定ファイルの差し替え（ローカル検証用。未設定時の動作は従来どおり）
 
-既存の `organizations`（団体マスタ）・CSV取込・ID77 送信・メール・予約の機能には手を入れていない。旧データ・旧ジョブの削除も行わない。
+`organizations`（団体マスタ）のテーブル・データと、それを参照するメール・予約の機能はそのまま動く（廃止したのは kintone管理サイト上の旧機能の画面・API だけ）。旧データ・旧ジョブの削除も行わない。
 
 ## 第2段階（役員連動）の拡張点
 

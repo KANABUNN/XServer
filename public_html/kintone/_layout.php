@@ -11,6 +11,32 @@ function kintone_user_can_operate(array $user): bool
     return kintone_auth_user_has_role($user, 'operator') || kintone_auth_user_has_role($user, 'admin');
 }
 
+/**
+ * 旧機能（CSV名簿取込 → 団体マスタ organizations → ID77 送信）は原則廃止。
+ * ソースは流用のために残すが、画面・API には入れない。再び使う場合だけ
+ * apps/config.php の kintone.legacy_features_enabled を true にする。
+ */
+function kintone_legacy_features_enabled(): bool
+{
+    return (bool)kintone_config_value('kintone.legacy_features_enabled', false);
+}
+
+function kintone_require_legacy_feature(): void
+{
+    if (kintone_legacy_features_enabled()) {
+        return;
+    }
+    $script = str_replace(chr(92), '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    if (str_contains($script, '/api/')) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'この機能は廃止されました。';
+        exit;
+    }
+    header('Location: ' . kintone_auth_join_path('roster.php'), true, 302);
+    exit;
+}
+
 function kintone_user_role_label(array $user): string
 {
     if (kintone_auth_user_has_role($user, 'admin')) {
@@ -32,12 +58,6 @@ function kintone_nav_items(array $user): array
         ['href' => 'roster_settings.php', 'label' => '反映・接続の確認', 'icon' => 'gauge', 'section' => '部員名簿（Forms 提出）', 'show' => true],
         ['href' => 'logs.php', 'label' => 'ログ', 'icon' => 'history', 'section' => 'データ', 'show' => true],
         ['href' => 'settings.php', 'label' => 'アプリ設定', 'icon' => 'settings', 'section' => '設定', 'show' => $isAdmin],
-        // 旧機能: CSV 名簿取込 → 団体マスタ（organizations）→ ID77 送信。メール・予約等が organizations を参照するため残す。
-        ['href' => 'upload.php', 'label' => '名簿CSVアップロード', 'icon' => 'upload', 'section' => '旧機能（CSV取込・団体マスタ）', 'show' => $canOperate],
-        ['href' => 'diff.php', 'label' => '差分・承認（CSV）', 'icon' => 'diff', 'section' => '旧機能（CSV取込・団体マスタ）', 'show' => true],
-        ['href' => 'review.php', 'label' => 'レビュー待ち（CSV）', 'icon' => 'inbox', 'section' => '旧機能（CSV取込・団体マスタ）', 'show' => true],
-        ['href' => 'organizations.php', 'label' => '団体マスタ', 'icon' => 'building', 'section' => '旧機能（CSV取込・団体マスタ）', 'show' => true],
-        ['href' => 'sync.php', 'label' => 'kintone同期（団体マスタ）', 'icon' => 'refresh', 'section' => '旧機能（CSV取込・団体マスタ）', 'show' => true],
     ];
     return array_values(array_filter($items, static fn(array $item): bool => $item['show']));
 }
@@ -48,9 +68,6 @@ function kintone_nav_items(array $user): array
 function kintone_page_header(string $title, array $user, array $opts = []): void
 {
     $current = basename((string)($_SERVER['SCRIPT_NAME'] ?? '')) ?: 'index.php';
-    if ($current === 'confirm_apply.php') {
-        $current = 'diff.php';
-    }
     if ($current === 'roster_detail.php') {
         $current = 'roster.php';
     }
