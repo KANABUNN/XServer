@@ -161,7 +161,7 @@ function asset_url(string $path): string
 /**
  * forms / lend 共通のページ先頭。FIT-SC UI v7（assets/ui/）とアプリ CSS（assets/css/app.css）を読み込む。
  *
- * @param array{app_name?: string, css?: string[]} $opts
+ * @param array{app_name?: string, css?: string[], favicon?: string} $opts
  */
 function page_header(string $title, string $bodyClass = '', array $opts = []): void
 {
@@ -173,6 +173,9 @@ function page_header(string $title, string $bodyClass = '', array $opts = []): v
     $head = fitsc_ui_head([
         'css' => array_merge(['assets/css/app.css'], $opts['css'] ?? []),
     ]);
+    if (!empty($opts['favicon'])) {
+        $head .= '<link rel="icon" type="image/png" href="' . h(asset_url((string)$opts['favicon'])) . '">' . "\n";
+    }
     $bodyClassAttr = h($bodyClass);
     echo <<<HTML
 <!DOCTYPE html>

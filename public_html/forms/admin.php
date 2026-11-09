@@ -4,12 +4,12 @@ forms_bootstrap();
 require_admin();
 $user = current_user();
 $userName = (string)($user['name'] ?? '');
-page_header('フォーム管理', 'forms-admin-page', ['app_name' => 'フォーム管理']);
+page_header('フォーム管理', 'forms-admin-page', ['app_name' => 'フォーム管理', 'favicon' => 'icon.png']);
 ?>
 <div class="app-shell fa-shell">
     <aside class="sidebar" id="app-sidebar" aria-label="フォーム一覧">
         <a class="sidebar__brand" href="admin.php">
-            <span class="brand-mark"><?= fitsc_icon('file-text') ?></span>
+            <span class="brand-mark forms-brand-mark"><img src="<?= h(asset_url('icon.png')) ?>" alt="" width="38" height="38"></span>
             <span class="brand-text"><strong>フォーム管理</strong><span>FIT-SC Forms</span></span>
         </a>
 

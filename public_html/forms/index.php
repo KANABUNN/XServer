@@ -3,13 +3,13 @@ require_once __DIR__ . '/../../apps/forms_core/bootstrap.php';
 require_once __DIR__ . '/../../apps/kintone_registry_integration.php';
 forms_bootstrap();
 $kintoneBridgePayload = fitsc_kintone_public_payload(['categories'], 500);
-page_header('提出フォーム', 'forms-public-page', ['app_name' => '総合管理事務局']);
+page_header('提出フォーム', 'forms-public-page', ['app_name' => '総合管理事務局', 'favicon' => 'icon.png']);
 ?>
 <div class="site fp-site">
     <header class="site-header">
         <div class="site-header__inner">
             <a class="site-brand" href="./" aria-label="提出フォーム トップ">
-                <span class="brand-mark"><?= fitsc_icon('file-text') ?></span>
+                <span class="brand-mark forms-brand-mark"><img src="<?= h(asset_url('icon.png')) ?>" alt="" width="38" height="38"></span>
                 <span class="site-brand__text">
                     <strong>提出フォーム</strong>
                     <span>総合管理事務局</span>

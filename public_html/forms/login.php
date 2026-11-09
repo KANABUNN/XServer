@@ -6,7 +6,7 @@ if (is_logged_in()) {
     exit;
 }
 
-page_header('管理者ログイン', 'forms-login-page', ['app_name' => 'フォーム管理']);
+page_header('管理者ログイン', 'forms-login-page', ['app_name' => 'フォーム管理', 'favicon' => 'icon.png']);
 ?>
 <main class="auth">
     <div class="auth__corner">
@@ -15,7 +15,7 @@ page_header('管理者ログイン', 'forms-login-page', ['app_name' => 'フォ�
     </div>
     <section class="auth__card">
         <div class="auth__head">
-            <span class="brand-mark brand-mark--lg"><?= fitsc_icon('file-text') ?></span>
+            <span class="brand-mark brand-mark--lg forms-brand-mark"><img src="<?= h(asset_url('icon.png')) ?>" alt="" width="52" height="52"></span>
             <h1>フォーム管理</h1>
             <p>共通アカウントでログインしてください</p>
         </div>

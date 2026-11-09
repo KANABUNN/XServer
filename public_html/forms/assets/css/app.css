@@ -2,6 +2,18 @@
    forms — アプリ固有スタイル（FIT-SC UI v7 の上に重ねる）
    ===================================================================== */
 
+/* サイト共通の Forms ロゴ。PNG 自体の角丸と透過をそのまま表示する。 */
+.forms-brand-mark {
+  background: none;
+  box-shadow: none;
+}
+.forms-brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 /* =========================== 利用者画面 =========================== */
 .fp-site { --fp-header: 62px; }
 
