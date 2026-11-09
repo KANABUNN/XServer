@@ -9,10 +9,12 @@ $isAdmin = kintone_auth_user_has_role($user, 'admin');
 
 $rosterKey = (string)roster_config('kintone.roster_app_key');
 $groupKey = (string)roster_config('kintone.group_app_key');
+$peopleKey = (string)roster_config('kintone.people_app_key');
+$officerKey = (string)roster_config('kintone.officer_app_key');
 $apps = [];
 try {
-    $stmt = kintone_pdo('org')->prepare('SELECT a.app_key, a.display_name, a.kintone_app_id, a.app_role, a.is_active, a.status, a.last_tested_at, c.api_token_encrypted IS NOT NULL AND c.api_token_encrypted <> "" AS has_token FROM kintone_apps a LEFT JOIN kintone_credentials c ON c.connection_key = a.app_key WHERE a.app_key IN (:r, :g)');
-    $stmt->execute([':r' => $rosterKey, ':g' => $groupKey]);
+    $stmt = kintone_pdo('org')->prepare('SELECT a.app_key, a.display_name, a.kintone_app_id, a.app_role, a.is_active, a.status, a.last_tested_at, c.api_token_encrypted IS NOT NULL AND c.api_token_encrypted <> "" AS has_token FROM kintone_apps a LEFT JOIN kintone_credentials c ON c.connection_key = a.app_key WHERE a.app_key IN (:r, :g, :p, :o)');
+    $stmt->execute([':r' => $rosterKey, ':g' => $groupKey, ':p' => $peopleKey, ':o' => $officerKey]);
     foreach ($stmt->fetchAll() ?: [] as $row) {
         $apps[(string)$row['app_key']] = $row;
     }
@@ -28,6 +30,15 @@ if ($checkFields) {
         $preflight = roster_kintone_preflight();
     } catch (Throwable $e) {
         $preflightError = mb_substr($e->getMessage(), 0, 300, 'UTF-8');
+    }
+}
+$officerPreflight = null;
+$officerPreflightError = '';
+if ($checkFields) {
+    try {
+        $officerPreflight = roster_kintone_officer_preflight();
+    } catch (Throwable $e) {
+        $officerPreflightError = mb_substr($e->getMessage(), 0, 300, 'UTF-8');
     }
 }
 $heartbeat = null;
@@ -54,7 +65,7 @@ kintone_render_flash();
   <section class="card">
     <div class="card__header"><div class="card__title"><?= fitsc_icon('cloud') ?>kintone 接続</div><?php if ($isAdmin): ?><a class="btn btn--ghost btn--sm" href="settings.php"><?= fitsc_icon('settings') ?>アプリ設定</a><?php endif; ?></div>
     <div class="card__body stack">
-      <?php foreach ([[$rosterKey, 'ID20 部員名簿（反映先）', '閲覧・追加・編集'], [$groupKey, 'ID7 公認団体・組織（団体一覧・ルックアップ参照）', '閲覧']] as [$key, $label, $perm]): $app = $apps[$key] ?? null; ?>
+      <?php foreach ([[$rosterKey, 'ID20 部員名簿（反映先）', '閲覧・追加・編集'], [$groupKey, 'ID7 公認団体・組織（団体一覧・ルックアップ参照）', '閲覧'], [$peopleKey, 'ID22 登録者（第2段階・役員の照合）', '閲覧'], [$officerKey, 'ID21 役員台帳（第2段階・役職の比較）', '閲覧']] as [$key, $label, $perm]): $app = $apps[$key] ?? null; ?>
         <div class="list-item">
           <span class="list-item__icon"><?= fitsc_icon('database', 'ico--sm') ?></span>
           <span class="list-item__main">
@@ -126,6 +137,32 @@ kintone_render_flash();
         </tbody>
       </table>
     </div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card__header">
+    <div><div class="card__title"><?= fitsc_icon('shield') ?>第2段階：ID22 / ID21 のフィールド設定</div><p class="card__subtitle">役員の照合と比較に必要な設定を確認します。ID22・ID21 への書込みは <?= roster_config('officers.write_enabled', false) ? '有効' : '無効' ?> です。</p></div>
+    <a class="btn btn--sm" href="roster_settings.php?check=1"><?= fitsc_icon('search') ?>いま確認する</a>
+  </div>
+  <div class="card__body stack">
+    <?php if (!$checkFields): ?>
+      <p class="text-subtle">「いま確認する」を押すと kintone からフィールド設定を取得して確認します。</p>
+    <?php elseif ($officerPreflightError !== ''): ?>
+      <div class="alert alert--danger"><?= fitsc_icon('alert-circle') ?><div class="alert__body"><?= kintone_h($officerPreflightError) ?></div></div>
+    <?php elseif (is_array($officerPreflight)): ?>
+      <?php if ($officerPreflight['ok']): ?>
+        <div class="alert alert--success"><?= fitsc_icon('check-circle') ?><div class="alert__body">必要なフィールドと選択肢がそろっています（ID22: アプリ <?= (int)$officerPreflight['people_app_id'] ?> ／ ID21: アプリ <?= (int)$officerPreflight['officers_app_id'] ?>）。</div></div>
+      <?php else: ?>
+        <div class="alert alert--danger"><?= fitsc_icon('alert-circle') ?><div class="alert__body"><ul class="kt-plain-list"><?php foreach ($officerPreflight['errors'] as $msg): ?><li><?= kintone_h($msg) ?></li><?php endforeach; ?></ul></div></div>
+      <?php endif; ?>
+      <?php if ($officerPreflight['warnings'] !== []): ?>
+        <div class="alert alert--warning"><?= fitsc_icon('alert-triangle') ?><div class="alert__body"><ul class="kt-plain-list"><?php foreach ($officerPreflight['warnings'] as $msg): ?><li><?= kintone_h($msg) ?></li><?php endforeach; ?></ul></div></div>
+      <?php endif; ?>
+      <?php if ($officerPreflight['write_blockers'] !== []): ?>
+        <div class="alert alert--warning"><?= fitsc_icon('lock') ?><div class="alert__body"><strong>書込みを有効にする前に必要な設定</strong><ul class="kt-plain-list"><?php foreach ($officerPreflight['write_blockers'] as $msg): ?><li><?= kintone_h($msg) ?></li><?php endforeach; ?></ul></div></div>
+      <?php endif; ?>
+    <?php endif; ?>
   </div>
 </section>
 

@@ -626,6 +626,8 @@ function forms_default_settings(): array
         'roster_fiscal_year' => '',
         'roster_phone_required_scope' => 'officers',
         'roster_phone_required_manager' => false,
+        // 第2段階: この名簿フォームの提出で役員情報（ID22/ID21 への反映候補）を受け付ける
+        'roster_officer_sync' => false,
     ];
 }
 
@@ -1213,6 +1215,7 @@ function forms_apply_roster_settings_from_input(PDO $pdo, array &$settings, arra
     $settings['roster_fiscal_year'] = $year;
     $settings['roster_phone_required_scope'] = in_array($scope, ['officers', 'all', 'none'], true) ? $scope : 'officers';
     $settings['roster_phone_required_manager'] = forms_normalize_boolean($formData['roster_phone_required_manager'] ?? $settings['roster_phone_required_manager'] ?? false);
+    $settings['roster_officer_sync'] = forms_normalize_boolean($formData['roster_officer_sync'] ?? $settings['roster_officer_sync'] ?? false);
     $settings['enable_date_field'] = false;
     $settings['date_required'] = false;
     $settings['allow_file_upload'] = false;
@@ -1347,6 +1350,8 @@ function forms_duplicate_form(int $sourceFormId, array $overrides = []): array
         'roster_fiscal_year' => $sourceSettings['roster_fiscal_year'] ?? '',
         'roster_phone_required_scope' => (string)($sourceSettings['roster_phone_required_scope'] ?? 'officers'),
         'roster_phone_required_manager' => (bool)($sourceSettings['roster_phone_required_manager'] ?? false),
+        // 複製したフォームの役員連携は、設定者が明示するまで有効にしない
+        'roster_officer_sync' => false,
     ];
 
     $fields = array_map(static function (array $field): array {

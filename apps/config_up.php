@@ -390,11 +390,17 @@ return [
         'kintone' => [
             'roster_app_key' => 'member_roster', // ID20 部員名簿（同期ロール: manual）
             'group_app_key' => 'groups',         // ID7 公認団体・組織（同期ロール: manual）
+            'people_app_key' => 'roster_people',    // ID22 登録者（第2段階・同期ロール: manual）
+            'officer_app_key' => 'roster_officers', // ID21 役員台帳（第2段階・同期ロール: manual）
         ],
         'groups' => [
             'allowed_ranks' => ['部', '同好会', '愛好会', '組織'],
             'allowed_statuses' => ['活動中', '結成登録中'],
             'directory_max_age_minutes' => 360,
+        ],
+        // 第2段階の ID22/ID21 への書込み。false の間は比較・計画のプレビューだけが動く
+        'officers' => [
+            'write_enabled' => false,
         ],
         'verification' => [
             'mail_transport' => 'smtp',

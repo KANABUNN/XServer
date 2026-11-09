@@ -133,6 +133,108 @@ function kt_roster_diff_table(array $diff, bool $showUnchanged = false): string
     return $html;
 }
 
+/** 第2段階の比較（読み取りのみ）。詳細な人物属性は operator 以上にだけ表示する。 */
+function kt_roster_officer_plan_html(array $plan, bool $canSeePersonal): string
+{
+    if (empty($plan['ok'])) {
+        return '<div class="alert alert--danger">' . fitsc_icon('alert-circle') . '<div class="alert__body">' . kintone_h((string)$plan['error']) . '</div></div>';
+    }
+    $list = static function (array $messages): string {
+        $html = '<ul class="kt-plain-list">';
+        foreach ($messages as $message) {
+            $html .= '<li>' . kintone_h((string)$message) . '</li>';
+        }
+        return $html . '</ul>';
+    };
+    $html = '';
+    if ($plan['blockers'] !== []) {
+        $html .= '<div class="alert alert--danger">' . fitsc_icon('lock') . '<div class="alert__body"><strong>解消が必要な項目</strong>' . $list($plan['blockers']) . '</div></div>';
+    } else {
+        $html .= '<div class="alert alert--success">' . fitsc_icon('check-circle') . '<div class="alert__body">登録者・役員台帳との比較で、解消が必要な項目はありません。</div></div>';
+    }
+    if ($plan['warnings'] !== []) {
+        $html .= '<div class="alert alert--warning">' . fitsc_icon('alert-triangle') . '<div class="alert__body">' . $list($plan['warnings']) . '</div></div>';
+    }
+    $ledger = $plan['ledger'];
+    $ledgerLabel = match ($ledger['operation']) {
+        'create' => '新規作成（現行レコードなし）',
+        'update' => '更新（レコード ID ' . (int)$ledger['record_id'] . ' ・ リビジョン ' . (int)$ledger['revision'] . ' ・ 登録日 ' . ((string)$ledger['register_date'] ?: '—') . '）',
+        default => '要確認（' . (int)$ledger['record_count'] . '件：ID ' . implode(', ', array_map('intval', $ledger['record_ids'])) . '）',
+    };
+    $dateLabel = match ($ledger['register_date_mode']) {
+        'accept_date' => '変更時はaccept日を使用（' . ($ledger['operation'] === 'create' ? '初回登録' : '今回は幹部構成に変更あり') . '）',
+        'keep' => '幹部構成に変更がないため既存の日付を維持',
+        default => '現行レコードを確定するまで判定しません',
+    };
+    $html .= '<p class="small-note">' . fitsc_icon('layers', 'ico--sm') . '役員台帳（ID21）：' . kintone_h($ledgerLabel) . '<br>' . fitsc_icon('calendar', 'ico--sm') . '登録日：' . kintone_h($dateLabel) . '</p>';
+
+    $html .= '<div class="table-wrap is-stacked kt-table-flat"><table class="table table--compact"><thead><tr><th>役員枠</th><th>現在の役員台帳</th><th>提出</th><th>操作</th><th>確認事項</th></tr></thead><tbody>';
+    foreach ($plan['slots'] as $slot) {
+        $person = static function (string $sid, string $name, string $step = '') use ($canSeePersonal): string {
+            if ($sid === '') {
+                return '<span class="text-subtle">—</span>';
+            }
+            if (!$canSeePersonal) {
+                return $step !== '' ? kintone_h($step) : '登録あり';
+            }
+            return '<span class="cell-main allow-select">' . kintone_h($name) . '</span><span class="cell-sub mono allow-select">' . kintone_h($sid) . '</span>';
+        };
+        $tone = match ($slot['operation']) {
+            'replace', 'set' => 'info',
+            'clear' => 'warning',
+            default => '',
+        };
+        $html .= '<tr><td>' . kintone_h($slot['label']) . ($slot['required'] ? ' <span class="req">必須</span>' : '') . '</td>'
+            . '<td>' . $person($slot['current_student_id'], $slot['current_name']) . '</td>'
+            . '<td>' . $person($slot['planned_student_id'], $slot['planned_name'], $slot['planned_step']) . '</td>'
+            . '<td>' . kt_roster_badge(roster_officer_slot_operation_label($slot['operation']), $tone) . '</td>'
+            . '<td>' . ($slot['flags'] !== [] ? '<span class="text-warning">' . kintone_h(implode('・', $slot['flags'])) . '</span>' : '<span class="text-subtle">—</span>') . '</td></tr>';
+    }
+    $html .= '</tbody></table></div>';
+
+    if ($plan['people'] !== []) {
+        $html .= '<div class="table-wrap is-stacked kt-table-flat"><table class="table table--compact"><thead><tr><th>番号</th><th>部員</th><th>担当（兼務）</th><th>登録者（ID22）との照合</th><th>登録者の内容</th><th>確認事項</th></tr></thead><tbody>';
+        foreach ($plan['people'] as $p) {
+            $tone = match ($p['operation']) {
+                'reference' => 'success',
+                'create' => 'info',
+                'needs_info' => 'warning',
+                default => 'danger',
+            };
+            $notes = '';
+            if ($canSeePersonal) {
+                foreach ($p['differences'] as $d) {
+                    $notes .= '<div>' . kintone_h($d['label']) . '：<span class="text-subtle">' . kintone_h($d['kintone']) . '</span> ／ 申告・名簿 <strong>' . kintone_h($d['submitted']) . '</strong></div>';
+                }
+            } elseif ($p['differences'] !== []) {
+                $notes .= '<div>相違あり（' . count($p['differences']) . '項目）</div>';
+            }
+            if ($p['missing'] !== []) {
+                $notes .= '<div class="text-warning">不足：' . kintone_h(implode('・', $p['missing'])) . '</div>';
+            }
+            foreach ($p['notes'] as $note) {
+                $notes .= '<div>' . kintone_h($note) . '</div>';
+            }
+            $k = $p['kintone'];
+            $kintoneCell = '<span class="text-subtle">未登録</span>';
+            if (is_array($k)) {
+                $kintoneCell = $canSeePersonal
+                    ? '<span class="cell-main allow-select">' . kintone_h($k['name']) . '</span><span class="cell-sub allow-select">' . kintone_h($k['mail']) . ' ・ ' . kintone_h($k['depend']) . ' ・ ' . kintone_h($k['type']) . ' ・ 執行・議会組織 ' . kintone_h($k['org_depend_state'] !== '' ? $k['org_depend_state'] : '—') . '</span>'
+                    : '登録あり';
+            }
+            $html .= '<tr><td class="mono text-xs">' . kintone_h($p['step_key']) . '</td>'
+                . '<td>' . ($canSeePersonal ? '<span class="cell-main allow-select">' . kintone_h($p['roster_name']) . '</span><span class="cell-sub mono allow-select">' . kintone_h($p['student_id']) . '</span>' : '<span class="text-subtle">（担当者のみ表示）</span>') . '</td>'
+                . '<td>' . kintone_h(implode('・', $p['holds'])) . ($canSeePersonal ? '<span class="cell-sub">名簿の役職：' . kintone_h($p['primary_role']) . '</span>' : '') . '</td>'
+                . '<td>' . kt_roster_badge(roster_officer_person_operation_label($p['operation']), $tone) . '</td>'
+                . '<td>' . $kintoneCell . '</td>'
+                . '<td>' . ($notes !== '' ? $notes : '<span class="text-subtle">—</span>') . '</td></tr>';
+        }
+        $html .= '</tbody></table></div>';
+    }
+    $html .= '<p class="small-note mono">計画の指紋 ' . kintone_h(substr((string)$plan['fingerprint'], 0, 16)) . '</p>';
+    return $html;
+}
+
 function kt_roster_flash_redirect(string $location, string $type, string $message): never
 {
     kintone_set_flash($type, $message);
