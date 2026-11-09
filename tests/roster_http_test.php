@@ -83,7 +83,7 @@ function latest_code(string $storageDir): string
 $formsPage = (new Client($base))->request('GET', '/forms/api/public_forms_with_closed.php');
 $rosterForm = null;
 foreach ((array)($formsPage['json']['forms'] ?? []) as $f) {
-    if (($f['settings']['form_type'] ?? '') === 'roster') {
+    if (($f['slug'] ?? '') === 'roster-2026') {
         $rosterForm = $f;
     }
 }

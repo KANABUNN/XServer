@@ -139,6 +139,11 @@ try {
                     'statuses' => roster_status_options(),
                     'active_statuses' => roster_active_statuses(),
                     'roles' => roster_role_definitions(),
+                    'officer_slots' => array_map(static fn(array $d): array => ['key' => $d['key'], 'label' => $d['label'], 'role' => $d['role'], 'required' => $d['required']], roster_officer_slot_definitions()),
+                    'depend_options' => roster_officer_depend_options(),
+                    'student_types' => roster_officer_type_options(),
+                    'org_depend_states' => roster_officer_org_depend_options(),
+                    'officer_min_active_members' => roster_officer_min_active_members(),
                 ],
             ] + $state);
             break;
@@ -146,7 +151,7 @@ try {
         case 'POST save_draft':
             $form = roster_api_form($formId, true);
             $session = roster_api_require_group($formId);
-            $result = roster_group_save_draft($form, (string)$session['group']['group_code'], (string)$session['group']['group_name'], $body['rows'] ?? null, (int)($body['draft_version'] ?? -1));
+            $result = roster_group_save_draft($form, (string)$session['group']['group_code'], (string)$session['group']['group_name'], $body['rows'] ?? null, (int)($body['draft_version'] ?? -1), $body['officers'] ?? null);
             json_response(['ok' => true, 'draft_version' => $result['draft_version'], 'saved_at' => $result['draft_updated_at']]);
             break;
 
@@ -167,13 +172,13 @@ try {
         case 'POST preview':
             $form = roster_api_form($formId, true);
             $session = roster_api_require_group($formId);
-            json_response(['ok' => true] + roster_group_preview($form, (string)$session['group']['group_code'], $body['rows'] ?? null));
+            json_response(['ok' => true] + roster_group_preview($form, (string)$session['group']['group_code'], $body['rows'] ?? null, $body['officers'] ?? null));
             break;
 
         case 'POST submit':
             $form = roster_api_form($formId, true);
             $session = roster_api_require_group($formId);
-            $result = roster_group_submit($form, $session['group'], $session['auth'], $body['rows'] ?? null, (int)($body['draft_version'] ?? -1), (string)($body['submitter_name'] ?? ''), get_client_ip());
+            $result = roster_group_submit($form, $session['group'], $session['auth'], $body['rows'] ?? null, (int)($body['draft_version'] ?? -1), (string)($body['submitter_name'] ?? ''), get_client_ip(), $body['officers'] ?? null);
             json_response([
                 'ok' => true,
                 'message' => (string)($form['settings']['completion_message'] ?? '') !== '' && (string)$form['settings']['completion_message'] !== '送信を受け付けました。'

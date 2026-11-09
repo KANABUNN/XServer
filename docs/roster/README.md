@@ -74,3 +74,7 @@ flowchart LR
 | 画面 | 役員の追加入力欄、担当者画面に ID22/ID21 の差分 | `roster.js`・`roster_detail.php` |
 
 反映ジョブは accept ごとに1件で、段階（phase）と書込み種別（write_kind）を記録しているため、ID22・ID21 の段階を後ろに追加できる。
+
+## 第2段階
+
+実装状況は [phase2.md](phase2.md) を参照。

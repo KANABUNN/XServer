@@ -30,6 +30,15 @@ $fake->seedRecord('CA056', [
     ['name' => '工大 花子', 'student_id' => 'BM23002', 'role' => '会計長', 'phone_number' => '080-1111-2222'],
     ['name' => '博多 次郎', 'student_id' => 'BM22003', 'role' => '-'],
 ]);
+// 第2段階の比較用: ID22 に2名、ID21 に CA056 の現行レコード
+$fake->people = [
+    ['id' => 1, 'revision' => 2, 'student_id' => 'BM23001', 'family_name' => '福岡', 'personal_name' => '太郎', 'mail' => 'registered@bene.fit.ac.jp', 'depend' => '情報工学科', 'type' => '大学 学生', 'org_depend_state' => '無'],
+    ['id' => 2, 'revision' => 1, 'student_id' => 'BM23002', 'family_name' => '工大', 'personal_name' => '花子', 'mail' => 'hanako@bene.fit.ac.jp', 'depend' => '電気工学科', 'type' => '大学 学生', 'org_depend_state' => '無'],
+];
+$fake->officerRecords = [[
+    'id' => 500, 'revision' => 4, 'group_id' => 'CA056', 'group_name' => '福工大謎解きサークル', 'group_org' => ['CA056'], 'register_date' => '2025-04-01',
+    'slots' => ['representative_stundet_id' => 'BM23001', 'representative_name' => '福岡太郎', 'representative_mail' => 'registered@bene.fit.ac.jp', 'accountant_stundet_id' => 'BM21000', 'accountant_name' => '前任会計', 'accountant_mail' => 'old@bene.fit.ac.jp'],
+]];
 $fake->save();
 roster_kintone_test_transport(fn(string $m, string $p, array $payload, int $t): array => $fake->handle($m, $p, $payload, $t), true);
 
@@ -56,6 +65,14 @@ if ($exists === 0) {
         ':name' => '2026年度 部員名簿',
         ':d' => "各団体の部員名簿を提出してください。\n顧問承諾書・クラブハウス部屋鍵保有者登録書は、これまでどおり書類で提出してください。",
         ':s' => json_encode(['form_type' => 'roster', 'roster_fiscal_year' => 2026, 'roster_phone_required_scope' => 'officers', 'roster_phone_required_manager' => false, 'enable_date_field' => false, 'allow_file_upload' => false], JSON_UNESCAPED_UNICODE),
+    ]);
+}
+if ((int)$pdo->query("SELECT COUNT(*) FROM managed_forms WHERE slug = 'roster-2026-officers'")->fetchColumn() === 0) {
+    $pdo->prepare('INSERT INTO managed_forms (slug, name, description, is_active, sort_order, settings_json) VALUES (:slug, :name, :d, 1, 1, :s)')->execute([
+        ':slug' => 'roster-2026-officers',
+        ':name' => '2026年度 部員名簿（役員情報あり）',
+        ':d' => '第2段階の確認用。部員名簿に役員の割り当てを付けて提出します。',
+        ':s' => json_encode(['form_type' => 'roster', 'roster_fiscal_year' => 2026, 'roster_phone_required_scope' => 'officers', 'roster_phone_required_manager' => false, 'roster_officer_sync' => true, 'enable_date_field' => false, 'allow_file_upload' => false], JSON_UNESCAPED_UNICODE),
     ]);
 }
 $dir = roster_directory_refresh($pdo);

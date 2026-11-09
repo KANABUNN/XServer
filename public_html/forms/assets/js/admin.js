@@ -1319,6 +1319,7 @@ function renderOverview(form) {
       chip(settings.distribution_enabled, 'download', settings.distribution_enabled ? `配布資料あり${hasDistributionFile ? '' : '（ファイル未登録）'}` : '配布資料なし'),
       chip(true, 'send', `ボタン「${settings.submit_button_label || '送信する'}」`),
       settings.form_type === 'roster' ? chip(true, 'users', `部員名簿フォーム（${settings.roster_fiscal_year || '年度未設定'}年度）`) : '',
+      settings.form_type === 'roster' && settings.roster_officer_sync ? chip(true, 'shield', '役員情報を受付') : '',
     ].join('');
   }
 
@@ -1398,6 +1399,7 @@ function fillEditor(form) {
     editor.elements.roster_fiscal_year.value = form?.settings?.roster_fiscal_year || '';
     editor.elements.roster_phone_required_scope.value = form?.settings?.roster_phone_required_scope || 'officers';
     editor.elements.roster_phone_required_manager.checked = Boolean(form?.settings?.roster_phone_required_manager);
+    editor.elements.roster_officer_sync.checked = Boolean(form?.settings?.roster_officer_sync);
     syncRosterSettingsVisibility(editor);
   }
 
@@ -2580,6 +2582,7 @@ function bindEvents() {
         roster_fiscal_year: Number(form.elements.roster_fiscal_year?.value || 0) || '',
         roster_phone_required_scope: form.elements.roster_phone_required_scope?.value || 'officers',
         roster_phone_required_manager: form.elements.roster_phone_required_manager?.checked || false,
+        roster_officer_sync: form.elements.roster_officer_sync?.checked || false,
       },
       fields: collectFields(),
     };

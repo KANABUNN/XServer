@@ -74,6 +74,10 @@ if ($canReview) {
 }
 $needsOverwriteConfirm = is_array($live) && $live['ok'] && ((int)($live['diff']['summary']['kintone_changed'] ?? 0) > 0 || (int)($live['diff']['summary']['student_id_corrected'] ?? 0) > 0 || !empty($live['base_outdated']));
 
+// 第2段階の比較（読み取りのみ）。版2の提出で、現在値との比較を行っているときだけ取得する
+$officerPlan = (is_array($live) && is_array($selected)) ? roster_officer_build_plan($case, $selected) : null;
+$returnSuggestion = is_array($officerPlan) && !empty($officerPlan['ok']) ? roster_officer_return_suggestion($officerPlan) : '';
+
 $reviewsByRevision = [];
 foreach ($detail['reviews'] as $review) {
     $reviewsByRevision[(int)$review['revision_id']][] = $review;
@@ -241,6 +245,19 @@ kintone_render_flash();
 </section>
 <?php endif; ?>
 
+<?php if (is_array($officerPlan)): ?>
+<section class="card">
+  <div class="card__header">
+    <div>
+      <div class="card__title"><?= fitsc_icon('shield') ?>登録者・役員台帳との比較（第2段階プレビュー）</div>
+      <p class="card__subtitle">ID22・ID21 の現在値と比較した結果です。この画面と accept では、ID22・ID21 へは書き込みません。accept しても反映されるのは部員名簿（ID20）だけです。</p>
+    </div>
+    <?= kt_roster_badge('書込み無効', 'warning') ?>
+  </div>
+  <div class="card__body stack"><?= kt_roster_officer_plan_html($officerPlan, $canOperate) ?></div>
+</section>
+<?php endif; ?>
+
 <?php if ($canReview): ?>
 <section class="card">
   <div class="card__header"><div class="card__title"><?= fitsc_icon('check-circle') ?>審査</div></div>
@@ -249,7 +266,7 @@ kintone_render_flash();
       <form method="post" action="<?= $actionUrl ?>" class="stack" data-confirm="差し戻すと団体に理由が表示され、修正・再提出を待つ状態になります。kintone は更新されません。" data-confirm-title="差し戻しますか？" data-confirm-ok="差し戻す" data-confirm-tone="warning">
         <?= $csrf ?><input type="hidden" name="action" value="return"><input type="hidden" name="case_id" value="<?= (int)$case['id'] ?>"><input type="hidden" name="revision_id" value="<?= (int)$selected['id'] ?>">
         <label class="field"><span class="field__label">差し戻し理由 <span class="req">必須</span></span>
-          <textarea name="reason" rows="4" required maxlength="2000" placeholder="例：3行目の学籍番号が誤っています。在籍者の電話番号（部長）が未入力です。"></textarea>
+          <textarea name="reason" rows="4" required maxlength="2000" placeholder="例：3行目の学籍番号が誤っています。在籍者の電話番号（部長）が未入力です。"><?= kintone_h($returnSuggestion) ?></textarea>
           <span class="field__hint">団体の提出画面に、第<?= (int)$selected['revision_number'] ?>版への差し戻し理由として表示されます。</span></label>
         <div><button type="submit" class="btn"><?= fitsc_icon('return') ?>差し戻す</button></div>
       </form>
