@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_layout.php';
+kintone_require_legacy_feature();
 $user = kintone_auth_require_view_access();
 $batchId = (int)($_GET['batch_id'] ?? 0);
 $params = [];
