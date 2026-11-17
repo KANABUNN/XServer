@@ -88,30 +88,39 @@ function kintone_sync_app(string $appKey): array
 }
 
 /**
- * 部員名簿アプリ（ID20）は、accept 済みの提出を反映する専用ワーカー（apps/roster_core/worker.php）以外から
- * 追加・更新・取得させない。同期ロールの設定に関係なく、汎用の push/pull/再同期の経路をここで止める。
+ * 部員名簿（ID20）・登録者（ID22）・役員台帳（ID21）は、accept 済みの提出を反映する専用の経路
+ * （apps/roster_core）以外から追加・更新・取得させない。同期ロールの設定や app_key の別名に関係なく、
+ * 汎用の push/pull/再同期の経路をここで止める。
  */
 function kintone_sync_assert_not_roster_app(array $app): void
 {
     $rosterConfig = kintone_config_value('roster', []);
-    $rosterKey = is_array($rosterConfig) ? (string)($rosterConfig['kintone']['roster_app_key'] ?? 'member_roster') : 'member_roster';
-    $appKey = (string)($app['app_key'] ?? '');
-    $isRoster = $appKey === $rosterKey;
-    if (!$isRoster && $rosterKey !== '') {
+    $kintoneConfig = is_array($rosterConfig) && is_array($rosterConfig['kintone'] ?? null) ? $rosterConfig['kintone'] : [];
+    $protectedKeys = array_values(array_filter([
+        (string)($kintoneConfig['roster_app_key'] ?? 'member_roster'),
+        (string)($kintoneConfig['people_app_key'] ?? 'roster_people'),
+        (string)($kintoneConfig['officer_app_key'] ?? 'roster_officers'),
+    ]));
+    $isProtected = in_array((string)($app['app_key'] ?? ''), $protectedKeys, true);
+    if (!$isProtected) {
         try {
-            $stmt = kintone_pdo('org')->prepare('SELECT kintone_app_id, kintone_subdomain FROM kintone_apps WHERE app_key = :key LIMIT 1');
-            $stmt->execute([':key' => $rosterKey]);
-            $roster = $stmt->fetch();
-            $isRoster = is_array($roster)
-                && (int)$roster['kintone_app_id'] > 0
-                && (int)$roster['kintone_app_id'] === (int)($app['kintone_app_id'] ?? 0)
-                && (string)$roster['kintone_subdomain'] === (string)($app['kintone_subdomain'] ?? '');
+            $placeholders = implode(',', array_fill(0, count($protectedKeys), '?'));
+            $stmt = kintone_pdo('org')->prepare('SELECT kintone_app_id, kintone_subdomain FROM kintone_apps WHERE app_key IN (' . $placeholders . ')');
+            $stmt->execute($protectedKeys);
+            foreach ($stmt->fetchAll() ?: [] as $protected) {
+                if ((int)$protected['kintone_app_id'] > 0
+                    && (int)$protected['kintone_app_id'] === (int)($app['kintone_app_id'] ?? 0)
+                    && (string)$protected['kintone_subdomain'] === (string)($app['kintone_subdomain'] ?? '')) {
+                    $isProtected = true;
+                    break;
+                }
+            }
         } catch (Throwable) {
-            $isRoster = false;
+            $isProtected = false;
         }
     }
-    if ($isRoster) {
-        throw new KintoneSyncException('部員名簿アプリは汎用の同期では扱えません。部員名簿の提出・accept画面から反映してください。');
+    if ($isProtected) {
+        throw new KintoneSyncException('部員名簿・登録者・役員台帳のアプリは汎用の同期では扱えません。部員名簿の提出・accept画面から反映してください。');
     }
 }
 

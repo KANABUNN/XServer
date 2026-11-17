@@ -20,6 +20,8 @@ function roster_default_config(): array
             // kintone管理サイト「アプリ設定」に登録する app_key（APIトークンもこのキーで保存される）
             'roster_app_key' => 'member_roster', // ID20 部員名簿（同期ロールは manual で登録）
             'group_app_key' => 'groups',         // ID7 公認団体・組織（団体一覧・団体確認・ルックアップ参照用）
+            'people_app_key' => 'roster_people',    // ID22 登録者（第2段階）
+            'officer_app_key' => 'roster_officers', // ID21 役員台帳（第2段階）
             'record_fields' => [
                 'group_code' => 'group_id',
                 'group_name' => 'group_name',
@@ -55,6 +57,18 @@ function roster_default_config(): array
             'allowed_ranks' => ['部', '同好会', '愛好会', '組織'],
             'allowed_statuses' => ['活動中', '結成登録中'],
             'directory_max_age_minutes' => 360,
+        ],
+        'officers' => [
+            // 第2段階の書込みスイッチ。比較・計画のプレビューは false のままで動く
+            'write_enabled' => false,
+            'depend_options' => [
+                '知能機械工学科', '生命環境化学科', '電子情報工学科', '電気工学科', '情報工学科', '情報通信工学科',
+                '情報システム工学科', 'システムマネジメント学科', '情報マネジメント学科', '社会環境学科', '短期大学部', '大学院', 'その他',
+            ],
+            'student_types' => ['大学 学生', '短期大学部 学生', '大学院 学生'],
+            'person_mail_domains' => ['bene.fit.ac.jp', 'fit.ac.jp'],
+            'org_depend_states' => ['有', '無'],
+            'min_active_members' => 5, // 新幹部部員名簿の提出に必要な「入部」「在籍」の人数
         ],
         'rules' => [
             'max_rows' => 500,
@@ -174,8 +188,10 @@ class RosterException extends RuntimeException
 
 require_once __DIR__ . '/schema.php';
 require_once __DIR__ . '/domain.php';
+require_once __DIR__ . '/officers.php';
 require_once __DIR__ . '/kintone_adapter.php';
 require_once __DIR__ . '/directory.php';
 require_once __DIR__ . '/case_service.php';
+require_once __DIR__ . '/officer_plan.php';
 require_once __DIR__ . '/verification.php';
 require_once __DIR__ . '/worker.php';

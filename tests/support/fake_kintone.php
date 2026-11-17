@@ -16,6 +16,15 @@ final class FakeKintone
     public int $nextRecordId = 1;
     public int $nextRowId = 1001;
     public array $calls = [];
+    /** 第2段階: [method, app] の記録（ID21/ID22 への書込みが0回であることの確認に使う） */
+    public array $appCalls = [];
+    /** ID22 登録者 */
+    public array $people = [];
+    /** ID21 役員台帳 */
+    public array $officerRecords = [];
+    public bool $officerFieldsComplete = true;
+    /** false は調査時の設定（総務1が必須・副代表者1が任意・一意キーなし）、true は業務ルールへの移行後 */
+    public bool $officerFieldsMigrated = false;
     public int $writes = 0;
     public bool $newFieldsPresent = true;
     /** @var null|callable(string,string,array,FakeKintone):mixed */
@@ -37,7 +46,7 @@ final class FakeKintone
         if (is_file($path)) {
             $state = json_decode((string)file_get_contents($path), true);
             if (is_array($state)) {
-                foreach (['records', 'nextRecordId', 'nextRowId', 'newFieldsPresent', 'groups'] as $key) {
+                foreach (['records', 'nextRecordId', 'nextRowId', 'newFieldsPresent', 'groups', 'people', 'officerRecords'] as $key) {
                     if (array_key_exists($key, $state)) {
                         $fake->$key = $state[$key];
                     }
@@ -59,12 +68,15 @@ final class FakeKintone
             'nextRowId' => $this->nextRowId,
             'newFieldsPresent' => $this->newFieldsPresent,
             'groups' => $this->groups,
+            'people' => $this->people,
+            'officerRecords' => $this->officerRecords,
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), LOCK_EX);
     }
 
     public function handle(string $method, string $path, array $payload, int $tokens): array
     {
         $this->calls[] = $method . ' ' . $path;
+        $this->appCalls[] = [$method, (int)($payload['app'] ?? 0)];
         if ($this->inject !== null) {
             $r = ($this->inject)($method, $path, $payload, $this);
             if (is_array($r)) {
@@ -86,6 +98,28 @@ final class FakeKintone
 
     private function dispatch(string $method, string $path, array $payload, int $tokens): array
     {
+        if ($method === 'GET' && $path === '/k/v1/records.json' && (int)$payload['app'] === 22) {
+            return ['status' => 200, 'body' => ['records' => $this->queryPeople((string)$payload['query'])]];
+        }
+        if ($method === 'GET' && $path === '/k/v1/records.json' && (int)$payload['app'] === 21) {
+            return ['status' => 200, 'body' => ['records' => $this->queryOfficers((string)$payload['query'])]];
+        }
+        if ($method === 'GET' && $path === '/k/v1/app/form/fields.json' && in_array((int)$payload['app'], [21, 22], true)) {
+            return ['status' => 200, 'body' => ['properties' => (int)$payload['app'] === 22 ? $this->peopleFields() : $this->officerFields()]];
+        }
+        if ($method === 'GET' && $path === '/k/v1/records.json' && (int)$payload['app'] === 7 && preg_match('/\bid = "([^"]+)"/', (string)$payload['query'], $match) === 1) {
+            $out = [];
+            foreach ($this->groups as $i => $g) {
+                if ($g['id'] === $match[1]) {
+                    $out[] = [
+                        '$id' => ['value' => (string)($i + 1)], '$revision' => ['value' => (string)($g['revision'] ?? 1)],
+                        'id' => ['value' => $g['id']], 'name' => ['value' => $g['name']], 'status' => ['value' => $g['status']],
+                        'org' => ['value' => array_map(static fn(string $c): array => ['code' => $c, 'name' => $c], $g['org'] ?? [$g['id']])],
+                    ];
+                }
+            }
+            return ['status' => 200, 'body' => ['records' => $out]];
+        }
         if ($method === 'GET' && $path === '/k/v1/records.json' && (int)$payload['app'] === 7) {
             $records = array_map(fn(array $g, int $i): array => [
                 '$id' => ['value' => (string)($i + 1)], '$revision' => ['value' => '1'],
@@ -157,6 +191,103 @@ final class FakeKintone
             return ['status' => 200, 'body' => ['revision' => (string)$r['revision']]];
         }
         return ['status' => 400, 'body' => ['code' => 'CB_IL02', 'message' => 'unsupported ' . $method . ' ' . $path]];
+    }
+
+    private function queryPeople(string $query): array
+    {
+        if (preg_match('/^(student_id|mail) in \((.*)\) limit/', $query, $m) !== 1) {
+            return [];
+        }
+        preg_match_all('/"([^"]*)"/', $m[2], $values);
+        $out = [];
+        foreach ($this->people as $person) {
+            if (in_array((string)$person[$m[1]], $values[1], true)) {
+                $row = ['$id' => ['value' => (string)$person['id']], '$revision' => ['value' => (string)$person['revision']]];
+                foreach (['student_id', 'family_name', 'personal_name', 'mail', 'depend', 'type', 'org_depend_state'] as $code) {
+                    $row[$code] = ['value' => (string)($person[$code] ?? '')];
+                }
+                $row['name'] = ['value' => $person['family_name'] . $person['personal_name']];
+                $out[] = $row;
+            }
+        }
+        return $out;
+    }
+
+    private function queryOfficers(string $query): array
+    {
+        preg_match('/group_id = "([^"]+)"/', $query, $m);
+        $out = [];
+        foreach ($this->officerRecords as $record) {
+            if ($record['group_id'] !== ($m[1] ?? '')) {
+                continue;
+            }
+            $row = [
+                '$id' => ['value' => (string)$record['id']],
+                '$revision' => ['value' => (string)$record['revision']],
+                'group_id' => ['value' => $record['group_id']],
+                'group_name' => ['value' => $record['group_name']],
+                'group_org' => ['value' => array_map(static fn(string $c): array => ['code' => $c, 'name' => $c], $record['group_org'] ?? [$record['group_id']])],
+                'register_date' => ['value' => $record['register_date'] ?? ''],
+            ];
+            if (isset($record['group_key'])) {
+                $row['forms_current_group_key'] = ['value' => $record['group_key']];
+            }
+            foreach ($record['slots'] ?? [] as $code => $value) {
+                $row[$code] = ['value' => $value];
+            }
+            $out[] = $row;
+        }
+        return array_reverse($out);
+    }
+
+    private function peopleFields(): array
+    {
+        $fields = [
+            'student_id' => ['type' => 'SINGLE_LINE_TEXT', 'unique' => true],
+            'family_name' => ['type' => 'SINGLE_LINE_TEXT'],
+            'personal_name' => ['type' => 'SINGLE_LINE_TEXT'],
+            'name' => ['type' => 'SINGLE_LINE_TEXT'],
+            'mail' => ['type' => 'LINK', 'unique' => true],
+            'depend' => ['type' => 'DROP_DOWN', 'options' => array_fill_keys(['知能機械工学科', '生命環境化学科', '電子情報工学科', '電気工学科', '情報工学科', '情報通信工学科', '情報システム工学科', 'システムマネジメント学科', '情報マネジメント学科', '社会環境学科', '短期大学部', '大学院', '教養力育成センター', '職員', 'その他'], [])],
+            'type' => ['type' => 'DROP_DOWN', 'options' => array_fill_keys(['大学 学生', '短期大学部 学生', '大学院 学生', '教職員', 'システムユーザ'], [])],
+            'org_depend_state' => ['type' => 'RADIO_BUTTON', 'options' => array_fill_keys(['有', '無'], [])],
+        ];
+        if (!$this->officerFieldsComplete) {
+            unset($fields['org_depend_state']);
+            $fields['mail'] = ['type' => 'LINK', 'unique' => false];
+        }
+        return $fields;
+    }
+
+    private function officerFields(): array
+    {
+        $fields = [
+            'group_id' => ['type' => 'SINGLE_LINE_TEXT', 'lookup' => null],
+            'group_name' => ['type' => 'SINGLE_LINE_TEXT'],
+            'group_org' => ['type' => 'ORGANIZATION_SELECT'],
+            'register_date' => ['type' => 'DATE'],
+        ];
+        foreach (['representative', 'deputy_representative_1', 'deputy_representative_2', 'accountant', 'deputy_accountant_1', 'deputy_accountant_2', 'general_affairs_1', 'general_affairs_2', 'general_affairs_3'] as $prefix) {
+            $required = $this->officerFieldsMigrated
+                ? in_array($prefix, ['representative', 'deputy_representative_1', 'accountant'], true)
+                : in_array($prefix, ['representative', 'accountant', 'general_affairs_1'], true);
+            $fields[$prefix . '_stundet_id'] = ['type' => 'SINGLE_LINE_TEXT', 'lookup' => null, 'required' => $required];
+            $fields[$prefix . '_name'] = ['type' => 'SINGLE_LINE_TEXT', 'required' => $required];
+            $fields[$prefix . '_mail'] = ['type' => 'LINK', 'required' => $required];
+        }
+        if ($this->officerFieldsMigrated) {
+            $fields['forms_current_group_key'] = ['type' => 'SINGLE_LINE_TEXT', 'required' => true, 'unique' => true];
+        }
+        if (!$this->officerFieldsComplete) {
+            unset($fields['accountant_stundet_id']);
+        }
+        return $fields;
+    }
+
+    /** ID21 / ID22 への書込み回数（第2段階の最初のPRでは常に0回） */
+    public function officerWrites(): int
+    {
+        return count(array_filter($this->appCalls, static fn(array $c): bool => $c[0] !== 'GET' && in_array($c[1], [21, 22], true)));
     }
 
     /** kintone のテーブル更新: 行IDありは更新、なしは追加、送られなかった行は削除。存在しないフィールドは無視。 */

@@ -83,6 +83,8 @@
     app.dirty = false;
     app.lastSavedAt = draft?.updated_at || '';
     app.errorsByKey = {};
+    app.officers = normalizeOfficers(draft?.officers);
+    app.officerTouched = {};
   }
 
   async function loadDirectory(app) {
@@ -339,6 +341,7 @@
         </div>
         ${countsHtml(latest.rows, app)}
         ${readonlyTableHtml(latest.rows)}
+        ${latest.officers ? `<h3 class="rs-section__title">${icon('shield')}役員の割り当て</h3>${officerSummaryHtml(latest.officers)}` : ''}
       </section>`;
     body.querySelector('[data-rs="edit-latest"]').addEventListener('click', async (event) => {
       const button = event.currentTarget;
@@ -372,6 +375,196 @@
                 <td data-label="団体メール">${r.uses_group_email ? '使用' : '—'}</td>
                 <td data-label="HP更新">${r.is_website_editor ? '担当' : '—'}</td>
               </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+
+  /* ---------------- 役員枠（役員連携の対象フォームだけ） ---------------- */
+  function officerEnabled(app) { return Boolean(app.state?.settings?.officer_sync); }
+
+  function normalizeOfficers(raw) {
+    return {
+      slots: { ...(raw?.slots && !Array.isArray(raw.slots) ? raw.slots : {}) },
+      people: Array.isArray(raw?.people) ? raw.people.map((p) => ({ ...p })) : [],
+    };
+  }
+
+  function officerSlots(app) { return app.options?.officer_slots || []; }
+
+  /** 役員候補は同じ提出内の入部・在籍の部員全員（兼務できるよう名簿の役職では絞らない）。同じ役職の別の枠の人は除く */
+  function officerCandidates(app, slot) {
+    const active = activeStatuses(app);
+    const others = officerSlots(app)
+      .filter((s) => s.role === slot.role && s.key !== slot.key)
+      .map((s) => app.officers.slots[s.key])
+      .filter(Boolean);
+    return app.rows.filter((r) => active.includes(r.membership_status)
+      && String(r.student_id || '').trim() !== ''
+      && !others.includes(r.student_id));
+  }
+
+  /** 枠が1つの役職で、名簿のその役職の部員が1人だけなら初期候補にする（複数枠は明示的に割り当てる） */
+  function applySingleOfficerDefaults(app) {
+    const slots = officerSlots(app);
+    const active = activeStatuses(app);
+    slots.forEach((slot) => {
+      const capacity = slots.filter((s) => s.role === slot.role).length;
+      if (capacity !== 1 || app.officers.slots[slot.key] || app.officerTouched[slot.key]) return;
+      const candidates = app.rows.filter((r) => r.role === slot.role && active.includes(r.membership_status) && String(r.student_id || '').trim() !== '');
+      if (candidates.length === 1) app.officers.slots[slot.key] = candidates[0].student_id;
+    });
+  }
+
+  function heldSlots(app, studentId) {
+    return officerSlots(app).filter((s) => app.officers.slots[s.key] === studentId);
+  }
+
+  function heldRoles(app, studentId) {
+    return [...new Set(heldSlots(app, studentId).map((s) => s.role))];
+  }
+
+  function reflectRowRole(app, row) {
+    const tr = app.host.querySelector(`tr[data-key="${CSS.escape(row.key)}"]`);
+    if (!tr) return;
+    const select = tr.querySelector('[data-f="role"]');
+    if (select) select.value = row.role;
+    const phone = tr.querySelector('[data-f="phone_number"]');
+    if (phone) phone.placeholder = phoneRequired(app, row) ? '必須' : '任意';
+  }
+
+  /** 名簿の役職（ID20 は単一選択）を、実際に担当する役職のどれかにそろえる。マネージャーは名簿側の役職なのでそのまま */
+  function syncPrimaryRoles(app) {
+    app.rows.forEach((row) => {
+      const held = heldRoles(app, row.student_id);
+      if (!row.student_id || !held.length || held.includes(row.role) || row.role === 'マネージャー') return;
+      row.role = held[0];
+      reflectRowRole(app, row);
+    });
+  }
+
+  function renameOfficerPerson(app, before, after) {
+    if (!before || before === after) return;
+    Object.keys(app.officers.slots).forEach((key) => { if (app.officers.slots[key] === before) app.officers.slots[key] = after; });
+    app.officers.people.forEach((p) => { if (p.student_id === before) p.student_id = after; });
+  }
+
+  function clearOfficerPerson(app, studentId) {
+    if (!studentId) return;
+    Object.keys(app.officers.slots).forEach((key) => { if (app.officers.slots[key] === studentId) app.officers.slots[key] = ''; });
+  }
+
+  function officerPerson(app, studentId) {
+    return app.officers.people.find((p) => p.student_id === studentId) || null;
+  }
+
+  function ensureOfficerPerson(app, studentId) {
+    let person = officerPerson(app, studentId);
+    if (!person) {
+      person = { student_id: studentId, family_name: '', personal_name: '', mail: '', depend: '', type: '', org_depend_state: '' };
+      app.officers.people.push(person);
+    }
+    return person;
+  }
+
+  function officerPersonHtml(app, studentId) {
+    const row = app.rows.find((r) => r.student_id === studentId);
+    const person = ensureOfficerPerson(app, studentId);
+    const slots = heldSlots(app, studentId);
+    const roles = heldRoles(app, studentId);
+    const concurrent = roles.length > 1;
+    const primaryRoles = row?.role === 'マネージャー' ? [...roles, 'マネージャー'] : roles;
+    const selectOptions = (options, value) => `<option value="">選択</option>${options.map((o) => `<option${o === value ? ' selected' : ''}>${esc(o)}</option>`).join('')}`;
+    return `
+      <div class="rs-officer-person" data-person="${esc(studentId)}">
+        <div class="rs-officer-person__head">
+          <strong>${esc(row?.name || studentId)}</strong> <span class="mono text-subtle">${esc(studentId)}</span>
+          <span class="chip">${esc(slots.map((s) => s.label).join('・'))}${concurrent ? '（兼務）' : ''}</span>
+        </div>
+        <div class="form-grid rs-officer-person__fields">
+          <label class="field"><span class="field__label">姓<span class="req">必須</span></span><input type="text" data-person-field="family_name" maxlength="50" value="${esc(person.family_name || '')}" autocomplete="off"></label>
+          <label class="field"><span class="field__label">名<span class="req">必須</span></span><input type="text" data-person-field="personal_name" maxlength="50" value="${esc(person.personal_name || '')}" autocomplete="off"></label>
+          <label class="field"><span class="field__label">本人の大学メールアドレス<span class="req">必須</span></span><input type="email" data-person-field="mail" maxlength="200" value="${esc(person.mail || '')}" autocomplete="off" inputmode="email"></label>
+          <label class="field"><span class="field__label">所属（学科等）<span class="req">必須</span></span><select data-person-field="depend">${selectOptions(app.options?.depend_options || [], person.depend)}</select></label>
+          <label class="field"><span class="field__label">学生区分<span class="req">必須</span></span><select data-person-field="type">${selectOptions(app.options?.student_types || [], person.type)}</select></label>
+          <label class="field"><span class="field__label">執行・議会組織への所属<span class="req">必須</span></span><select data-person-field="org_depend_state">${selectOptions(app.options?.org_depend_states || [], person.org_depend_state)}</select></label>
+          ${concurrent ? `<label class="field"><span class="field__label">名簿に載せる役職（主役職）</span><select data-person-primary>${primaryRoles.map((r) => `<option value="${esc(r)}"${r === row?.role ? ' selected' : ''}>${esc(roleLabel(r))}</option>`).join('')}</select></label>` : ''}
+        </div>
+      </div>`;
+  }
+
+  function renderOfficers(app) {
+    const node = app.host.querySelector('[data-rs="officers"]');
+    if (!node || !officerEnabled(app)) return;
+    applySingleOfficerDefaults(app);
+    const slots = officerSlots(app);
+    const assigned = [...new Set(slots.map((s) => app.officers.slots[s.key]).filter(Boolean))];
+    const minimum = Number(app.options?.officer_min_active_members || 0);
+    const activeCount = new Set(app.rows.filter((r) => activeStatuses(app).includes(r.membership_status) && r.student_id).map((r) => r.student_id)).size;
+    node.innerHTML = `
+      <h3 class="rs-section__title">${icon('shield')}役員の割り当て</h3>
+      <p class="small-note">提出時点で実際に就任している役員を、入部・在籍の部員から選びます。代表者・副代表者1・会計長は必須です。異なる役職を兼務する場合は、同じ人を選べます。担当者がいない枠は「空席」のままにしてください。${minimum ? `入部・在籍の部員は${minimum}人以上必要です（現在${activeCount}人）。` : ''}</p>
+      <div class="rs-officer-grid">
+        ${slots.map((slot) => {
+    const current = app.officers.slots[slot.key] || '';
+    const candidates = officerCandidates(app, slot);
+    const known = candidates.some((r) => r.student_id === current);
+    const currentRow = app.rows.find((r) => r.student_id === current);
+    return `
+          <label class="field">
+            <span class="field__label">${esc(slot.label)}${slot.required ? '<span class="req">必須</span>' : ''}</span>
+            <select data-slot="${esc(slot.key)}">
+              <option value="">${slot.required ? '選択してください' : '空席'}</option>
+              ${candidates.map((r) => `<option value="${esc(r.student_id)}"${r.student_id === current ? ' selected' : ''}>${esc(r.name || r.student_id)}（${esc(r.student_id)}）</option>`).join('')}
+              ${current && !known ? `<option value="${esc(current)}" selected>${esc(currentRow?.name || current)}（状態を確認してください）</option>` : ''}
+            </select>
+          </label>`;
+  }).join('')}
+      </div>
+      ${assigned.length ? `
+        <div class="rs-officer-people">
+          <p class="small-note">大学の登録者情報との照合と新規登録に使います。兼務する人の入力は1人分です。登録済みかどうかは総合管理事務局が確認します。</p>
+          ${assigned.map((sid) => officerPersonHtml(app, sid)).join('')}
+        </div>` : ''}`;
+  }
+
+  function bindOfficers(app) {
+    const node = app.host.querySelector('[data-rs="officers"]');
+    if (!node) return;
+    node.addEventListener('change', (event) => {
+      const target = event.target;
+      if (target.dataset.slot) {
+        app.officers.slots[target.dataset.slot] = target.value;
+        app.officerTouched[target.dataset.slot] = true;
+        syncPrimaryRoles(app);
+        renderOfficers(app);
+        markDirty(app);
+        return;
+      }
+      if (target.hasAttribute('data-person-primary')) {
+        const row = app.rows.find((r) => r.student_id === target.closest('[data-person]').dataset.person);
+        if (row) { row.role = target.value; reflectRowRole(app, row); markDirty(app); }
+      }
+    });
+    const onPersonField = (event) => {
+      const field = event.target.dataset.personField;
+      if (!field) return;
+      const person = officerPerson(app, event.target.closest('[data-person]').dataset.person);
+      if (person) { person[field] = event.target.value; markDirty(app); }
+    };
+    node.addEventListener('input', onPersonField);
+    node.addEventListener('change', onPersonField);
+  }
+
+  function officerSummaryHtml(items) {
+    if (!items) return '';
+    return `
+      <div class="table-wrap rs-table-wrap">
+        <table class="table table--compact rs-officer-table">
+          <thead><tr><th>役員枠</th><th>部員</th><th>学籍番号</th><th>兼務</th></tr></thead>
+          <tbody>${items.map((o) => `
+            <tr><td>${esc(o.label)}${o.required ? ' <span class="req">必須</span>' : ''}</td><td>${o.student_id ? esc(o.name) : '<span class="text-subtle">空席</span>'}</td><td class="mono">${esc(o.student_id)}</td><td>${(o.concurrent || []).length ? esc(o.concurrent.join('・')) : '—'}</td></tr>`).join('')}
           </tbody>
         </table>
       </div>`;
@@ -448,6 +641,7 @@
           </table>
         </div>
         <div data-rs="empty" class="empty"${app.rows.length ? ' hidden' : ''}><span class="empty__icon">${icon('users')}</span><span>部員がまだいません。「部員を追加」またはkintoneの名簿の読み込みから始めてください。</span></div>
+        ${officerEnabled(app) ? '<div class="rs-officers" data-rs="officers"></div>' : ''}
         <div class="fp-submit rs-submit">
           <div class="fp-submit__status"><span class="fp-saved" data-rs="save-status">${saveStatusText(app)}</span></div>
           <div class="fp-submit__actions">
@@ -458,6 +652,7 @@
       </section>`;
     renderRows(app);
     bindEditor(app, body);
+    bindOfficers(app);
   }
 
   function saveStatusText(app) {
@@ -505,6 +700,7 @@
     const empty = app.host.querySelector('[data-rs="empty"]');
     if (empty) empty.hidden = app.rows.length > 0;
     refreshCounts(app);
+    renderOfficers(app);
   }
 
   function refreshCounts(app) {
@@ -526,7 +722,7 @@
     app.saving = true;
     updateSaveStatus(app);
     try {
-      const result = await call(app, 'save_draft', { rows: app.rows, draft_version: app.draftVersion });
+      const result = await call(app, 'save_draft', { rows: app.rows, officers: app.officers, draft_version: app.draftVersion });
       if (!result.ok) { handleApiFailure(app, result, '下書きを保存できませんでした'); return false; }
       app.draftVersion = result.draft_version;
       app.lastSavedAt = result.saved_at || '';
@@ -552,7 +748,10 @@
       if (!field || !tr) return;
       const row = app.rows.find((r) => r.key === tr.dataset.key);
       if (!row) return;
+      const previousStudentId = row.student_id;
       row[field] = target.type === 'checkbox' ? target.checked : target.value;
+      if (field === 'student_id') renameOfficerPerson(app, previousStudentId, row.student_id);
+      if (['student_id', 'name', 'role', 'membership_status'].includes(field)) renderOfficers(app);
       if (target.getAttribute('aria-invalid') === 'true') target.removeAttribute('aria-invalid');
       if (field === 'membership_status' || field === 'role') {
         const phone = tr.querySelector('[data-f="phone_number"]');
@@ -574,6 +773,7 @@
         if (!ok) return;
       }
       app.rows = app.rows.filter((r) => r !== row);
+      clearOfficerPerson(app, row.student_id);
       delete app.errorsByKey[row.key];
       renderRows(app);
       markDirty(app);
@@ -641,7 +841,7 @@
     button.disabled = true;
     try {
       if (app.dirty && !(await saveDraft(app))) return;
-      const result = await call(app, 'preview', { rows: app.rows });
+      const result = await call(app, 'preview', { rows: app.rows, officers: app.officers });
       if (!result.ok) { handleApiFailure(app, result, '確認できませんでした'); return; }
       app.errorsByKey = {};
       (result.validation?.errors || []).forEach((e) => {
@@ -701,6 +901,7 @@
             </table>
           </div>` : '<p class="small-note">kintoneの名簿から変更はありません。</p>'}
         ${p.diff?.kept?.length ? `<details><summary>提出に含まれない登録済みの部員（${p.diff.kept.length}名・kintoneにはそのまま残ります）</summary><ul class="rs-msg-list">${p.diff.kept.map((k) => `<li>${esc(k.name)} <span class="mono">${esc(k.student_id)}</span> ${esc(k.status || '')}</li>`).join('')}</ul></details>` : ''}
+        ${p.officers ? `<div class="stack stack--sm"><h3 class="rs-section__title">${icon('shield')}役員の割り当て</h3>${officerSummaryHtml(p.officers)}<p class="small-note">役員の情報は、総合管理事務局が登録者・役員台帳と照合して確認します。</p></div>` : ''}
         <label class="field rs-submitter">
           <span class="field__label">提出者の氏名<span class="req">必須</span></span>
           <input type="text" name="submitter_name" maxlength="100" autocomplete="name" placeholder="例：福岡 太郎（部長）">
@@ -732,7 +933,7 @@
     button.classList.add('is-loading');
     button.disabled = true;
     try {
-      const result = await call(app, 'submit', { rows: app.rows, draft_version: app.draftVersion, submitter_name: submitterName });
+      const result = await call(app, 'submit', { rows: app.rows, officers: app.officers, draft_version: app.draftVersion, submitter_name: submitterName });
       if (!result.ok) {
         if (result.reason === 'validation') {
           app.view = 'edit';

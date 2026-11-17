@@ -135,6 +135,7 @@ function roster_form_settings(array $settings): array
         'fiscal_year' => ($year >= 2000 && $year <= 2100) ? $year : 0,
         'phone_required_scope' => $scope,
         'phone_required_manager' => !empty($settings['roster_phone_required_manager']),
+        'officer_sync' => !empty($settings['roster_officer_sync']),
     ];
 }
 

@@ -252,6 +252,10 @@ page_header('フォーム管理', 'forms-admin-page', ['app_name' => 'フォー�
                                     </select>
                                 </label>
                                 <div class="field span-full" data-roster-only><label class="switch"><input type="checkbox" name="roster_phone_required_manager">マネージャーも電話番号を必須にする</label></div>
+                                <div class="field span-full" data-roster-only>
+                                    <label class="switch"><input type="checkbox" name="roster_officer_sync">役員情報を受け付ける（第2段階）</label>
+                                    <span class="field__hint">団体が役員枠を割り当てて提出します。担当者は登録者（ID22）・役員台帳（ID21）との比較を確認できます。フォームを複製した場合は、この設定はオフになります。</span>
+                                </div>
                                 <p class="field__hint span-full" data-roster-only>対象年度は日付から自動判定しません。新年度の受付を始めるときに変更してください（変更すると前年度の未反映の提出は反映されなくなります）。部員名簿フォームでは日付入力・添付ファイル・追加項目は使いません。</p>
                             </div>
                         </section>

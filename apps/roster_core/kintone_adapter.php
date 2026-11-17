@@ -60,14 +60,19 @@ function roster_kintone_test_transport(?callable $transport = null, bool $set = 
     return $current;
 }
 
-/** 'roster'（ID20）または 'group'（ID7）の接続情報 */
+/** 'roster'（ID20）/ 'group'（ID7）/ 'people'（ID22）/ 'officers'（ID21）の接続情報 */
 function roster_kintone_app_context(string $which): array
 {
-    $appKey = (string)roster_config($which === 'group' ? 'kintone.group_app_key' : 'kintone.roster_app_key');
+    $appKey = (string)roster_config(match ($which) {
+        'group' => 'kintone.group_app_key',
+        'people' => 'kintone.people_app_key',
+        'officers' => 'kintone.officer_app_key',
+        default => 'kintone.roster_app_key',
+    });
     if (roster_kintone_test_transport() !== null) {
         return [
             'app_key' => $appKey,
-            'app_id' => (int)roster_config('kintone.test_app_ids.' . $which, $which === 'group' ? 7 : 20),
+            'app_id' => (int)roster_config('kintone.test_app_ids.' . $which, ['group' => 7, 'people' => 22, 'officers' => 21][$which] ?? 20),
             'base_url' => 'https://roster-test.invalid',
             'token' => 'test-token-' . $which,
         ];
@@ -567,4 +572,197 @@ function roster_kintone_fetch_groups(): array
         $offset += 500;
     }
     return $groups;
+}
+
+
+/* ---------------- 第2段階: ID7 / ID22 / ID21 の読取り（書込みなし） ---------------- */
+
+function roster_kintone_organization_codes(mixed $value): array
+{
+    $codes = [];
+    foreach (is_array($value) ? $value : [] as $entity) {
+        if (is_array($entity) && (string)($entity['code'] ?? '') !== '') {
+            $codes[] = (string)$entity['code'];
+        }
+    }
+    sort($codes, SORT_STRING);
+    return $codes;
+}
+
+/** ID7 の団体レコード（キャッシュではなく現在値）。見つからなければ null。 */
+function roster_kintone_find_group_master(string $groupCode): ?array
+{
+    $ctx = roster_kintone_app_context('group');
+    $f = static fn(string $k): string => (string)roster_config('kintone.group_fields.' . $k, $k);
+    $res = roster_kintone_request('GET', '/k/v1/records.json', [
+        'app' => $ctx['app_id'],
+        'fields' => ['$id', '$revision', $f('code'), $f('name'), $f('status'), 'org'],
+        'query' => $f('code') . ' = ' . roster_kintone_query_string($groupCode) . ' limit 2',
+    ], [$ctx]);
+    $record = $res['records'][0] ?? null;
+    if (!is_array($record)) {
+        return null;
+    }
+    return [
+        'record_id' => (int)($record['$id']['value'] ?? 0),
+        'revision' => (int)($record['$revision']['value'] ?? 0),
+        'name' => (string)($record[$f('name')]['value'] ?? ''),
+        'status' => (string)($record[$f('status')]['value'] ?? ''),
+        'org' => roster_kintone_organization_codes($record['org']['value'] ?? []),
+    ];
+}
+
+/** ID22 を学籍番号またはメールの完全一致で検索する */
+function roster_kintone_find_people(string $field, array $values): array
+{
+    $values = array_values(array_unique(array_filter(array_map('strval', $values), static fn(string $v): bool => $v !== '')));
+    if ($values === []) {
+        return [];
+    }
+    $ctx = roster_kintone_app_context('people');
+    $people = [];
+    foreach (array_chunk($values, 50) as $chunk) {
+        $res = roster_kintone_request('GET', '/k/v1/records.json', [
+            'app' => $ctx['app_id'],
+            'fields' => ['$id', '$revision', 'student_id', 'family_name', 'personal_name', 'name', 'mail', 'depend', 'type', 'org_depend_state'],
+            'query' => $field . ' in (' . implode(', ', array_map('roster_kintone_query_string', $chunk)) . ') limit 500',
+        ], [$ctx]);
+        foreach ((array)($res['records'] ?? []) as $record) {
+            $get = static fn(string $code): string => (string)($record[$code]['value'] ?? '');
+            $people[] = [
+                'record_id' => (int)$get('$id'),
+                'revision' => (int)$get('$revision'),
+                'student_id' => $get('student_id'),
+                'family_name' => $get('family_name'),
+                'personal_name' => $get('personal_name'),
+                'name' => $get('name'),
+                'mail' => $get('mail'),
+                'depend' => $get('depend'),
+                'type' => $get('type'),
+                'org_depend_state' => $get('org_depend_state'),
+            ];
+        }
+    }
+    return $people;
+}
+
+/**
+ * ID21 を団体識別記号で検索する（0件・1件・複数件を呼び出し側で判定）。
+ * 一意キー forms_current_group_key は移行前のアプリには存在しないため、fields で列挙せず全項目を受け取る。
+ */
+function roster_kintone_find_officer_records(string $groupCode): array
+{
+    $ctx = roster_kintone_app_context('officers');
+    $res = roster_kintone_request('GET', '/k/v1/records.json', [
+        'app' => $ctx['app_id'],
+        'query' => 'group_id = ' . roster_kintone_query_string($groupCode) . ' order by $id desc limit 10',
+    ], [$ctx]);
+    $records = [];
+    foreach ((array)($res['records'] ?? []) as $record) {
+        $slots = [];
+        foreach (roster_officer_slot_definitions() as $def) {
+            $slots[$def['key']] = [
+                'student_id' => (string)($record[$def['student_field']]['value'] ?? ''),
+                'name' => (string)($record[$def['name_field']]['value'] ?? ''),
+                'mail' => (string)($record[$def['mail_field']]['value'] ?? ''),
+            ];
+        }
+        $records[] = [
+            'record_id' => (int)($record['$id']['value'] ?? 0),
+            'revision' => (int)($record['$revision']['value'] ?? 0),
+            'group_name' => (string)($record['group_name']['value'] ?? ''),
+            'group_org' => roster_kintone_organization_codes($record['group_org']['value'] ?? []),
+            'register_date' => (string)($record['register_date']['value'] ?? ''),
+            'group_key' => (string)($record['forms_current_group_key']['value'] ?? ''),
+            'slots' => $slots,
+        ];
+    }
+    return ['count' => count($records), 'records' => $records];
+}
+
+/** ID22 / ID21 のフィールド設定を検査する（第2段階の接続確認。書込みはしない） */
+function roster_kintone_officer_preflight(): array
+{
+    $errors = [];
+    $warnings = [];
+    $writeBlockers = [];
+    $isOn = static fn(mixed $value): bool => $value === true || $value === 'true';
+    $check = static function (array $props, string $app, string $code, string $type, array $options = [], bool $unique = false) use (&$errors, $isOn): ?array {
+        $field = $props[$code] ?? null;
+        if (!is_array($field)) {
+            $errors[] = $app . '：フィールド「' . $code . '」がありません。';
+            return null;
+        }
+        if ((string)($field['type'] ?? '') !== $type) {
+            $errors[] = $app . '：「' . $code . '」の型が ' . (string)($field['type'] ?? '?') . ' です（' . $type . ' が必要）。';
+            return null;
+        }
+        if ($options !== []) {
+            $missing = array_values(array_diff($options, array_map('strval', array_keys(is_array($field['options'] ?? null) ? $field['options'] : []))));
+            if ($missing !== []) {
+                $errors[] = $app . '：「' . $code . '」に選択肢「' . implode('・', $missing) . '」がありません。';
+            }
+        }
+        if ($unique && !$isOn($field['unique'] ?? false)) {
+            $errors[] = $app . '：「' . $code . '」が「値の重複を禁止」になっていません。';
+        }
+        return $field;
+    };
+
+    $peopleCtx = roster_kintone_app_context('people');
+    $res = roster_kintone_request('GET', '/k/v1/app/form/fields.json', ['app' => $peopleCtx['app_id']], [$peopleCtx]);
+    $props = is_array($res['properties'] ?? null) ? $res['properties'] : [];
+    $check($props, 'ID22', 'student_id', 'SINGLE_LINE_TEXT', [], true);
+    $check($props, 'ID22', 'family_name', 'SINGLE_LINE_TEXT');
+    $check($props, 'ID22', 'personal_name', 'SINGLE_LINE_TEXT');
+    $check($props, 'ID22', 'name', 'SINGLE_LINE_TEXT');
+    $check($props, 'ID22', 'mail', 'LINK', [], true);
+    $check($props, 'ID22', 'depend', 'DROP_DOWN', roster_officer_depend_options());
+    $check($props, 'ID22', 'type', 'DROP_DOWN', roster_officer_type_options());
+    $check($props, 'ID22', 'org_depend_state', 'RADIO_BUTTON', roster_officer_org_depend_options());
+
+    $officerCtx = roster_kintone_app_context('officers');
+    $res = roster_kintone_request('GET', '/k/v1/app/form/fields.json', ['app' => $officerCtx['app_id']], [$officerCtx]);
+    $props = is_array($res['properties'] ?? null) ? $res['properties'] : [];
+    $lookup = static function (?array $field, string $code) use (&$errors): void {
+        // lookup の値は参照先の権限がないトークンでは null になるため、キーの有無で判定する
+        if ($field !== null && !array_key_exists('lookup', $field)) {
+            $errors[] = 'ID21：「' . $code . '」がルックアップではありません。';
+        }
+    };
+    $lookup($check($props, 'ID21', 'group_id', 'SINGLE_LINE_TEXT'), 'group_id');
+    $check($props, 'ID21', 'group_name', 'SINGLE_LINE_TEXT');
+    $check($props, 'ID21', 'group_org', 'ORGANIZATION_SELECT');
+    $check($props, 'ID21', 'register_date', 'DATE');
+    foreach (roster_officer_slot_definitions() as $def) {
+        $lookup($check($props, 'ID21', $def['student_field'], 'SINGLE_LINE_TEXT'), $def['student_field']);
+        $check($props, 'ID21', $def['name_field'], 'SINGLE_LINE_TEXT');
+        $check($props, 'ID21', $def['mail_field'], 'LINK');
+    }
+    // 業務ルールに合わせた ID21 の設定。プレビューには影響しないが、そろうまで書込みは有効にしない
+    foreach (roster_officer_slot_definitions() as $def) {
+        foreach ([$def['student_field'], $def['name_field'], $def['mail_field']] as $code) {
+            if (!is_array($props[$code] ?? null) || $isOn($props[$code]['required'] ?? false) === $def['required']) {
+                continue;
+            }
+            $writeBlockers[] = $def['required']
+                ? 'ID21：「' . $code . '」を必須にしてください（' . $def['label'] . 'は必須の役職です）。'
+                : 'ID21：「' . $code . '」の必須指定を解除してください（' . $def['label'] . 'を空席で保存できません）。';
+        }
+    }
+    $groupKey = $props['forms_current_group_key'] ?? null;
+    if (!is_array($groupKey)) {
+        $writeBlockers[] = 'ID21：一意キー「forms_current_group_key」がありません（文字列・必須・値の重複禁止で追加します）。';
+    } else {
+        if ((string)($groupKey['type'] ?? '') !== 'SINGLE_LINE_TEXT') {
+            $writeBlockers[] = 'ID21：「forms_current_group_key」は文字列（1行）にしてください。';
+        }
+        if (!$isOn($groupKey['required'] ?? false)) {
+            $writeBlockers[] = 'ID21：「forms_current_group_key」を必須にしてください。';
+        }
+        if (!$isOn($groupKey['unique'] ?? false)) {
+            $writeBlockers[] = 'ID21：「forms_current_group_key」を「値の重複を禁止」にしてください。';
+        }
+    }
+    return ['ok' => $errors === [], 'errors' => $errors, 'warnings' => $warnings, 'write_blockers' => $writeBlockers, 'people_app_id' => $peopleCtx['app_id'], 'officers_app_id' => $officerCtx['app_id']];
 }

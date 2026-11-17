@@ -153,6 +153,33 @@ function roster_draft_base(array $case): ?array
     return is_array($base) ? $base : null;
 }
 
+/** 下書きの役員情報。第1段階の下書き（officers なし）は空として読む。 */
+function roster_draft_officers(array $case): array
+{
+    $draft = roster_json_decode((string)($case['draft_json'] ?? ''), null);
+    return is_array($draft) && is_array($draft['officers'] ?? null) ? roster_normalize_officers($draft['officers']) : roster_officer_empty();
+}
+
+/** 下書きの JSON。役員連携の対象でないフォームでは第1段階と同じ形にする。 */
+function roster_draft_json(array $rows, ?array $officers): string
+{
+    return roster_json($officers === null ? ['rows' => $rows] : ['rows' => $rows, 'officers' => $officers]);
+}
+
+/** 部員行と役員情報をまとめて検証する（役員連携の対象でなければ $officers は null） */
+function roster_validate_submission(array $rows, ?array $officers, array $rosterSettings): array
+{
+    $validation = roster_validate_rows($rows, $rosterSettings);
+    if ($officers !== null) {
+        $officerValidation = roster_validate_officers($officers, $rows);
+        $validation['errors'] = array_merge($validation['errors'], $officerValidation['errors']);
+        // 主役職は単一選択なので、代表者が兼務で別の役職を主役職にしても「部長・主将がいない」とは扱わない（代表者枠は必須で検証済み）
+        $rowWarnings = array_values(array_filter($validation['warnings'], static fn(array $w): bool => !($w['row'] === null && $w['field'] === 'role')));
+        $validation['warnings'] = array_merge($rowWarnings, $officerValidation['warnings']);
+    }
+    return $validation;
+}
+
 function roster_base_row_ids(?array $base): array
 {
     if (!is_array($base)) {
@@ -172,7 +199,7 @@ function roster_assert_version(array $case, int $expectedVersion): void
 
 /* ---------------- 団体（Forms）側 ---------------- */
 
-function roster_group_save_draft(array $form, string $groupCode, string $groupName, mixed $rawRows, int $expectedVersion): array
+function roster_group_save_draft(array $form, string $groupCode, string $groupName, mixed $rawRows, int $expectedVersion, mixed $rawOfficers = null): array
 {
     $form = roster_require_roster_form($form);
     $pdo = roster_db();
@@ -181,10 +208,11 @@ function roster_group_save_draft(array $form, string $groupCode, string $groupNa
         $case = roster_case_lock_or_create($pdo, $form['id'], $form['roster']['fiscal_year'], $groupCode, $groupName);
         roster_assert_version($case, $expectedVersion);
         $rows = roster_normalize_rows($rawRows, roster_base_row_ids(roster_draft_base($case)));
+        $officers = $form['roster']['officer_sync'] ? roster_normalize_officers($rawOfficers) : null;
         $version = (int)$case['draft_version'] + 1;
         $now = roster_now_sql();
         $pdo->prepare('UPDATE roster_cases SET draft_json = :draft, draft_version = :version, draft_updated_at = :now, group_name = :name WHERE id = :id')->execute([
-            ':draft' => roster_json(['rows' => $rows]),
+            ':draft' => roster_draft_json($rows, $officers),
             ':version' => $version,
             ':now' => $now,
             ':name' => mb_substr($groupName, 0, 255, 'UTF-8'),
@@ -244,8 +272,9 @@ function roster_group_load_kintone(array $form, string $groupCode, string $group
         roster_assert_version($case, $expectedVersion);
         $version = (int)$case['draft_version'] + 1;
         $now = roster_now_sql();
+        // 名簿を読み込み直しても、役員枠の割当ては学籍番号で参照しているので保持する
         $pdo->prepare('UPDATE roster_cases SET draft_json = :draft, draft_base_json = :base, draft_version = :version, draft_updated_at = :now WHERE id = :id')->execute([
-            ':draft' => roster_json(['rows' => $rows]),
+            ':draft' => roster_draft_json($rows, $form['roster']['officer_sync'] ? roster_draft_officers($case) : null),
             ':base' => roster_json($base),
             ':version' => $version,
             ':now' => $now,
@@ -279,9 +308,10 @@ function roster_group_edit_from_latest(array $form, string $groupCode, int $expe
         foreach ((array)($payload['rows'] ?? []) as $i => $r) {
             $rows[] = ['key' => 'v' . $revision['revision_number'] . '_' . ($i + 1)] + $r;
         }
+        $officers = $form['roster']['officer_sync'] ? roster_normalize_officers($payload['officers'] ?? null) : null;
         $version = (int)$case['draft_version'] + 1;
         $pdo->prepare('UPDATE roster_cases SET draft_json = :draft, draft_base_json = :base, draft_version = :version, draft_updated_at = :now WHERE id = :id')->execute([
-            ':draft' => roster_json(['rows' => $rows]),
+            ':draft' => roster_draft_json($rows, $officers),
             ':base' => $revision['base_json'],
             ':version' => $version,
             ':now' => roster_now_sql(),
@@ -312,14 +342,15 @@ function roster_base_summary(?array $base): ?array
 }
 
 /** 提出前の確認（検証結果と、読み込んだ kintone 名簿との差分） */
-function roster_group_preview(array $form, string $groupCode, mixed $rawRows): array
+function roster_group_preview(array $form, string $groupCode, mixed $rawRows, mixed $rawOfficers = null): array
 {
     $form = roster_require_roster_form($form);
     $pdo = roster_db();
     $case = roster_case_find($pdo, $form['id'], $form['roster']['fiscal_year'], $groupCode);
     $base = is_array($case) ? roster_draft_base($case) : null;
     $rows = roster_normalize_rows($rawRows, roster_base_row_ids($base));
-    $validation = roster_validate_rows($rows, $form['roster']);
+    $officers = $form['roster']['officer_sync'] ? roster_normalize_officers($rawOfficers) : null;
+    $validation = roster_validate_submission($rows, $officers, $form['roster']);
     $diff = roster_compute_diff($rows, (array)($base['rows'] ?? []), null);
     return [
         'rows' => $rows,
@@ -327,6 +358,7 @@ function roster_group_preview(array $form, string $groupCode, mixed $rawRows): a
         'diff' => roster_public_diff($diff),
         'counts' => roster_count_rows($rows),
         'base' => roster_base_summary($base),
+        'officers' => $officers !== null ? roster_public_officers($officers, $rows) : null,
     ];
 }
 
@@ -374,7 +406,7 @@ function roster_public_diff(array $diff): array
  * 提出（新しいリビジョン）。kintone へは書き込まない。
  * 反映中・結果確認待ちの間は提出を受け付けず、内容は下書きとして保存する。
  */
-function roster_group_submit(array $form, array $group, array $auth, mixed $rawRows, int $expectedVersion, string $submitterName, string $ipAddress = ''): array
+function roster_group_submit(array $form, array $group, array $auth, mixed $rawRows, int $expectedVersion, string $submitterName, string $ipAddress = '', mixed $rawOfficers = null): array
 {
     $form = roster_require_roster_form($form);
     $submitterName = roster_clean_text($submitterName, 100);
@@ -394,7 +426,8 @@ function roster_group_submit(array $form, array $group, array $auth, mixed $rawR
         roster_assert_version($case, $expectedVersion);
         $base = roster_draft_base($case);
         $rows = roster_normalize_rows($rawRows, roster_base_row_ids($base));
-        $validation = roster_validate_rows($rows, $formRow['roster']);
+        $officers = $formRow['roster']['officer_sync'] ? roster_normalize_officers($rawOfficers) : null;
+        $validation = roster_validate_submission($rows, $officers, $formRow['roster']);
         if ($validation['errors'] !== []) {
             throw new RosterException('入力内容に不足・誤りがあります。', 'validation', 422, ['validation' => $validation]);
         }
@@ -404,7 +437,7 @@ function roster_group_submit(array $form, array $group, array $auth, mixed $rawR
             // 古い内容と新しい内容の適用順が逆転しないよう、反映処理が終わるまで提出を受け付けない。
             $version = (int)$case['draft_version'] + 1;
             $pdo->prepare('UPDATE roster_cases SET draft_json = :draft, draft_version = :version, draft_updated_at = :now WHERE id = :id')->execute([
-                ':draft' => roster_json(['rows' => $rows]),
+                ':draft' => roster_draft_json($rows, $officers),
                 ':version' => $version,
                 ':now' => roster_now_sql(),
                 ':id' => (int)$case['id'],
@@ -425,6 +458,19 @@ function roster_group_submit(array $form, array $group, array $auth, mixed $rawR
 
         $snapshot = roster_snapshot_rows($rows);
         $counts = roster_count_rows($snapshot);
+        // 役員連携の対象フォームの提出だけ版2にする。対象外は第1段階と同じ形・同じハッシュのまま。
+        $payload = [
+            'rows' => $snapshot,
+            'group_name' => $groupName,
+            'form_settings' => [
+                'phone_required_scope' => $formRow['roster']['phone_required_scope'],
+                'phone_required_manager' => $formRow['roster']['phone_required_manager'],
+            ],
+            'warnings' => $validation['warnings'],
+        ];
+        if ($officers !== null) {
+            $payload = ['payload_version' => ROSTER_PAYLOAD_VERSION_OFFICERS, 'officers' => $officers] + $payload;
+        }
         $revisionNumber = (int)$case['latest_revision_number'] + 1;
         $now = roster_now_sql();
         $pdo->prepare(
@@ -440,16 +486,8 @@ function roster_group_submit(array $form, array $group, array $auth, mixed $rawR
             ':submitter' => $submitterName,
             ':email' => mb_substr((string)($group['group_email'] ?? ''), 0, 255),
             ':verification_id' => (int)($auth['verification_id'] ?? 0) ?: null,
-            ':payload' => roster_json([
-                'rows' => $snapshot,
-                'group_name' => $groupName,
-                'form_settings' => [
-                    'phone_required_scope' => $formRow['roster']['phone_required_scope'],
-                    'phone_required_manager' => $formRow['roster']['phone_required_manager'],
-                ],
-                'warnings' => $validation['warnings'],
-            ]),
-            ':hash' => roster_payload_hash($snapshot),
+            ':payload' => roster_json($payload),
+            ':hash' => $officers !== null ? roster_payload_hash_v2($snapshot, $officers) : roster_payload_hash($snapshot),
             ':base' => $base !== null ? roster_json($base) : null,
             ':rows' => $counts['total'],
             ':active' => $counts['active'],
@@ -503,6 +541,7 @@ function roster_group_state(array $form, string $groupCode): array
             'phone_required_scope' => $form['roster']['phone_required_scope'],
             'phone_required_manager' => $form['roster']['phone_required_manager'],
             'max_rows' => (int)roster_config('rules.max_rows', 500),
+            'officer_sync' => (bool)$form['roster']['officer_sync'],
         ],
         'case' => null,
         'draft' => null,
@@ -510,7 +549,7 @@ function roster_group_state(array $form, string $groupCode): array
         'history' => [],
     ];
     if (!is_array($case)) {
-        $state['draft'] = ['rows' => [], 'draft_version' => 0, 'base' => null, 'exists' => false];
+        $state['draft'] = ['rows' => [], 'officers' => roster_officer_empty(), 'draft_version' => 0, 'base' => null, 'exists' => false];
         return $state;
     }
     $job = (int)$case['current_job_id'] > 0 ? roster_job_by_id($pdo, (int)$case['current_job_id']) : null;
@@ -528,6 +567,7 @@ function roster_group_state(array $form, string $groupCode): array
     $draftExists = $case['draft_json'] !== null;
     $state['draft'] = [
         'rows' => roster_draft_rows($case),
+        'officers' => roster_draft_officers($case),
         'draft_version' => (int)$case['draft_version'],
         'updated_at' => (string)($case['draft_updated_at'] ?? ''),
         'base' => roster_base_summary(roster_draft_base($case)),
@@ -559,7 +599,12 @@ function roster_group_state(array $form, string $groupCode): array
         ];
         if ($i === 0) {
             $payload = roster_json_decode((string)$rev['payload_json'], []);
-            $state['latest'] = $item + ['rows' => (array)($payload['rows'] ?? [])];
+            $state['latest'] = $item + [
+                'rows' => (array)($payload['rows'] ?? []),
+                'officers' => roster_payload_version($payload) >= ROSTER_PAYLOAD_VERSION_OFFICERS
+                    ? roster_public_officers(roster_normalize_officers($payload['officers'] ?? null), (array)($payload['rows'] ?? []))
+                    : null,
+            ];
         }
         $state['history'][] = $item;
     }
