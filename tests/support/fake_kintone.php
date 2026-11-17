@@ -8,6 +8,8 @@ declare(strict_types=1);
  * - 存在しないフィールドは無視（kintone の仕様。だから書込み前のフィールド検査が必須）
  * - 送られなかった行内の項目は空にする（仕様に明記がないため厳しい側で模擬）
  * - リビジョン不一致は 409 GAIA_CO02、ルックアップ参照先のトークンが無ければ 403
+ * - 第2段階: ID22 は学籍番号・メールの重複禁止、ID21 は団体キーの重複禁止・必須項目・ルックアップのコピーを模擬する。
+ *   ルックアップの学籍番号を空にするとコピー先も空になる（実機では試作アプリで確認すること）
  */
 
 final class FakeKintone
@@ -46,7 +48,7 @@ final class FakeKintone
         if (is_file($path)) {
             $state = json_decode((string)file_get_contents($path), true);
             if (is_array($state)) {
-                foreach (['records', 'nextRecordId', 'nextRowId', 'newFieldsPresent', 'groups', 'people', 'officerRecords'] as $key) {
+                foreach (['records', 'nextRecordId', 'nextRowId', 'newFieldsPresent', 'groups', 'people', 'officerRecords', 'officerFieldsMigrated'] as $key) {
                     if (array_key_exists($key, $state)) {
                         $fake->$key = $state[$key];
                     }
@@ -70,6 +72,7 @@ final class FakeKintone
             'groups' => $this->groups,
             'people' => $this->people,
             'officerRecords' => $this->officerRecords,
+            'officerFieldsMigrated' => $this->officerFieldsMigrated,
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), LOCK_EX);
     }
 
@@ -98,6 +101,10 @@ final class FakeKintone
 
     private function dispatch(string $method, string $path, array $payload, int $tokens): array
     {
+        $app = (int)($payload['app'] ?? 0);
+        if ($path === '/k/v1/record.json' && in_array($app, [21, 22], true)) {
+            return $app === 22 ? $this->personRecord($method, $payload, $tokens) : $this->officerRecord($method, $payload, $tokens);
+        }
         if ($method === 'GET' && $path === '/k/v1/records.json' && (int)$payload['app'] === 22) {
             return ['status' => 200, 'body' => ['records' => $this->queryPeople((string)$payload['query'])]];
         }
@@ -193,6 +200,174 @@ final class FakeKintone
         return ['status' => 400, 'body' => ['code' => 'CB_IL02', 'message' => 'unsupported ' . $method . ' ' . $path]];
     }
 
+    private function exportPerson(array $person): array
+    {
+        $row = ['$id' => ['value' => (string)$person['id']], '$revision' => ['value' => (string)$person['revision']]];
+        foreach (['student_id', 'family_name', 'personal_name', 'mail', 'depend', 'type', 'org_depend_state'] as $code) {
+            $row[$code] = ['value' => (string)($person[$code] ?? '')];
+        }
+        $row['name'] = ['value' => $person['family_name'] . $person['personal_name']];
+        return $row;
+    }
+
+    private function duplicateError(string $code): array
+    {
+        return ['status' => 400, 'body' => ['code' => 'CB_VA01', 'message' => '入力内容が正しくありません。', 'errors' => ['record.' . $code . '.value' => ['messages' => ['値がほかのレコードと重複しています。']]]]];
+    }
+
+    /** ID22 登録者のレコード（追加・取得） */
+    private function personRecord(string $method, array $payload, int $tokens): array
+    {
+        if ($method === 'GET') {
+            foreach ($this->people as $person) {
+                if ((int)$person['id'] === (int)$payload['id']) {
+                    return ['status' => 200, 'body' => ['record' => $this->exportPerson($person)]];
+                }
+            }
+            return ['status' => 404, 'body' => ['code' => 'GAIA_RE01', 'message' => 'not found']];
+        }
+        if ($method !== 'POST') {
+            return ['status' => 400, 'body' => ['code' => 'CB_IL02', 'message' => 'unsupported']];
+        }
+        $this->writes++;
+        $values = [];
+        foreach ((array)($payload['record'] ?? []) as $code => $field) {
+            $values[$code] = (string)($field['value'] ?? '');
+        }
+        foreach ($this->people as $person) {
+            if ((string)$person['student_id'] === ($values['student_id'] ?? '')) {
+                return $this->duplicateError('student_id');
+            }
+            if (strtolower((string)$person['mail']) === strtolower($values['mail'] ?? '')) {
+                return $this->duplicateError('mail');
+            }
+        }
+        $id = max(array_merge([100], array_map(static fn(array $p): int => (int)$p['id'], $this->people))) + 1;
+        $this->people[] = ['id' => $id, 'revision' => 1] + $values + ['student_id' => '', 'family_name' => '', 'personal_name' => '', 'mail' => '', 'depend' => '', 'type' => '', 'org_depend_state' => ''];
+        return ['status' => 200, 'body' => ['id' => (string)$id, 'revision' => '1']];
+    }
+
+    private function exportOfficer(array $record): array
+    {
+        $row = [
+            '$id' => ['value' => (string)$record['id']],
+            '$revision' => ['value' => (string)$record['revision']],
+            'group_id' => ['value' => $record['group_id']],
+            'group_name' => ['value' => $record['group_name']],
+            'group_org' => ['value' => array_map(static fn(string $c): array => ['code' => $c, 'name' => $c], $record['group_org'] ?? [$record['group_id']])],
+            'register_date' => ['value' => $record['register_date'] ?? ''],
+        ];
+        if (isset($record['group_key'])) {
+            $row['forms_current_group_key'] = ['value' => $record['group_key']];
+        }
+        foreach ($record['slots'] ?? [] as $code => $value) {
+            $row[$code] = ['value' => $value];
+        }
+        return $row;
+    }
+
+    /** ID21 の項目を書き込む（ルックアップの学籍番号は ID22 から氏名・メールをコピー、空ならコピー先も空） */
+    private function applyOfficerValues(array &$record, array $values): ?array
+    {
+        foreach ($values as $code => $value) {
+            $value = (string)$value;
+            if ($code === 'forms_current_group_key') {
+                $record['group_key'] = $value;
+            } elseif ($code === 'register_date') {
+                $record['register_date'] = $value;
+            } elseif (str_ends_with($code, '_stundet_id')) {
+                $prefix = substr($code, 0, -strlen('_stundet_id'));
+                if ($value === '') {
+                    $record['slots'][$code] = '';
+                    $record['slots'][$prefix . '_name'] = '';
+                    $record['slots'][$prefix . '_mail'] = '';
+                    continue;
+                }
+                $matches = array_values(array_filter($this->people, static fn(array $p): bool => (string)$p['student_id'] === $value));
+                if (count($matches) !== 1) {
+                    return ['status' => 400, 'body' => ['code' => 'GAIA_LO04', 'message' => 'ルックアップの参照先から値をコピーできません。', 'errors' => ['record.' . $code . '.value' => ['messages' => ['一致するレコードがありません。']]]]];
+                }
+                $record['slots'][$code] = $value;
+                $record['slots'][$prefix . '_name'] = $matches[0]['family_name'] . $matches[0]['personal_name'];
+                $record['slots'][$prefix . '_mail'] = (string)$matches[0]['mail'];
+            }
+        }
+        foreach ($this->officerFields() as $code => $field) {
+            if (empty($field['required'])) {
+                continue;
+            }
+            $current = match (true) {
+                $code === 'forms_current_group_key' => (string)($record['group_key'] ?? ''),
+                default => (string)($record['slots'][$code] ?? ''),
+            };
+            if ($current === '') {
+                return ['status' => 400, 'body' => ['code' => 'CB_VA01', 'message' => '入力内容が正しくありません。', 'errors' => ['record.' . $code . '.value' => ['messages' => ['必須です。']]]]];
+            }
+        }
+        return null;
+    }
+
+    /** ID21 役員台帳のレコード（追加・更新・取得） */
+    private function officerRecord(string $method, array $payload, int $tokens): array
+    {
+        if ($method === 'GET') {
+            foreach ($this->officerRecords as $record) {
+                if ((int)$record['id'] === (int)$payload['id']) {
+                    return ['status' => 200, 'body' => ['record' => $this->exportOfficer($record)]];
+                }
+            }
+            return ['status' => 404, 'body' => ['code' => 'GAIA_RE01', 'message' => 'not found']];
+        }
+        $this->writes++;
+        if ($tokens < 3) {
+            return ['status' => 403, 'body' => ['code' => 'GAIA_NO01', 'message' => 'lookup app token missing']];
+        }
+        $values = [];
+        foreach ((array)($payload['record'] ?? []) as $code => $field) {
+            $values[$code] = (string)($field['value'] ?? '');
+        }
+        if (isset($values['forms_current_group_key']) && $this->officerFieldsMigrated) {
+            foreach ($this->officerRecords as $other) {
+                if (($other['group_key'] ?? '') === $values['forms_current_group_key'] && ($method === 'POST' || (int)$other['id'] !== (int)$payload['id'])) {
+                    return $this->duplicateError('forms_current_group_key');
+                }
+            }
+        }
+        if ($method === 'POST') {
+            $groupId = $values['group_id'] ?? '';
+            $group = array_values(array_filter($this->groups, static fn(array $g): bool => $g['id'] === $groupId))[0] ?? null;
+            if ($group === null) {
+                return ['status' => 400, 'body' => ['code' => 'GAIA_LO04', 'message' => 'lookup failed']];
+            }
+            $record = ['id' => max(array_merge([499], array_map(static fn(array $r): int => (int)$r['id'], $this->officerRecords))) + 1, 'revision' => 1, 'group_id' => $groupId, 'group_name' => $group['name'], 'group_org' => $group['org'] ?? [$groupId], 'register_date' => '', 'slots' => []];
+            $error = $this->applyOfficerValues($record, $values);
+            if ($error !== null) {
+                return $error;
+            }
+            $this->officerRecords[] = $record;
+            return ['status' => 200, 'body' => ['id' => (string)$record['id'], 'revision' => '1']];
+        }
+        if ($method !== 'PUT') {
+            return ['status' => 400, 'body' => ['code' => 'CB_IL02', 'message' => 'unsupported']];
+        }
+        foreach ($this->officerRecords as $i => $record) {
+            if ((int)$record['id'] !== (int)$payload['id']) {
+                continue;
+            }
+            if (isset($payload['revision']) && (int)$payload['revision'] !== -1 && (int)$payload['revision'] !== (int)$record['revision']) {
+                return ['status' => 409, 'body' => ['code' => 'GAIA_CO02', 'message' => 'revision mismatch']];
+            }
+            $error = $this->applyOfficerValues($record, $values);
+            if ($error !== null) {
+                return $error;
+            }
+            $record['revision']++;
+            $this->officerRecords[$i] = $record;
+            return ['status' => 200, 'body' => ['revision' => (string)$record['revision']]];
+        }
+        return ['status' => 404, 'body' => ['code' => 'GAIA_RE01', 'message' => 'not found']];
+    }
+
     private function queryPeople(string $query): array
     {
         if (preg_match('/^(student_id|mail) in \((.*)\) limit/', $query, $m) !== 1) {
@@ -202,12 +377,7 @@ final class FakeKintone
         $out = [];
         foreach ($this->people as $person) {
             if (in_array((string)$person[$m[1]], $values[1], true)) {
-                $row = ['$id' => ['value' => (string)$person['id']], '$revision' => ['value' => (string)$person['revision']]];
-                foreach (['student_id', 'family_name', 'personal_name', 'mail', 'depend', 'type', 'org_depend_state'] as $code) {
-                    $row[$code] = ['value' => (string)($person[$code] ?? '')];
-                }
-                $row['name'] = ['value' => $person['family_name'] . $person['personal_name']];
-                $out[] = $row;
+                $out[] = $this->exportPerson($person);
             }
         }
         return $out;
@@ -218,24 +388,9 @@ final class FakeKintone
         preg_match('/group_id = "([^"]+)"/', $query, $m);
         $out = [];
         foreach ($this->officerRecords as $record) {
-            if ($record['group_id'] !== ($m[1] ?? '')) {
-                continue;
+            if ($record['group_id'] === ($m[1] ?? '')) {
+                $out[] = $this->exportOfficer($record);
             }
-            $row = [
-                '$id' => ['value' => (string)$record['id']],
-                '$revision' => ['value' => (string)$record['revision']],
-                'group_id' => ['value' => $record['group_id']],
-                'group_name' => ['value' => $record['group_name']],
-                'group_org' => ['value' => array_map(static fn(string $c): array => ['code' => $c, 'name' => $c], $record['group_org'] ?? [$record['group_id']])],
-                'register_date' => ['value' => $record['register_date'] ?? ''],
-            ];
-            if (isset($record['group_key'])) {
-                $row['forms_current_group_key'] = ['value' => $record['group_key']];
-            }
-            foreach ($record['slots'] ?? [] as $code => $value) {
-                $row[$code] = ['value' => $value];
-            }
-            $out[] = $row;
         }
         return array_reverse($out);
     }
@@ -284,7 +439,7 @@ final class FakeKintone
         return $fields;
     }
 
-    /** ID21 / ID22 への書込み回数（第2段階の最初のPRでは常に0回） */
+    /** ID21 / ID22 への書込み回数（書込み無効・未承認の操作では常に0回） */
     public function officerWrites(): int
     {
         return count(array_filter($this->appCalls, static fn(array $c): bool => $c[0] !== 'GET' && in_array($c[1], [21, 22], true)));

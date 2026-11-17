@@ -55,6 +55,22 @@ try {
     $dbError = 'fitsc_forms の名簿テーブルに接続できません。DB接続設定（db_connections.forms）と移行SQLの適用を確認してください。';
 }
 $projectRoot = dirname(__DIR__, 2);
+// 第2段階: 役員の書込み対象（admin が団体・フォーム・年度を指定する）
+$officerTargets = [];
+$officerForms = [];
+if ($dbError === '') {
+    try {
+        $officerTargets = roster_officer_targets($pdo);
+        foreach ($pdo->query('SELECT id, name, settings_json FROM managed_forms ORDER BY id DESC')->fetchAll() ?: [] as $f) {
+            $rs = roster_form_settings((array)(json_decode((string)$f['settings_json'], true) ?: []));
+            if ($rs['is_roster'] && $rs['officer_sync'] && $rs['fiscal_year'] > 0) {
+                $officerForms[] = ['id' => (int)$f['id'], 'name' => (string)$f['name'], 'fiscal_year' => $rs['fiscal_year']];
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('[kintone roster settings officer targets] ' . $e->getMessage());
+    }
+}
 
 kintone_page_header('反映・接続の確認', $user, ['subtitle' => '部員名簿の反映に必要な kintone の接続・フィールド・定期実行の状態を確認します。']);
 kintone_render_flash();
@@ -142,7 +158,7 @@ kintone_render_flash();
 
 <section class="card">
   <div class="card__header">
-    <div><div class="card__title"><?= fitsc_icon('shield') ?>第2段階：ID22 / ID21 のフィールド設定</div><p class="card__subtitle">役員の照合と比較に必要な設定を確認します。ID22・ID21 への書込みは <?= roster_config('officers.write_enabled', false) ? '有効' : '無効' ?> です。</p></div>
+    <div><div class="card__title"><?= fitsc_icon('shield') ?>第2段階：ID22 / ID21 のフィールド設定</div><p class="card__subtitle">役員の照合・比較と、書込みの前提になる設定を確認します。ID22・ID21 への書込みのサーバー設定は <?= roster_config('officers.write_enabled', false) ? '有効' : '無効' ?>、空席の自動解除は <?= roster_config('officers.clear_enabled', false) ? '有効' : '無効' ?> です。</p></div>
     <a class="btn btn--sm" href="roster_settings.php?check=1"><?= fitsc_icon('search') ?>いま確認する</a>
   </div>
   <div class="card__body stack">
@@ -162,6 +178,53 @@ kintone_render_flash();
       <?php if ($officerPreflight['write_blockers'] !== []): ?>
         <div class="alert alert--warning"><?= fitsc_icon('lock') ?><div class="alert__body"><strong>書込みを有効にする前に必要な設定</strong><ul class="kt-plain-list"><?php foreach ($officerPreflight['write_blockers'] as $msg): ?><li><?= kintone_h($msg) ?></li><?php endforeach; ?></ul></div></div>
       <?php endif; ?>
+    <?php endif; ?>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card__header">
+    <div><div class="card__title"><?= fitsc_icon('key') ?>第2段階：役員の書込み対象</div><p class="card__subtitle">ID22・ID21 へ書き込むのは、サーバー設定（roster.officers.write_enabled = <?= roster_config('officers.write_enabled', false) ? 'true' : 'false' ?>）が有効で、ここで指定した団体・フォーム・年度の accept だけです。指定を変えると、変更前の accept は実行時に止まります。</p></div>
+  </div>
+  <div class="card__body stack">
+    <?php if ($officerTargets === []): ?>
+      <p class="text-subtle">書込み対象の団体はありません（すべての団体で比較のみ）。</p>
+    <?php else: ?>
+      <div class="table-wrap is-stacked kt-table-flat">
+        <table class="table table--compact">
+          <thead><tr><th>団体</th><th>フォーム・年度</th><th>設定の世代</th><th>処理中のジョブ</th><th>更新</th><?php if ($isAdmin): ?><th><span class="sr-only">操作</span></th><?php endif; ?></tr></thead>
+          <tbody>
+          <?php foreach ($officerTargets as $t): ?>
+            <tr>
+              <td><span class="cell-main"><?= kintone_h((string)($t['group_name'] ?? '')) ?></span><span class="cell-sub mono"><?= kintone_h((string)$t['group_code']) ?></span></td>
+              <td><?= kintone_h((string)($t['form_name'] ?? ('フォーム #' . (int)$t['officer_form_id']))) ?><span class="cell-sub"><?= (int)$t['officer_fiscal_year'] ?>年度</span></td>
+              <td class="num"><?= (int)$t['generation'] ?></td>
+              <td class="mono"><?= $t['active_job_id'] ? '#' . (int)$t['active_job_id'] : '—' ?></td>
+              <td class="text-xs"><?= kintone_h((string)($t['updated_by'] ?? '')) ?><span class="cell-sub"><?= kintone_h((string)$t['updated_at']) ?></span></td>
+              <?php if ($isAdmin): ?><td>
+                <form method="post" action="api/roster_action.php" data-confirm="<?= kintone_h((string)$t['group_code']) ?> を役員の書込み対象から外します。処理待ちの役員の反映は実行時に止まります。" data-confirm-title="書込み対象から外しますか？" data-confirm-ok="外す"><?= kintone_auth_csrf_field() ?>
+                  <input type="hidden" name="action" value="officer_target_clear"><input type="hidden" name="group_code" value="<?= kintone_h((string)$t['group_code']) ?>">
+                  <button type="submit" class="btn btn--sm btn--danger-ghost"><?= fitsc_icon('x-circle') ?>外す</button></form>
+              </td><?php endif; ?>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+    <?php if ($isAdmin): ?>
+      <?php if ($officerForms === []): ?>
+        <p class="small-note">役員情報を受け付ける名簿フォーム（対象年度あり）がないため、書込み対象を指定できません。</p>
+      <?php else: ?>
+        <form method="post" action="api/roster_action.php" class="cluster" data-confirm="指定した団体の accept で、ID22（登録者）と ID21（役員台帳）へ書き込むようになります。試作アプリでの確認と ID21 の移行が済んでいることを確認してください。" data-confirm-title="役員の書込み対象に指定しますか？" data-confirm-ok="指定する" data-confirm-tone="warning"><?= kintone_auth_csrf_field() ?>
+          <input type="hidden" name="action" value="officer_target_set">
+          <label class="field"><span class="field__label">団体識別記号</span><input type="text" name="group_code" required maxlength="32" placeholder="例：CA056" spellcheck="false" autocapitalize="characters"></label>
+          <label class="field"><span class="field__label">フォーム（年度）</span><select name="form_id" required><?php foreach ($officerForms as $f): ?><option value="<?= (int)$f['id'] ?>"><?= kintone_h($f['name']) ?>（<?= (int)$f['fiscal_year'] ?>年度）</option><?php endforeach; ?></select></label>
+          <div><button type="submit" class="btn"><?= fitsc_icon('plus') ?>書込み対象に指定</button></div>
+        </form>
+      <?php endif; ?>
+    <?php else: ?>
+      <p class="small-note">書込み対象の変更は admin が行います。</p>
     <?php endif; ?>
   </div>
 </section>

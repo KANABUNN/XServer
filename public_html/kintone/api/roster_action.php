@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * 部員名簿の審査・反映の操作（POST のみ・operator 以上・CSRF 必須）
- * action: return / accept / revoke / retry / run_now / refresh_groups
+ * action: return / accept / revoke / retry / run_now / refresh_groups / officer_target_set / officer_target_clear（admin のみ）
  * 権限・対象リビジョン・状態はすべてサーバー側（apps/roster_core）で確認する。ボタンの表示有無には依存しない。
  */
 
@@ -34,7 +34,7 @@ try {
 
         case 'accept':
             $revisionId = (int)($_POST['revision_id'] ?? 0);
-            $result = roster_staff_accept($caseId, $revisionId, (string)($_POST['compare_token'] ?? ''), $actor);
+            $result = roster_staff_accept($caseId, $revisionId, (string)($_POST['compare_token'] ?? ''), $actor, (string)($_POST['officer_fingerprint'] ?? ''));
             kintone_write_audit_log('kintone.roster.accept', 'roster_case', (string)$caseId, [
                 'revision_id' => $revisionId,
                 'acceptance_id' => $result['acceptance_id'],
@@ -43,7 +43,7 @@ try {
             ], $user);
             kt_roster_flash_redirect($back, 'success', $result['already']
                 ? 'この版はすでに accept 済みです（ジョブ #' . $result['job_id'] . '）。'
-                : 'accept しました。反映ジョブ #' . $result['job_id'] . ' を登録しました。次回の定期実行で kintone へ反映されます。');
+                : 'accept しました。反映ジョブ #' . $result['job_id'] . ' を登録しました。次回の定期実行で kintone へ反映されます。' . (!empty($result['officers']) ? '役員（登録者・役員台帳）も計画どおりに反映します。' : ''));
 
         case 'revoke':
             $jobId = (int)($_POST['job_id'] ?? 0);
@@ -81,15 +81,30 @@ try {
             kintone_write_audit_log('kintone.roster.refresh_groups', 'roster_group_directory', null, ['count' => $result['count']], $user);
             kt_roster_flash_redirect('../roster_settings.php', 'success', '団体一覧を更新しました（' . $result['count'] . '団体）。');
 
+        case 'officer_target_set':
+        case 'officer_target_clear':
+            if (!kintone_auth_user_has_role($user, 'admin')) {
+                kt_roster_flash_redirect('../roster_settings.php', 'error', '役員の書込み対象の変更には admin 権限が必要です。');
+            }
+            $groupCode = (string)($_POST['group_code'] ?? '');
+            if ($action === 'officer_target_set') {
+                $result = roster_officer_target_set($groupCode, (int)($_POST['form_id'] ?? 0), $actor);
+                kintone_write_audit_log('kintone.roster.officer_target_set', 'roster_group', $result['group_code'], $result, $user);
+                kt_roster_flash_redirect('../roster_settings.php', 'success', $result['group_code'] . ' を役員の書込み対象に指定しました（' . $result['fiscal_year'] . '年度）。指定前の accept は実行時に止まります。');
+            }
+            roster_officer_target_clear($groupCode, $actor);
+            kintone_write_audit_log('kintone.roster.officer_target_clear', 'roster_group', roster_normalize_group_code($groupCode), [], $user);
+            kt_roster_flash_redirect('../roster_settings.php', 'success', '役員の書込み対象から外しました。処理待ちの役員の反映は実行時に止まります。');
+
         default:
             kt_roster_flash_redirect($back, 'error', '不明な操作です。');
     }
 } catch (RosterException $e) {
-    kt_roster_flash_redirect($action === 'refresh_groups' ? '../roster_settings.php' : $back, $e->httpStatus >= 500 ? 'error' : 'warn', $e->getMessage());
+    kt_roster_flash_redirect(in_array($action, ['refresh_groups', 'officer_target_set', 'officer_target_clear'], true) ? '../roster_settings.php' : $back, $e->httpStatus >= 500 ? 'error' : 'warn', $e->getMessage());
 } catch (RosterKintoneError $e) {
     error_log('[kintone roster action][' . $ref . '][' . $action . '] ' . $e->getMessage());
-    kt_roster_flash_redirect($action === 'refresh_groups' ? '../roster_settings.php' : $back, 'error', 'kintone との通信に失敗しました：' . mb_substr($e->getMessage(), 0, 200, 'UTF-8') . '（参照ID: ' . $ref . '）');
+    kt_roster_flash_redirect(in_array($action, ['refresh_groups', 'officer_target_set', 'officer_target_clear'], true) ? '../roster_settings.php' : $back, 'error', 'kintone との通信に失敗しました：' . mb_substr($e->getMessage(), 0, 200, 'UTF-8') . '（参照ID: ' . $ref . '）');
 } catch (Throwable $e) {
     error_log('[kintone roster action][' . $ref . '][' . $action . '] ' . get_class($e) . ': ' . $e->getMessage() . ' @' . $e->getFile() . ':' . $e->getLine());
-    kt_roster_flash_redirect($action === 'refresh_groups' ? '../roster_settings.php' : $back, 'error', '処理に失敗しました（参照ID: ' . $ref . '）。');
+    kt_roster_flash_redirect(in_array($action, ['refresh_groups', 'officer_target_set', 'officer_target_clear'], true) ? '../roster_settings.php' : $back, 'error', '処理に失敗しました（参照ID: ' . $ref . '）。');
 }

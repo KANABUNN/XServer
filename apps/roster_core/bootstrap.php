@@ -59,8 +59,11 @@ function roster_default_config(): array
             'directory_max_age_minutes' => 360,
         ],
         'officers' => [
-            // 第2段階の書込みスイッチ。比較・計画のプレビューは false のままで動く
+            // 第2段階の書込みスイッチ。比較・計画のプレビューは false のままで動く。
+            // true にしても、書込みは「反映・接続の確認」で admin が指定した団体・フォーム・年度に限られる
             'write_enabled' => false,
+            // 空席にした枠の自動解除。試作アプリでルックアップとコピー先が空になることを確認するまで false
+            'clear_enabled' => false,
             'depend_options' => [
                 '知能機械工学科', '生命環境化学科', '電子情報工学科', '電気工学科', '情報工学科', '情報通信工学科',
                 '情報システム工学科', 'システムマネジメント学科', '情報マネジメント学科', '社会環境学科', '短期大学部', '大学院', 'その他',
@@ -140,9 +143,19 @@ function roster_db(): PDO
     return $pdo;
 }
 
+/** テスト用: 現在時刻を固定する（日付をまたぐ accept と反映の確認に使う） */
+function roster_test_clock(?DateTimeImmutable $now = null, bool $set = false): ?DateTimeImmutable
+{
+    static $clock = null;
+    if ($set) {
+        $clock = $now;
+    }
+    return $clock;
+}
+
 function roster_now(): DateTimeImmutable
 {
-    return kintone_now();
+    return roster_test_clock() ?? kintone_now();
 }
 
 function roster_now_sql(int $offsetSeconds = 0): string
@@ -193,5 +206,6 @@ require_once __DIR__ . '/kintone_adapter.php';
 require_once __DIR__ . '/directory.php';
 require_once __DIR__ . '/case_service.php';
 require_once __DIR__ . '/officer_plan.php';
+require_once __DIR__ . '/officer_apply.php';
 require_once __DIR__ . '/verification.php';
 require_once __DIR__ . '/worker.php';

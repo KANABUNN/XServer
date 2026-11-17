@@ -628,22 +628,29 @@ function roster_kintone_find_people(string $field, array $values): array
             'query' => $field . ' in (' . implode(', ', array_map('roster_kintone_query_string', $chunk)) . ') limit 500',
         ], [$ctx]);
         foreach ((array)($res['records'] ?? []) as $record) {
-            $get = static fn(string $code): string => (string)($record[$code]['value'] ?? '');
-            $people[] = [
-                'record_id' => (int)$get('$id'),
-                'revision' => (int)$get('$revision'),
-                'student_id' => $get('student_id'),
-                'family_name' => $get('family_name'),
-                'personal_name' => $get('personal_name'),
-                'name' => $get('name'),
-                'mail' => $get('mail'),
-                'depend' => $get('depend'),
-                'type' => $get('type'),
-                'org_depend_state' => $get('org_depend_state'),
-            ];
+            if (is_array($record)) {
+                $people[] = roster_kintone_normalize_person($record);
+            }
         }
     }
     return $people;
+}
+
+function roster_kintone_normalize_person(array $record): array
+{
+    $get = static fn(string $code): string => (string)($record[$code]['value'] ?? '');
+    return [
+        'record_id' => (int)$get('$id'),
+        'revision' => (int)$get('$revision'),
+        'student_id' => $get('student_id'),
+        'family_name' => $get('family_name'),
+        'personal_name' => $get('personal_name'),
+        'name' => $get('name'),
+        'mail' => $get('mail'),
+        'depend' => $get('depend'),
+        'type' => $get('type'),
+        'org_depend_state' => $get('org_depend_state'),
+    ];
 }
 
 /**
@@ -659,25 +666,33 @@ function roster_kintone_find_officer_records(string $groupCode): array
     ], [$ctx]);
     $records = [];
     foreach ((array)($res['records'] ?? []) as $record) {
-        $slots = [];
-        foreach (roster_officer_slot_definitions() as $def) {
-            $slots[$def['key']] = [
-                'student_id' => (string)($record[$def['student_field']]['value'] ?? ''),
-                'name' => (string)($record[$def['name_field']]['value'] ?? ''),
-                'mail' => (string)($record[$def['mail_field']]['value'] ?? ''),
-            ];
+        if (is_array($record)) {
+            $records[] = roster_kintone_normalize_officer_record($record);
         }
-        $records[] = [
-            'record_id' => (int)($record['$id']['value'] ?? 0),
-            'revision' => (int)($record['$revision']['value'] ?? 0),
-            'group_name' => (string)($record['group_name']['value'] ?? ''),
-            'group_org' => roster_kintone_organization_codes($record['group_org']['value'] ?? []),
-            'register_date' => (string)($record['register_date']['value'] ?? ''),
-            'group_key' => (string)($record['forms_current_group_key']['value'] ?? ''),
-            'slots' => $slots,
-        ];
     }
     return ['count' => count($records), 'records' => $records];
+}
+
+function roster_kintone_normalize_officer_record(array $record): array
+{
+    $slots = [];
+    foreach (roster_officer_slot_definitions() as $def) {
+        $slots[$def['key']] = [
+            'student_id' => (string)($record[$def['student_field']]['value'] ?? ''),
+            'name' => (string)($record[$def['name_field']]['value'] ?? ''),
+            'mail' => (string)($record[$def['mail_field']]['value'] ?? ''),
+        ];
+    }
+    return [
+        'record_id' => (int)($record['$id']['value'] ?? 0),
+        'revision' => (int)($record['$revision']['value'] ?? 0),
+        'group_id' => (string)($record['group_id']['value'] ?? ''),
+        'group_name' => (string)($record['group_name']['value'] ?? ''),
+        'group_org' => roster_kintone_organization_codes($record['group_org']['value'] ?? []),
+        'register_date' => (string)($record['register_date']['value'] ?? ''),
+        'group_key' => (string)($record['forms_current_group_key']['value'] ?? ''),
+        'slots' => $slots,
+    ];
 }
 
 /** ID22 / ID21 のフィールド設定を検査する（第2段階の接続確認。書込みはしない） */
@@ -766,3 +781,108 @@ function roster_kintone_officer_preflight(): array
     }
     return ['ok' => $errors === [], 'errors' => $errors, 'warnings' => $warnings, 'write_blockers' => $writeBlockers, 'people_app_id' => $peopleCtx['app_id'], 'officers_app_id' => $officerCtx['app_id']];
 }
+
+
+/* ---------------- 第2段階: ID22 / ID21 への書込み（承認済み計画を処理するワーカーからだけ呼ぶ） ----------------
+   - 自動再送はしない。成否不明は呼び出し側で「結果確認待ち」にして、一意な値で照合してから判断する。
+   - ID21 へ書くときはルックアップ元（ID7・ID22）のトークンも送る。 */
+
+/** 接続先テナント（承認時と実行時の一致確認と、団体単位の書込み予約の識別に使う） */
+function roster_kintone_tenant(): string
+{
+    $host = (string)parse_url((string)roster_kintone_app_context('roster')['base_url'], PHP_URL_HOST);
+    return mb_substr(strtolower($host !== '' ? $host : 'default'), 0, 190);
+}
+
+/** 第2段階で使う4アプリのアプリID（承認計画に固定し、実行時に差し替えを検出する） */
+function roster_kintone_officer_app_ids(): array
+{
+    return [
+        'groups' => roster_kintone_app_context('group')['app_id'],
+        'roster' => roster_kintone_app_context('roster')['app_id'],
+        'people' => roster_kintone_app_context('people')['app_id'],
+        'officers' => roster_kintone_app_context('officers')['app_id'],
+    ];
+}
+
+/** 一意制約（値の重複禁止）に当たったエラーか */
+function roster_kintone_is_duplicate_error(Throwable $e): bool
+{
+    if (!$e instanceof RosterKintoneError || $e->kintoneCode !== 'CB_VA01') {
+        return false;
+    }
+    foreach ($e->errors as $info) {
+        foreach ((array)($info['messages'] ?? []) as $message) {
+            $message = (string)$message;
+            if (str_contains($message, '重複') || stripos($message, 'already exists') !== false || stripos($message, 'duplicate') !== false) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/** kintone へ送るレコードの形（フィールドコード => 値）へ変換する */
+function roster_kintone_record_values(array $values): array
+{
+    $record = [];
+    foreach ($values as $code => $value) {
+        $record[(string)$code] = ['value' => $value];
+    }
+    return $record;
+}
+
+function roster_kintone_get_person(int $recordId): array
+{
+    $ctx = roster_kintone_app_context('people');
+    $res = roster_kintone_request('GET', '/k/v1/record.json', ['app' => $ctx['app_id'], 'id' => $recordId], [$ctx]);
+    if (!is_array($res['record'] ?? null)) {
+        throw new RosterKintoneError('登録者（ID22）のレコードを取得できませんでした。', 0, 'ROSTER_EMPTY_RECORD');
+    }
+    return roster_kintone_normalize_person($res['record']);
+}
+
+/** ID22 へ1人を追加する。氏名（name）は kintone の計算結果を読み戻して確認する。 */
+function roster_kintone_add_person(array $values): array
+{
+    $ctx = roster_kintone_app_context('people');
+    $res = roster_kintone_request('POST', '/k/v1/record.json', ['app' => $ctx['app_id'], 'record' => roster_kintone_record_values($values)], [$ctx]);
+    return ['record_id' => (int)($res['id'] ?? 0), 'revision' => (int)($res['revision'] ?? 0)];
+}
+
+function roster_kintone_officer_write_contexts(): array
+{
+    return [roster_kintone_app_context('officers'), roster_kintone_app_context('group'), roster_kintone_app_context('people')];
+}
+
+function roster_kintone_get_officer_record(int $recordId): array
+{
+    $ctx = roster_kintone_app_context('officers');
+    $res = roster_kintone_request('GET', '/k/v1/record.json', ['app' => $ctx['app_id'], 'id' => $recordId], [$ctx]);
+    if (!is_array($res['record'] ?? null)) {
+        throw new RosterKintoneError('役員台帳（ID21）のレコードを取得できませんでした。', 0, 'ROSTER_EMPTY_RECORD');
+    }
+    return roster_kintone_normalize_officer_record($res['record']);
+}
+
+/** ID21 に団体の現行レコードを作成する（団体キーは必須・重複禁止のため、同じ団体の二重作成は kintone が拒否する） */
+function roster_kintone_add_officer_record(array $values): array
+{
+    $contexts = roster_kintone_officer_write_contexts();
+    $res = roster_kintone_request('POST', '/k/v1/record.json', ['app' => $contexts[0]['app_id'], 'record' => roster_kintone_record_values($values)], $contexts);
+    return ['record_id' => (int)($res['id'] ?? 0), 'revision' => (int)($res['revision'] ?? 0)];
+}
+
+/** ID21 の現行レコードを、レコードIDと期待リビジョンを指定して更新する（送った項目だけが変わる） */
+function roster_kintone_update_officer_record(int $recordId, int $expectedRevision, array $values): array
+{
+    $contexts = roster_kintone_officer_write_contexts();
+    $res = roster_kintone_request('PUT', '/k/v1/record.json', [
+        'app' => $contexts[0]['app_id'],
+        'id' => $recordId,
+        'revision' => $expectedRevision,
+        'record' => roster_kintone_record_values($values),
+    ], $contexts);
+    return ['revision' => (int)($res['revision'] ?? 0)];
+}
+

@@ -133,7 +133,7 @@ function kt_roster_diff_table(array $diff, bool $showUnchanged = false): string
     return $html;
 }
 
-/** 第2段階の比較（読み取りのみ）。詳細な人物属性は operator 以上にだけ表示する。 */
+/** 第2段階の比較と反映計画。詳細な人物属性は operator 以上にだけ表示する。 */
 function kt_roster_officer_plan_html(array $plan, bool $canSeePersonal): string
 {
     if (empty($plan['ok'])) {
@@ -152,8 +152,23 @@ function kt_roster_officer_plan_html(array $plan, bool $canSeePersonal): string
     } else {
         $html .= '<div class="alert alert--success">' . fitsc_icon('check-circle') . '<div class="alert__body">登録者・役員台帳との比較で、解消が必要な項目はありません。</div></div>';
     }
+    if ($plan['write_blockers'] !== []) {
+        $html .= '<div class="alert alert--' . (!empty($plan['gate']['enabled']) ? 'danger' : 'warning') . '">' . fitsc_icon('lock') . '<div class="alert__body"><strong>書き込む前に解消が必要な項目</strong>' . $list($plan['write_blockers']) . '</div></div>';
+    }
     if ($plan['warnings'] !== []) {
         $html .= '<div class="alert alert--warning">' . fitsc_icon('alert-triangle') . '<div class="alert__body">' . $list($plan['warnings']) . '</div></div>';
+    }
+    $gate = $plan['gate'];
+    $html .= '<p class="small-note">' . fitsc_icon(!empty($gate['enabled']) ? 'key' : 'lock', 'ico--sm')
+        . (!empty($gate['enabled'])
+            ? 'この団体・フォーム・年度は役員の書込み対象です。accept するとこの計画を固定し、部員名簿（ID20）→ 登録者（ID22）→ 役員台帳（ID21）の順に反映します。'
+            : '役員の書込みは行いません：' . kintone_h((string)$gate['reason']) . ' accept しても反映されるのは部員名簿（ID20）だけです。')
+        . '</p>';
+    $rep = $plan['representative'];
+    if (!empty($rep['changed'])) {
+        $html .= '<p class="small-note">' . fitsc_icon('user', 'ico--sm') . '代表者の交代：'
+            . ($canSeePersonal ? kintone_h($rep['previous_name'] ?: $rep['previous_student_id'] ?: '—') . ' → ' . kintone_h($rep['new_name'] ?: $rep['new_student_id']) : 'あり')
+            . '（役員台帳の読戻しで交代を確認した時点で、代表者の履歴に一度だけ記録します）</p>';
     }
     $ledger = $plan['ledger'];
     $ledgerLabel = match ($ledger['operation']) {
@@ -233,6 +248,39 @@ function kt_roster_officer_plan_html(array $plan, bool $canSeePersonal): string
     }
     $html .= '<p class="small-note mono">計画の指紋 ' . kintone_h(substr((string)$plan['fingerprint'], 0, 16)) . '</p>';
     return $html;
+}
+
+/** 承認計画のステップ別の結果（個人情報は表示しない） */
+function kt_roster_steps_html(array $steps): string
+{
+    $html = '<div class="table-wrap is-stacked kt-table-flat"><table class="table table--compact"><thead><tr><th>反映先</th><th>操作</th><th>状態</th><th>レコード</th><th>内容</th></tr></thead><tbody>';
+    foreach ($steps as $step) {
+        $status = (string)$step['status'];
+        $tone = match ($status) {
+            ROSTER_STEP_VERIFIED => 'success',
+            ROSTER_STEP_FAILED => 'danger',
+            ROSTER_STEP_CONFLICT, ROSTER_STEP_UNKNOWN => 'warning',
+            default => '',
+        };
+        $operation = match ((string)$step['operation']) {
+            'apply' => '名簿の反映',
+            'reference' => '既存の登録者を参照',
+            'create' => (string)$step['target_app'] === 'officers' ? '新規作成' : '新規登録',
+            'update' => '更新',
+            default => (string)$step['operation'],
+        };
+        $write = match ((string)($step['write_kind'] ?? '')) {
+            'add' => '追加',
+            'update' => '更新',
+            'none' => '書込みなし（照合のみ）',
+            default => '',
+        };
+        $html .= '<tr><td>' . kintone_h(roster_step_label($step)) . '</td><td>' . kintone_h($operation) . '</td>'
+            . '<td>' . kt_roster_badge(roster_step_status_label($status), $tone) . ($write !== '' ? '<span class="cell-sub">' . kintone_h($write) . '</span>' : '') . '</td>'
+            . '<td class="mono text-xs">' . ($step['target_record_id'] ? 'ID ' . (int)$step['target_record_id'] . ($step['after_revision'] !== null ? ' ・ rev ' . ($step['before_revision'] !== null && (int)$step['before_revision'] !== (int)$step['after_revision'] ? (int)$step['before_revision'] . ' → ' : '') . (int)$step['after_revision'] : '') : '—') . '</td>'
+            . '<td class="text-xs allow-select">' . ((string)($step['error_message'] ?? '') !== '' ? '<span class="text-danger">' . kintone_h(roster_kintone_error_class_label((string)$step['error_class'])) . '：' . kintone_h(mb_substr((string)$step['error_message'], 0, 300, 'UTF-8')) . '</span>' : ($step['verified_at'] ? '確認 ' . kintone_h((string)$step['verified_at']) : '—')) . '</td></tr>';
+    }
+    return $html . '</tbody></table></div>';
 }
 
 function kt_roster_flash_redirect(string $location, string $type, string $message): never
