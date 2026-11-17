@@ -3,8 +3,9 @@
 declare(strict_types=1);
 
 /**
- * 第2段階（役員入力・比較プレビュー）の HTTP 経由の確認。
+ * 第2段階（役員入力・比較・書込み対象の指定・accept・反映）の HTTP 経由の確認。
  * tests/support/roster_dev_seed.php でデータを作り、tests/support/roster_dev_router.php でサーバーを起動したうえで実行する。
+ * サーバーのローカル設定で roster.officers.write_enabled を true にしておくこと（書込み対象を指定した団体だけが書き込まれる）。
  *
  *   php -d extension=curl tests/roster_officer_http_test.php http://127.0.0.1:8090 <accounts.txt> <kintone_storage_dir> <fake_kintone.json>
  */
@@ -133,6 +134,47 @@ ok(str_contains($settings, '書込みを有効にする前に必要な設定') &
 
 $after = json_decode((string)file_get_contents($fakeState), true);
 ok($before['people'] === $after['people'] && $before['officerRecords'] === $after['officerRecords'], '提出・比較では ID21 / ID22 が変わらない');
+
+echo "\n# 役員の書込み（admin が対象を指定 → accept → 反映）\n";
+// ID21 の移行（団体キーの補完・必須設定の変更）が済んだ状態を模擬する
+$state = json_decode((string)file_get_contents($fakeState), true);
+$state['officerFieldsMigrated'] = true;
+foreach ($state['officerRecords'] as &$rec) {
+    if ($rec['group_id'] === 'CA056') {
+        $rec['group_key'] = 'CA056';
+    }
+}
+unset($rec);
+file_put_contents($fakeState, json_encode($state, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+$csrfOf = static fn(string $html): string => html_entity_decode(preg_match('/name="_csrf" value="([^"]+)"/', $html, $m) === 1 ? $m[1] : '');
+$operator->request('POST', '/kintone/api/roster_action.php', ['_csrf' => $csrfOf($settings), 'action' => 'officer_target_set', 'group_code' => 'CA056', 'form_id' => $formId]);
+ok(str_contains($operator->request('GET', '/kintone/roster_settings.php')['body'], 'admin 権限が必要'), 'operator は書込み対象を変更できない');
+$admin = new Client($base);
+ok($admin->login('roster_admin', $passwords['roster_admin']), '管理者でログイン');
+$adminSettings = $admin->request('GET', '/kintone/roster_settings.php')['body'];
+$admin->request('POST', '/kintone/api/roster_action.php', ['_csrf' => $csrfOf($adminSettings), 'action' => 'officer_target_set', 'group_code' => 'CA056', 'form_id' => $formId]);
+$adminSettings = $admin->request('GET', '/kintone/roster_settings.php')['body'];
+ok(str_contains($adminSettings, '役員の書込み対象に指定しました') && str_contains($adminSettings, '<span class="cell-sub mono">CA056</span>'), 'admin が団体・フォーム・年度を書込み対象に指定できる');
+$detail = $operator->request('GET', '/kintone/roster_detail.php?case_id=' . $caseId)['body'];
+preg_match('/name="officer_fingerprint" value="([0-9a-f]*)"/', $detail, $fp);
+preg_match('/name="compare_token" value="([^"]*)"/', $detail, $ct);
+preg_match('/name="action" value="accept"><input type="hidden" name="case_id" value="\d+"><input type="hidden" name="revision_id" value="(\d+)"/', $detail, $rv);
+ok(str_contains($detail, '書込み対象') && strlen($fp[1] ?? '') === 64 && ($rv[1] ?? '') !== '', '書込み対象の団体では、accept の画面に計画の指紋を渡す');
+$operator->request('POST', '/kintone/api/roster_action.php', ['_csrf' => $csrfOf($detail), 'action' => 'accept', 'case_id' => $caseId, 'revision_id' => $rv[1] ?? 0, 'compare_token' => html_entity_decode($ct[1] ?? ''), 'officer_fingerprint' => str_repeat('0', 64)]);
+ok(str_contains($operator->request('GET', '/kintone/roster_detail.php?case_id=' . $caseId)['body'], '登録者・役員台帳の内容が変わりました'), '画面と異なる指紋の accept は拒否');
+$detail = $operator->request('GET', '/kintone/roster_detail.php?case_id=' . $caseId)['body'];
+$operator->request('POST', '/kintone/api/roster_action.php', ['_csrf' => $csrfOf($detail), 'action' => 'accept', 'case_id' => $caseId, 'revision_id' => $rv[1] ?? 0, 'compare_token' => html_entity_decode($ct[1] ?? ''), 'officer_fingerprint' => $fp[1] ?? '']);
+$jobId = (int)(new PDO('mysql:host=127.0.0.1;port=33306;dbname=fitsc_forms;charset=utf8mb4', 'root', 'roster-test-root'))->query('SELECT current_job_id FROM roster_cases WHERE id = ' . $caseId)->fetchColumn();
+$detail = $operator->request('GET', '/kintone/roster_detail.php?case_id=' . $caseId)['body'];
+ok($jobId > 0 && str_contains($detail, '役員（登録者・役員台帳）も計画どおりに反映します') && str_contains($detail, '役員台帳（ID21）'), 'accept で計画を固定し、ステップ（ID20 → ID22 → ID21）を表示', $jobId);
+$operator->request('POST', '/kintone/api/roster_action.php', ['_csrf' => $csrfOf($detail), 'action' => 'run_now', 'case_id' => $caseId, 'job_id' => $jobId]);
+$detail = $operator->request('GET', '/kintone/roster_detail.php?case_id=' . $caseId)['body'];
+ok(str_contains($detail, '処理しました：反映済み') && substr_count($detail, '確認済み') >= 6, '今すぐ処理で、全ステップを読み戻して確認済み');
+$final = json_decode((string)file_get_contents($fakeState), true);
+$ledger = array_values(array_filter($final['officerRecords'], static fn(array $r): bool => $r['group_id'] === 'CA056'))[0];
+ok(count($final['people']) === count($before['people']) + 2 && $ledger['slots']['accountant_stundet_id'] === 'BM23002' && $ledger['slots']['general_affairs_1_name'] === '新入一郎', 'ID22 に未登録の2名を登録し、ID21 の会計長・総務1・副代表者1を更新', $ledger['slots']);
+$viewerDetail = $viewer->request('GET', '/kintone/roster_detail.php?case_id=' . $caseId)['body'];
+ok(str_contains($viewerDetail, '登録者（ID22）person_') && !str_contains($viewerDetail, 'bm26001@bene.fit.ac.jp'), 'viewer にもステップ別の結果を表示し、人物の属性は出さない');
 
 echo "\n{$passes} passed, {$fails} failed\n";
 exit($fails > 0 ? 1 : 0);

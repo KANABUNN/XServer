@@ -74,9 +74,17 @@ if ($canReview) {
 }
 $needsOverwriteConfirm = is_array($live) && $live['ok'] && ((int)($live['diff']['summary']['kintone_changed'] ?? 0) > 0 || (int)($live['diff']['summary']['student_id_corrected'] ?? 0) > 0 || !empty($live['base_outdated']));
 
-// 第2段階の比較（読み取りのみ）。版2の提出で、現在値との比較を行っているときだけ取得する
+// 第2段階の比較。版2の提出で、現在値との比較を行っているときだけ取得する
 $officerPlan = (is_array($live) && is_array($selected)) ? roster_officer_build_plan($case, $selected) : null;
 $returnSuggestion = is_array($officerPlan) && !empty($officerPlan['ok']) ? roster_officer_return_suggestion($officerPlan) : '';
+$officerWritable = is_array($officerPlan) && !empty($officerPlan['ok']) && !empty($officerPlan['writable']);
+$officerGateOn = is_array($officerPlan) && !empty($officerPlan['gate']['enabled']);
+if ($canReview && $officerGateOn && !$officerWritable) {
+    $acceptBlockers[] = empty($officerPlan['ok'])
+        ? '登録者・役員台帳と比較できないため accept できません。'
+        : '役員の反映計画に解消が必要な項目があります（「登録者・役員台帳との比較」を確認してください）。差し戻すか、kintone 側を整理してから比較し直してください。';
+}
+$currentSteps = is_array($currentJob) ? ($detail['steps'][(int)$currentJob['id']] ?? []) : [];
 
 $reviewsByRevision = [];
 foreach ($detail['reviews'] as $review) {
@@ -130,9 +138,9 @@ kintone_render_flash();
     <?php
     $status = (string)$currentJob['status'];
     $explain = match ($status) {
-        ROSTER_JOB_QUEUED => '次回の定期実行（cron）で kintone の部員名簿へ反映されます。',
+        ROSTER_JOB_QUEUED => $currentSteps !== [] ? '次回の定期実行（cron）で、部員名簿 → 登録者 → 役員台帳の順に反映されます。' : '次回の定期実行（cron）で kintone の部員名簿へ反映されます。',
         ROSTER_JOB_RUNNING => '反映中です。',
-        ROSTER_JOB_APPLIED => 'kintone の部員名簿へ反映し、読み戻して内容を確認しました。',
+        ROSTER_JOB_APPLIED => $currentSteps !== [] ? 'kintone の部員名簿・登録者・役員台帳へ反映し、それぞれ読み戻して内容を確認しました。' : 'kintone の部員名簿へ反映し、読み戻して内容を確認しました。',
         ROSTER_JOB_FAILED => '反映できませんでした（kintone は更新されていないか、更新後の照合で不一致がありました）。原因を解消してから再試行してください。',
         ROSTER_JOB_CONFLICT => 'kintone 側の変更などにより、上書きせずに停止しました。差分を確認し直し、accept を取り消してから改めて accept してください。',
         ROSTER_JOB_UNKNOWN => 'kintone への書込みの成否が確認できません。同じ登録を繰り返さず、次回の実行で kintone を検索・照合します。',
@@ -140,6 +148,17 @@ kintone_render_flash();
     };
     ?>
     <p><?= kintone_h($explain) ?></p>
+    <?php if ($currentSteps !== []): ?>
+      <?php
+      $stepStatuses = array_column($currentSteps, 'status', 'step_key');
+      $rosterDone = ($stepStatuses['roster'] ?? '') === ROSTER_STEP_VERIFIED;
+      $allDone = !in_array(false, array_map(static fn(string $st): bool => $st === ROSTER_STEP_VERIFIED, $stepStatuses), true);
+      ?>
+      <?php if ($rosterDone && !$allDone): ?>
+        <div class="alert alert--info"><?= fitsc_icon('info') ?><div class="alert__body">部員名簿（ID20）は反映・確認済みです。登録者（ID22）・役員台帳（ID21）の反映は完了していません（下の表の未処理・停止中のステップ）。</div></div>
+      <?php endif; ?>
+      <?= kt_roster_steps_html($currentSteps) ?>
+    <?php endif; ?>
     <?php if ((string)($currentJob['error_message'] ?? '') !== ''): ?>
       <div class="alert alert--<?= $status === ROSTER_JOB_APPLIED ? 'success' : ($status === ROSTER_JOB_FAILED ? 'danger' : 'warning') ?>"><?= fitsc_icon('alert-circle') ?>
         <div class="alert__body"><strong><?= kintone_h(roster_kintone_error_class_label((string)$currentJob['error_class'])) ?><?= $currentJob['error_code'] ? '（' . kintone_h((string)$currentJob['error_code']) . '）' : '' ?></strong>
@@ -249,10 +268,10 @@ kintone_render_flash();
 <section class="card">
   <div class="card__header">
     <div>
-      <div class="card__title"><?= fitsc_icon('shield') ?>登録者・役員台帳との比較（第2段階プレビュー）</div>
-      <p class="card__subtitle">ID22・ID21 の現在値と比較した結果です。この画面と accept では、ID22・ID21 へは書き込みません。accept しても反映されるのは部員名簿（ID20）だけです。</p>
+      <div class="card__title"><?= fitsc_icon('shield') ?>登録者・役員台帳との比較</div>
+      <p class="card__subtitle">ID22・ID21 の現在値と比較した結果です。この画面を表示しただけでは kintone へ書き込みません。<?= $officerGateOn ? 'accept すると、この計画（指紋 ' . kintone_h(substr((string)($officerPlan['fingerprint'] ?? ''), 0, 8)) . '）を固定して定期実行で反映します。' : 'accept しても反映されるのは部員名簿（ID20）だけです。' ?></p>
     </div>
-    <?= kt_roster_badge('書込み無効', 'warning') ?>
+    <?= $officerGateOn ? kt_roster_badge('書込み対象', 'success') : kt_roster_badge('書込み無効', 'warning') ?>
   </div>
   <div class="card__body stack"><?= kt_roster_officer_plan_html($officerPlan, $canOperate) ?></div>
 </section>
@@ -273,7 +292,9 @@ kintone_render_flash();
       <form method="post" action="<?= $actionUrl ?>" class="stack" data-confirm="第<?= (int)$selected['revision_number'] ?>版の内容を承認し、kintone の部員名簿への自動反映を予約します。" data-confirm-title="accept しますか？" data-confirm-ok="accept する" data-confirm-tone="primary">
         <?= $csrf ?><input type="hidden" name="action" value="accept"><input type="hidden" name="case_id" value="<?= (int)$case['id'] ?>"><input type="hidden" name="revision_id" value="<?= (int)$selected['id'] ?>">
         <input type="hidden" name="compare_token" value="<?= kintone_h((string)($live['compare_token'] ?? '')) ?>">
+        <input type="hidden" name="officer_fingerprint" value="<?= kintone_h($officerGateOn ? (string)($officerPlan['fingerprint'] ?? '') : '') ?>">
         <p>accept すると、<strong>この第<?= (int)$selected['revision_number'] ?>版の内容だけ</strong>が固定され、定期実行で kintone の部員名簿へ自動反映されます。kintone の名簿が上の比較の後に変更されていた場合は、上書きせずに「競合」で止まります。</p>
+        <?php if ($officerGateOn): ?><p>役員は、上の「登録者・役員台帳との比較」の計画どおりに、登録者（ID22）→ 役員台帳（ID21）の順で反映します。登録日は<?= ($officerPlan['ledger']['register_date_mode'] ?? '') === 'keep' ? '既存の日付を維持します' : 'accept した日（日本時間）になります' ?>。</p><?php endif; ?>
         <?php if ($acceptBlockers !== []): ?>
           <div class="alert alert--danger"><?= fitsc_icon('lock') ?><div class="alert__body"><ul class="kt-plain-list"><?php foreach ($acceptBlockers as $b): ?><li><?= kintone_h($b) ?></li><?php endforeach; ?></ul></div></div>
         <?php endif; ?>

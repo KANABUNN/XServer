@@ -332,6 +332,8 @@ check($slots['general_affairs_2']['operation'] === 'clear' && $slots['general_af
 check($slots['deputy_accountant_1']['operation'] === 'clear' && in_array('現在の役員は卒部・退部です', $slots['deputy_accountant_1']['flags'], true), '卒部・退部した現任をそのまま維持せず解除として示す', $slots['deputy_accountant_1']);
 check($plan['ledger']['register_date_mode'] === 'accept_date' && $plan['ledger']['composition_changed'] === true, '就任・交代・解除があれば登録日は accept 日', $plan['ledger']);
 check($plan['ready'] === true && $plan['write_enabled'] === false, '解除や交代があっても準備は完了にできる（書込みは既定で無効）', $plan['blockers']);
+check(has_message($plan['write_blockers'], '自動解除は、試作アプリで確認するまで無効'), '空席の自動解除が無効なら、解除を含む計画は書き込む前に手動解除が必要と示す', $plan['write_blockers']);
+check($plan['gate']['enabled'] === false && $plan['writable'] === false && str_contains($plan['gate']['reason'], 'write_enabled'), 'サーバー設定が無効なら書込み対象にならない', $plan['gate']);
 $fake->officerRecords[0]['slots'] = $ledgerSlots;
 $swapRows = array_merge($baseRows, [member('BM007', '総務 七郎', '総務')]);
 $swapOfficers = $good;
@@ -359,7 +361,7 @@ $fp2 = $planFor($s1)['fingerprint'];
 $fake->people[1]['revision'] = 3;
 check($planFor($s1)['fingerprint'] !== $fp2, '比較後に登録者が更新されても計画の指紋が変わる');
 $fake->officerRecords[0]['group_key'] = '';
-check(has_message($planFor($s1)['warnings'], 'forms_current_group_key'), '現行レコードに団体キーがなければ移行が必要と示す');
+check(has_message($planFor($s1)['write_blockers'], 'forms_current_group_key') && $planFor($s1)['ready'] === true, '現行レコードに団体キーがなければ、書き込む前に移行が必要と示す（比較は続ける）');
 $fake->officerRecords[0]['group_key'] = 'CA999';
 check(has_message($planFor($s1)['blockers'], '団体キーが団体識別記号と一致しません'), '団体キーの不一致は止める');
 $fake->officerRecords[0]['group_key'] = 'CA056';

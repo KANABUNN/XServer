@@ -696,8 +696,10 @@ function roster_staff_return(int $caseId, int $revisionId, string $reason, array
 /**
  * accept。kintone の現在値を先に取得し（トランザクション外）、担当者が見た比較元と一致する場合だけ、
  * accept の保存と反映ジョブの登録を1つのトランザクションで行う。連打・再送は同じ accept・ジョブへ集約する。
+ * 第2段階: 役員の書込み対象の団体・フォーム・年度なら、反映計画（ID22・ID21）を作り直して担当者が見た指紋と照合し、
+ * 計画を承認スナップショット（版2）に固定してステップの初期行を同じトランザクションで作る。
  */
-function roster_staff_accept(int $caseId, int $revisionId, string $postedCompareToken, array $actor): array
+function roster_staff_accept(int $caseId, int $revisionId, string $postedCompareToken, array $actor, string $postedOfficerFingerprint = ''): array
 {
     $pdo = roster_db();
     $case = roster_case_by_id($pdo, $caseId);
@@ -733,9 +735,30 @@ function roster_staff_accept(int $caseId, int $revisionId, string $postedCompare
     if ($match['ambiguous'] !== []) {
         throw new RosterException('学籍番号が一致する既存行が kintone 上に複数あるため accept できません。kintone側で重複を整理してください。', 'ambiguous', 409);
     }
+    // 第2段階: 書込み対象なら、HTTP による照会を DB ロックの外で済ませてから計画を固定する
+    $officerPlan = null;
+    $gate = null;
+    if (roster_payload_version($payload) >= ROSTER_PAYLOAD_VERSION_OFFICERS) {
+        $gate = roster_officer_write_gate($pdo, $case);
+        if ($gate['enabled']) {
+            $officerPlan = roster_officer_build_plan($case, $revision);
+            if (!is_array($officerPlan) || empty($officerPlan['ok'])) {
+                throw new RosterException('kintone の登録者・役員台帳と比較できないため accept できません（' . (string)($officerPlan['error'] ?? '') . '）。', 'kintone_unavailable', 503);
+            }
+            if ($officerPlan['blockers'] !== [] || $officerPlan['write_blockers'] !== []) {
+                throw new RosterException('役員の反映計画に解消が必要な項目があるため accept できません。「登録者・役員台帳との比較」を確認してください。', 'officer_blocked', 409);
+            }
+            if ($postedOfficerFingerprint === '' || !hash_equals((string)$officerPlan['fingerprint'], $postedOfficerFingerprint)) {
+                throw new RosterException('比較を表示した後に登録者・役員台帳の内容が変わりました。画面を再読み込みして確認し直してください。', 'stale', 409);
+            }
+        }
+    }
+    $tenant = $gate !== null && $gate['enabled'] ? (string)$gate['tenant'] : roster_guard_tenant_or_default();
 
     $pdo->beginTransaction();
     try {
+        // ロック順は「団体の予約 → 案件 → ジョブ」（ワーカー・復旧と同じ）
+        $guard = roster_guard_lock($pdo, $tenant, (string)$case['group_code']);
         $case = roster_case_by_id($pdo, $caseId, true);
         if ((int)$case['latest_revision_id'] !== $revisionId) {
             throw new RosterException('acceptできるのは最新の提出だけです（新しい提出があります）。画面を再読み込みしてください。', 'stale', 409);
@@ -758,7 +781,26 @@ function roster_staff_accept(int $caseId, int $revisionId, string $postedCompare
         if (is_array($currentJob) && in_array((string)$currentJob['status'], [ROSTER_JOB_QUEUED, ROSTER_JOB_RUNNING, ROSTER_JOB_UNKNOWN], true)) {
             throw new RosterException('この団体には処理中の反映ジョブがあります。完了してから accept してください。', 'busy', 409);
         }
-        $now = roster_now_sql();
+        // 同じ団体を別のフォーム・年度から扱う場合も、未完了の反映が残っている間は accept しない（適用順の逆転を防ぐ）
+        $other = $pdo->prepare('SELECT j.id FROM roster_apply_jobs j JOIN roster_cases c ON c.id = j.case_id WHERE c.group_code = :g AND c.id <> :case AND j.status IN (:queued, :running, :unknown) AND j.invalidated_at IS NULL LIMIT 1');
+        $other->execute([':g' => (string)$case['group_code'], ':case' => $caseId, ':queued' => ROSTER_JOB_QUEUED, ':running' => ROSTER_JOB_RUNNING, ':unknown' => ROSTER_JOB_UNKNOWN]);
+        $otherJobId = (int)$other->fetchColumn();
+        if ($otherJobId > 0) {
+            throw new RosterException('同じ団体の別の名簿（フォーム・年度）の反映ジョブ #' . $otherJobId . ' が完了していません。完了してから accept してください。', 'busy', 409);
+        }
+        if ($officerPlan !== null
+            && ((int)$guard['generation'] !== (int)$gate['generation'] || (int)$guard['officer_form_id'] !== (int)$case['form_id'] || (int)$guard['officer_fiscal_year'] !== (int)$case['fiscal_year'])) {
+            throw new RosterException('accept の直前に役員の書込み対象の設定が変更されました。画面を再読み込みして確認し直してください。', 'stale', 409);
+        }
+        $acceptedAt = roster_now();
+        $now = $acceptedAt->format('Y-m-d H:i:s');
+        if ($officerPlan !== null) {
+            $snapshot = roster_officer_snapshot($case, $revision, $rows, $officerPlan, $gate, roster_officer_accept_date($acceptedAt));
+            $snapshotHash = roster_officer_snapshot_hash($snapshot);
+        } else {
+            $snapshot = ['rows' => $rows, 'group_code' => (string)$case['group_code']];
+            $snapshotHash = roster_payload_hash($rows);
+        }
         $pdo->prepare(
             'INSERT INTO roster_acceptances (case_id, revision_id, revision_number, active_revision_id, snapshot_json, snapshot_hash, compared_record_count, compared_record_id, compared_revision, compared_rows_json, compared_at, accepted_by_account_id, accepted_by_login_id, accepted_by_name, accepted_at) '
             . 'VALUES (:case_id, :revision_id, :revision_number, :active, :snapshot, :hash, :count, :record_id, :revision, :rows, :now, :account_id, :login_id, :name, :now2)'
@@ -767,8 +809,8 @@ function roster_staff_accept(int $caseId, int $revisionId, string $postedCompare
             ':revision_id' => $revisionId,
             ':revision_number' => (int)$revision['revision_number'],
             ':active' => $revisionId,
-            ':snapshot' => roster_json(['rows' => $rows, 'group_code' => (string)$case['group_code']]),
-            ':hash' => roster_payload_hash($rows),
+            ':snapshot' => roster_json($snapshot),
+            ':hash' => $snapshotHash,
             ':count' => $found['count'],
             ':record_id' => $record['record_id'] ?? null,
             ':revision' => $record['revision'] ?? null,
@@ -788,6 +830,9 @@ function roster_staff_accept(int $caseId, int $revisionId, string $postedCompare
             ':now' => $now,
         ]);
         $jobId = (int)$pdo->lastInsertId();
+        if ($officerPlan !== null) {
+            roster_officer_insert_steps($pdo, $jobId, $snapshot);
+        }
         $pdo->prepare('UPDATE roster_revisions SET review_state = :state WHERE id = :id')->execute([':state' => ROSTER_REVIEW_ACCEPTED, ':id' => $revisionId]);
         $pdo->prepare('UPDATE roster_cases SET review_state = :review, apply_state = :apply, current_acceptance_id = :acc, current_job_id = :job WHERE id = :id')->execute([
             ':review' => ROSTER_REVIEW_ACCEPTED,
@@ -796,9 +841,9 @@ function roster_staff_accept(int $caseId, int $revisionId, string $postedCompare
             ':job' => $jobId,
             ':id' => $caseId,
         ]);
-        roster_insert_review($pdo, $caseId, $revisionId, 'accept', null, 'staff', $actor);
+        roster_insert_review($pdo, $caseId, $revisionId, 'accept', $officerPlan !== null ? '役員（登録者・役員台帳）の反映計画を含む' : null, 'staff', $actor);
         $pdo->commit();
-        return ['acceptance_id' => $acceptanceId, 'job_id' => $jobId, 'already' => false];
+        return ['acceptance_id' => $acceptanceId, 'job_id' => $jobId, 'already' => false, 'officers' => $officerPlan !== null];
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
@@ -893,6 +938,12 @@ function roster_staff_retry(int $caseId, int $jobId, array $actor): array
                 ':id' => $jobId,
                 ':failed' => ROSTER_JOB_FAILED,
             ]);
+            // 版2: 失敗したステップだけを未処理に戻す（確認済み・結果確認待ちのステップはそのまま）
+            $pdo->prepare('UPDATE roster_apply_steps SET status = :pending, phase = NULL, attempts = 0, error_class = NULL, error_code = NULL, error_message = NULL WHERE job_id = :id AND status = :failed')->execute([
+                ':pending' => ROSTER_STEP_PENDING,
+                ':id' => $jobId,
+                ':failed' => ROSTER_STEP_FAILED,
+            ]);
             $pdo->prepare('UPDATE roster_cases SET apply_state = :apply WHERE id = :id')->execute([':apply' => ROSTER_JOB_QUEUED, ':id' => $caseId]);
             $action = 'retry';
         } elseif ($status === ROSTER_JOB_UNKNOWN) {
@@ -980,9 +1031,13 @@ function roster_staff_detail(int $caseId): ?array
     };
     $jobs = $q('SELECT * FROM roster_apply_jobs WHERE case_id = :id ORDER BY id DESC LIMIT 50');
     $attempts = [];
+    $steps = [];
     if ($jobs !== []) {
         $ids = implode(',', array_map(static fn(array $j): int => (int)$j['id'], $jobs));
         $attempts = $pdo->query('SELECT * FROM roster_apply_attempts WHERE job_id IN (' . $ids . ') ORDER BY id DESC LIMIT 200')->fetchAll() ?: [];
+        foreach ($pdo->query('SELECT * FROM roster_apply_steps WHERE job_id IN (' . $ids . ') ORDER BY job_id DESC, step_order ASC')->fetchAll() ?: [] as $step) {
+            $steps[(int)$step['job_id']][] = $step;
+        }
     }
     return [
         'case' => $case,
@@ -993,5 +1048,6 @@ function roster_staff_detail(int $caseId): ?array
         'acceptances' => $q('SELECT id, revision_id, revision_number, compared_record_count, compared_record_id, compared_revision, compared_at, accepted_by_name, accepted_at, revoked_at, revoked_by_name, revoke_reason FROM roster_acceptances WHERE case_id = :id ORDER BY id DESC'),
         'jobs' => $jobs,
         'attempts' => $attempts,
+        'steps' => $steps,
     ];
 }

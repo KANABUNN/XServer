@@ -11,7 +11,9 @@
 - アプリも初回アクセス時に同じ定義でテーブルを作成するが（`roster_ensure_schema()`）、権限の都合で失敗しないよう、事前に SQL を実行しておくことを推奨する。
 - fitsc_forms は既存のバックアップ対象（`backup_manager.db_targets`）に含まれているため、提出原本・accept・反映履歴もバックアップされる。
 
-定義を変えたときは `php tools/roster_migration_sql.php > apps/roster_core/migrations/001_roster_tables.sql` で生成し直す（`--check` で一致を確認できる）。
+第2段階（役員連動）を使う場合は、続けて `apps/roster_core/migrations/002_roster_officer_sync.sql` も実行する（書込みを有効にするまでの手順は [phase2.md](phase2.md) の「導入手順」）。
+
+定義を変えたときは `php tools/roster_migration_sql.php > apps/roster_core/migrations/001_roster_tables.sql`（002 は `php tools/roster_migration_sql.php 002 > …/002_roster_officer_sync.sql`）で生成し直す（`--check` ですべての移行SQLとの一致を確認できる）。
 
 ## 2. 設定（apps/config.php）
 

@@ -3,9 +3,10 @@
 declare(strict_types=1);
 
 /* =====================================================================
-   第2段階: 反映計画のプレビュー（ID7 / ID22 / ID21 の読取りと比較だけを行う）
-   - この処理から kintone へは書き込まない。計画の固定と実行は accept・ワーカー側の役割。
+   第2段階: 反映計画（ID7 / ID22 / ID21 の読取りと比較だけを行う）
+   - この処理から kintone へは書き込まない。計画の固定は accept（roster_officer_snapshot）、実行はワーカーの役割。
    - 計画の指紋は、担当者が見た比較元・操作を accept 直前に照合するためのもの。
+   - blockers は計画そのものの問題、write_blockers は書き込む前に解消が必要な設定・移行・運用上の制限。
    ===================================================================== */
 
 function roster_officer_person_operation_label(string $operation): string
@@ -225,16 +226,22 @@ function roster_officer_build_plan(array $case, array $revision): ?array
     $groupCode = (string)$case['group_code'];
     $blockers = roster_officer_slot_issues($officers, $rows);
     $warnings = roster_officer_capacity_issues($rows);
+    $writeBlockers = [];
+    try {
+        $gate = roster_officer_write_gate(roster_db(), $case);
+    } catch (Throwable $e) {
+        $gate = ['enabled' => false, 'reason' => '書込み対象の設定を確認できません。', 'tenant' => '', 'generation' => null];
+    }
     try {
         $group = roster_kintone_find_group_master($groupCode);
         $ledger = roster_kintone_find_officer_records($groupCode);
         $people = roster_officer_classify_people($officers, $rowsBySid, $blockers, $warnings);
-        $appIds = [
-            'groups' => roster_kintone_app_context('group')['app_id'],
-            'roster' => roster_kintone_app_context('roster')['app_id'],
-            'people' => roster_kintone_app_context('people')['app_id'],
-            'officers' => roster_kintone_app_context('officers')['app_id'],
-        ];
+        $appIds = roster_kintone_officer_app_ids();
+        if ($gate['enabled']) {
+            // 書込み対象なら、ID22・ID21 のフィールド設定と移行の状態も accept の前提として確認する
+            $preflight = roster_kintone_officer_preflight();
+            array_push($writeBlockers, ...$preflight['errors'], ...$preflight['write_blockers']);
+        }
     } catch (RosterKintoneError $e) {
         roster_log('warning', 'officer plan failed', ['case_id' => (int)$case['id']] + $e->summary());
         return ['ok' => false, 'error' => 'kintone の登録者・役員台帳と比較できません（' . mb_substr($e->getMessage(), 0, 200, 'UTF-8') . '）。'];
@@ -257,7 +264,7 @@ function roster_officer_build_plan(array $case, array $revision): ?array
     }
     if ($record !== null) {
         if ($record['group_key'] === '') {
-            $warnings[] = '役員台帳の現行レコードに団体キー（forms_current_group_key）が入っていません。移行で補完するまで書込みは有効にできません。';
+            $writeBlockers[] = '役員台帳の現行レコードに団体キー（forms_current_group_key）が入っていません。移行で補完するまで書き込めません。';
         } elseif ($record['group_key'] !== $groupCode) {
             $blockers[] = '役員台帳の団体キーが団体識別記号と一致しません。';
         }
@@ -311,6 +318,11 @@ function roster_officer_build_plan(array $case, array $revision): ?array
         if ($planned !== '' && count(array_unique(array_column($assignments[$planned] ?? [], 'role'))) > 1) {
             $flags[] = '兼務';
         }
+        // 同じ担当者でも、ID22 だけが訂正されて ID21 のコピーが古い場合は、ルックアップを取り直す
+        $known = $op === 'keep' ? ($personBySid[$planned]['kintone'] ?? null) : null;
+        if (is_array($known) && !roster_officer_copy_matches($record['slots'][$def['key']] ?? ['name' => '', 'mail' => ''], $known)) {
+            $flags[] = '氏名・メールのコピーを登録者の現在値で取り直します';
+        }
         $slots[] = [
             'key' => $def['key'],
             'label' => $def['label'],
@@ -324,6 +336,19 @@ function roster_officer_build_plan(array $case, array $revision): ?array
             'flags' => $flags,
         ];
     }
+
+    $clearLabels = array_column(array_filter($slots, static fn(array $s): bool => $s['operation'] === 'clear'), 'label');
+    if ($clearLabels !== [] && !roster_config('officers.clear_enabled', false)) {
+        $writeBlockers[] = implode('・', $clearLabels) . '：空席にした枠の自動解除は、試作アプリで確認するまで無効です。役員台帳で手動で解除してから比較し直してください。';
+    }
+    $repSlot = array_column($slots, null, 'key')['representative'];
+    $representative = [
+        'previous_student_id' => $repSlot['current_student_id'],
+        'previous_name' => $repSlot['current_name'],
+        'new_student_id' => $repSlot['planned_student_id'],
+        'new_name' => $repSlot['planned_name'],
+        'changed' => $operation === 'update' && $repSlot['planned_student_id'] !== '' && $repSlot['planned_student_id'] !== $repSlot['current_student_id'],
+    ];
 
     $fingerprint = roster_canonical_hash([
         'case_id' => (int)$case['id'],
@@ -356,11 +381,15 @@ function roster_officer_build_plan(array $case, array $revision): ?array
             'record_ids' => array_column($ledger['records'], 'record_id'),
         ],
         'slots' => $slots,
+        'representative' => $representative,
         'blockers' => $blockers,
         'warnings' => $warnings,
+        'write_blockers' => array_values(array_unique($writeBlockers)),
         'ready' => $blockers === [],
+        'gate' => $gate,
+        'writable' => $gate['enabled'] && $blockers === [] && $writeBlockers === [],
         'fingerprint' => $fingerprint,
-        'write_enabled' => (bool)roster_config('officers.write_enabled', false),
+        'write_enabled' => (bool)$gate['enabled'],
     ];
 }
 

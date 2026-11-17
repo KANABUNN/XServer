@@ -402,7 +402,8 @@ return [
         ],
         // 第2段階の ID22/ID21 への書込み。false の間は比較・計画のプレビューだけが動く
         'officers' => [
-            'write_enabled' => false,
+            'write_enabled' => false, // true でも、書込み先は「反映・接続の確認」で指定した団体・フォーム・年度だけ
+            'clear_enabled' => false, // 空席の自動解除。試作アプリで解除を確認してから true にする
         ],
         'verification' => [
             'mail_transport' => 'smtp',

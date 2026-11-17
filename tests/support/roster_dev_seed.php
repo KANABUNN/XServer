@@ -23,6 +23,7 @@ require_once __DIR__ . '/fake_kintone.php';
 
 $fake = FakeKintone::persistent($argv[1]);
 $fake->records = [];
+$fake->officerFieldsMigrated = false; // ID21 は調査時の設定（総務1が必須・一意キーなし）から始める
 $fake->nextRecordId = 1;
 $fake->nextRowId = 1001;
 $fake->seedRecord('CA056', [
