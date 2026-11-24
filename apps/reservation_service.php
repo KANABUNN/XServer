@@ -137,7 +137,7 @@ function reservation_validate_form_input(array $cfg, array $source): array
     [$minDate, $maxDate] = reservation_allowed_range($cfg);
     $timezone = new DateTimeZone(reservation_timezone($cfg));
     foreach ($useDates as $useDate) {
-        $dt = DateTimeImmutable::createFromFormat('Y-m-d', $useDate, $timezone);
+        $dt = DateTimeImmutable::createFromFormat('!Y-m-d', $useDate, $timezone);
         if (!$dt || $dt->format('Y-m-d') !== $useDate) {
             throw new RuntimeException('利用日の形式が不正です。');
         }
@@ -223,7 +223,7 @@ function reservation_validate_detail_rows(array $cfg, string $email, string $org
             throw new RuntimeException($useDate . ' の利用時間は ' . $allowedStartTime . '〜' . $allowedEndTime . ' の範囲で指定してください。');
         }
 
-        $dt = DateTimeImmutable::createFromFormat('Y-m-d', $useDate, $timezone);
+        $dt = DateTimeImmutable::createFromFormat('!Y-m-d', $useDate, $timezone);
         if (!$dt || $dt->format('Y-m-d') !== $useDate) {
             throw new RuntimeException('利用日の形式が不正です。');
         }
